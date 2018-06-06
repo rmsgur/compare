@@ -33,7 +33,7 @@ package org.hsqldb.persist;
 
 import org.hsqldb.Database;
 import org.hsqldb.Row;
-import org.hsqldb.RowAVL;
+import org.hsqldb.RowSBT;
 import org.hsqldb.RowAction;
 import org.hsqldb.Session;
 import org.hsqldb.Table;
@@ -50,12 +50,12 @@ import org.hsqldb.rowio.RowInputInterface;
  * @version 2.2.9
  * @since 1.9.0
  */
-public class RowStoreAVLMemory extends RowStoreAVL implements PersistentStore {
+public class RowStoreSBTMemory extends RowStoreSBT implements PersistentStore {
 
     Database database;
     int      rowIdSequence = 0;
 
-    public RowStoreAVLMemory(PersistentStoreCollection manager, Table table) {
+    public RowStoreSBTMemory(PersistentStoreCollection manager, Table table) {
 
         this.database     = table.database;
         this.manager      = manager;
@@ -81,7 +81,7 @@ public class RowStoreAVLMemory extends RowStoreAVL implements PersistentStore {
     }
 
     public CachedObject get(long i, boolean keep) {
-        throw Error.runtimeError(ErrorCode.U_S0500, "RowStoreAVLMemory");
+        throw Error.runtimeError(ErrorCode.U_S0500, "RowStoreSBTMemory");
     }
 
     public CachedObject get(CachedObject object, boolean keep) {
@@ -103,7 +103,7 @@ public class RowStoreAVLMemory extends RowStoreAVL implements PersistentStore {
             id = rowIdSequence++;
         }
 
-        Row row = new RowAVL(table, (Object[]) object, id, this);
+        Row row = new RowSBT(table, (Object[]) object, id, this);
 
         if (tx) {
             RowAction action = new RowAction(session, table,
@@ -164,7 +164,7 @@ public class RowStoreAVLMemory extends RowStoreAVL implements PersistentStore {
 
             case RowAction.ACTION_DELETE :
                 if (txModel == TransactionManager.LOCKS) {
-                    ((RowAVL) row).setNewNodes(this);
+                    ((RowSBT) row).setNewNodes(this);
                     indexRow(session, row);
                 }
                 break;

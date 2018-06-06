@@ -47,7 +47,7 @@ import org.hsqldb.rowio.RowInputInterface;
  * @version 2.3.0
  * @since 2.2.7
  */
-public class RowStoreDataChange extends RowStoreAVLHybrid {
+public class RowStoreDataChange extends RowStoreSBTHybrid {
 
     Session session;
 

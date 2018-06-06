@@ -46,7 +46,7 @@ import org.hsqldb.types.Type;
  * @version 2.3.0
  * @since 2.2.7
  */
-public class RowDiskDataChange extends RowAVLDisk {
+public class RowDiskDataChange extends RowSBTDisk {
 
     public final static int COL_POS_ROW_NUM     = 0;
     public final static int COL_POS_ROW_ID      = 1;

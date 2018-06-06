@@ -74,7 +74,7 @@ import org.hsqldb.Constraint;
 import org.hsqldb.HsqlNameManager;
 import org.hsqldb.HsqlNameManager.HsqlName;
 import org.hsqldb.Row;
-import org.hsqldb.RowAVL;
+import org.hsqldb.RowSBT;
 import org.hsqldb.Session;
 import org.hsqldb.Table;
 import org.hsqldb.TableBase;
@@ -84,7 +84,7 @@ import org.hsqldb.persist.PersistentStore;
 import org.hsqldb.types.Type;
 
 /**
- * Implementation of an AVL for memory tables.<p>
+ * Implementation of an SBT for memory tables.<p>
  *
  *  New class derived from Hypersonic SQL code and enhanced in HSQLDB. <p>
  *
@@ -93,7 +93,7 @@ import org.hsqldb.types.Type;
  * @version 1.9.0
  * @since Hypersonic SQL
  */
-public class IndexAVLMemory extends IndexAVL {
+public class IndexSBTMemory extends IndexSBT {
 
     /**
      * Constructor declaration
@@ -111,7 +111,7 @@ public class IndexAVLMemory extends IndexAVL {
      * @param forward is this an auto-index for an FK that refers to a table
      *   defined after this table
      */
-    public IndexAVLMemory(HsqlName name, long id, TableBase table,
+    public IndexSBTMemory(HsqlName name, long id, TableBase table,
                           int[] columns, boolean[] descending,
                           boolean[] nullsLast, Type[] colTypes, boolean pk,
                           boolean unique, boolean constraint,
@@ -125,8 +125,8 @@ public class IndexAVLMemory extends IndexAVL {
         readLock.lock();
 
         try {
-            NodeAVL p = getAccessor(store);
-            NodeAVL f = null;
+            NodeSBT p = getAccessor(store);
+            NodeSBT f = null;
 
             while (p != null) {
                 f = p;
@@ -148,10 +148,10 @@ public class IndexAVLMemory extends IndexAVL {
         }
     }
 
-    void checkNodes(PersistentStore store, NodeAVL p) {
+    void checkNodes(PersistentStore store, NodeSBT p) {
 
-        NodeAVL l = p.nLeft;
-        NodeAVL r = p.nRight;
+        NodeSBT l = p.nLeft;
+        NodeSBT r = p.nRight;
 
         if (l != null && l.getBalance(store) == -2) {
             System.out.print("broken index - deleted");
@@ -175,8 +175,8 @@ public class IndexAVLMemory extends IndexAVL {
      */
     public void insert(Session session, PersistentStore store, Row row) {
 
-        NodeAVL        n;
-        NodeAVL        x;
+        NodeSBT        n;
+        NodeSBT        x;
         boolean        isleft        = true;
         int            compare       = -1;
         final Object[] rowData       = row.getData();
@@ -190,7 +190,7 @@ public class IndexAVLMemory extends IndexAVL {
             x = n;
 
             if (n == null) {
-                store.setAccessor(this, ((RowAVL) row).getNode(position));
+                store.setAccessor(this, ((RowSBT) row).getNode(position));
 
                 return;
             }
@@ -250,7 +250,7 @@ public class IndexAVLMemory extends IndexAVL {
                 }
             }
 
-            x = x.set(store, isleft, ((RowAVL) row).getNode(position));
+            x = x.set(store, isleft, ((RowSBT) row).getNode(position));
 
             balance(store, x, isleft);
         } finally {
@@ -258,13 +258,13 @@ public class IndexAVLMemory extends IndexAVL {
         }
     }
 
-    void delete(PersistentStore store, NodeAVL x) {
+    void delete(PersistentStore store, NodeSBT x) {
 
         if (x == null) {
             return;
         }
 
-        NodeAVL n;
+        NodeSBT n;
 
         writeLock.lock();
 
@@ -274,12 +274,12 @@ public class IndexAVLMemory extends IndexAVL {
             } else if (x.nRight == null) {
                 n = x.nLeft;
             } else {
-                NodeAVL d = x;
+                NodeSBT d = x;
 
                 x = x.nLeft;
 
                 while (true) {
-                    NodeAVL temp = x.nRight;
+                    NodeSBT temp = x.nRight;
 
                     if (temp == null) {
                         break;
@@ -298,8 +298,8 @@ public class IndexAVLMemory extends IndexAVL {
                 d.iBalance = b;
 
                 // set x.parent
-                NodeAVL xp = x.nParent;
-                NodeAVL dp = d.nParent;
+                NodeSBT xp = x.nParent;
+                NodeSBT dp = d.nParent;
 
                 if (d.isRoot(store)) {
                     store.setAccessor(this, x);
@@ -322,13 +322,13 @@ public class IndexAVLMemory extends IndexAVL {
                     if (d.nLeft == x) {
                         x.nLeft = d;
 
-                        NodeAVL dr = d.nRight;
+                        NodeSBT dr = d.nRight;
 
                         x.nRight = dr;
                     } else {
                         x.nRight = d;
 
-                        NodeAVL dl = d.nLeft;
+                        NodeSBT dl = d.nLeft;
 
                         x.nLeft = dl;
                     }
@@ -336,8 +336,8 @@ public class IndexAVLMemory extends IndexAVL {
                     d.nParent = xp;
                     xp.nRight = d;
 
-                    NodeAVL dl = d.nLeft;
-                    NodeAVL dr = d.nRight;
+                    NodeSBT dl = d.nLeft;
+                    NodeSBT dr = d.nRight;
 
                     x.nLeft  = dl;
                     x.nRight = dr;
@@ -383,13 +383,13 @@ public class IndexAVLMemory extends IndexAVL {
                         return;
 
                     case 1 :
-                        NodeAVL r = x.child(store, !isleft);
+                        NodeSBT r = x.child(store, !isleft);
                         int     b = r.iBalance;
 
                         if (b * sign >= 0) {
                             x.replace(store, this, r);
 
-                            NodeAVL child = r.child(store, isleft);
+                            NodeSBT child = r.child(store, isleft);
 
                             x.set(store, !isleft, child);
                             r.set(store, isleft, x);
@@ -405,7 +405,7 @@ public class IndexAVLMemory extends IndexAVL {
                             r.iBalance = 0;
                             x          = r;
                         } else {
-                            NodeAVL l = r.child(store, isleft);
+                            NodeSBT l = r.child(store, isleft);
 
                             x.replace(store, this, l);
 
@@ -433,14 +433,14 @@ public class IndexAVLMemory extends IndexAVL {
         }
     }
 
-    NodeAVL next(PersistentStore store, NodeAVL x) {
+    NodeSBT next(PersistentStore store, NodeSBT x) {
 
-        NodeAVL r = x.nRight;
+        NodeSBT r = x.nRight;
 
         if (r != null) {
             x = r;
 
-            NodeAVL l = x.nLeft;
+            NodeSBT l = x.nLeft;
 
             while (l != null) {
                 x = l;
@@ -450,7 +450,7 @@ public class IndexAVLMemory extends IndexAVL {
             return x;
         }
 
-        NodeAVL ch = x;
+        NodeSBT ch = x;
 
         x = x.nParent;
 
@@ -462,18 +462,18 @@ public class IndexAVLMemory extends IndexAVL {
         return x;
     }
 
-    NodeAVL last(PersistentStore store, NodeAVL x) {
+    NodeSBT last(PersistentStore store, NodeSBT x) {
 
         if (x == null) {
             return null;
         }
 
-        NodeAVL left = x.nLeft;
+        NodeSBT left = x.nLeft;
 
         if (left != null) {
             x = left;
 
-            NodeAVL right = x.nRight;
+            NodeSBT right = x.nRight;
 
             while (right != null) {
                 x     = right;
@@ -483,7 +483,7 @@ public class IndexAVLMemory extends IndexAVL {
             return x;
         }
 
-        NodeAVL ch = x;
+        NodeSBT ch = x;
 
         x = x.nParent;
 
@@ -498,7 +498,7 @@ public class IndexAVLMemory extends IndexAVL {
     /**
      * Balances part of the tree after an alteration to the index.
      */
-    void balance(PersistentStore store, NodeAVL x, boolean isleft) {
+    void balance(PersistentStore store, NodeSBT x, boolean isleft) {
 
         while (true) {
             int sign = isleft ? 1
@@ -516,7 +516,7 @@ public class IndexAVLMemory extends IndexAVL {
                     break;
 
                 case -1 :
-                    NodeAVL l = isleft ? x.nLeft
+                    NodeSBT l = isleft ? x.nLeft
                                        : x.nRight;
 
                     if (l.iBalance == -sign) {
@@ -527,7 +527,7 @@ public class IndexAVLMemory extends IndexAVL {
                         x.iBalance = 0;
                         l.iBalance = 0;
                     } else {
-                        NodeAVL r = !isleft ? l.nLeft
+                        NodeSBT r = !isleft ? l.nLeft
                                             : l.nRight;
 
                         x.replace(store, this, r);

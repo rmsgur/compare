@@ -32,14 +32,14 @@
 package org.hsqldb.persist;
 
 import org.hsqldb.Row;
-import org.hsqldb.RowAVL;
+import org.hsqldb.RowSBT;
 import org.hsqldb.RowAction;
 import org.hsqldb.Session;
 import org.hsqldb.Table;
 import org.hsqldb.TableBase;
 import org.hsqldb.index.Index;
-import org.hsqldb.index.NodeAVL;
-import org.hsqldb.index.NodeAVLDisk;
+import org.hsqldb.index.NodeSBT;
+import org.hsqldb.index.NodeSBTDisk;
 import org.hsqldb.navigator.RowIterator;
 
 /*
@@ -49,11 +49,11 @@ import org.hsqldb.navigator.RowIterator;
  * @version 2.3.0
  * @since 2.0.1
  */
-public class RowStoreAVLHybridExtended extends RowStoreAVLHybrid {
+public class RowStoreSBTHybridExtended extends RowStoreSBTHybrid {
 
     Session session;
 
-    public RowStoreAVLHybridExtended(Session session,
+    public RowStoreSBTHybridExtended(Session session,
                                      PersistentStoreCollection manager,
                                      TableBase table, boolean diskBased) {
 
@@ -79,7 +79,7 @@ public class RowStoreAVLHybridExtended extends RowStoreAVLHybrid {
         if (isCached) {
             int size = object.getRealSize(cache.rowOut);
 
-            size += indexList.length * NodeAVLDisk.SIZE_IN_BYTE;
+            size += indexList.length * NodeSBTDisk.SIZE_IN_BYTE;
             size = cache.rowOut.getStorageSize(size);
 
             object.setStorageSize(size);
@@ -112,7 +112,7 @@ public class RowStoreAVLHybridExtended extends RowStoreAVLHybrid {
 
     public void indexRow(Session session, Row row) {
 
-        NodeAVL node  = ((RowAVL) row).getNode(0);
+        NodeSBT node  = ((RowSBT) row).getNode(0);
         int     count = 0;
 
         while (node != null) {
@@ -123,7 +123,7 @@ public class RowStoreAVLHybridExtended extends RowStoreAVLHybrid {
 
         if (count != indexList.length) {
             resetAccessorKeys(session, table.getIndexList());
-            ((RowAVL) row).setNewNodes(this);
+            ((RowSBT) row).setNewNodes(this);
         }
 
         super.indexRow(session, row);
@@ -162,7 +162,7 @@ public class RowStoreAVLHybridExtended extends RowStoreAVLHybrid {
             case RowAction.ACTION_DELETE :
                 row = (Row) get(row, true);
 
-                ((RowAVL) row).setNewNodes(this);
+                ((RowSBT) row).setNewNodes(this);
                 row.keepInMemory(false);
                 indexRow(session, row);
                 break;
@@ -185,7 +185,7 @@ public class RowStoreAVLHybridExtended extends RowStoreAVLHybrid {
      */
     public void delete(Session session, Row row) {
 
-        NodeAVL node  = ((RowAVL) row).getNode(0);
+        NodeSBT node  = ((RowSBT) row).getNode(0);
         int     count = 0;
 
         while (node != null) {
@@ -236,7 +236,7 @@ public class RowStoreAVLHybridExtended extends RowStoreAVLHybrid {
 
     private void resetAccessorKeysForCached() {
 
-        RowStoreAVLHybrid tempStore = new RowStoreAVLHybridExtended(session,
+        RowStoreSBTHybrid tempStore = new RowStoreSBTHybridExtended(session,
             manager, table, true);
 
         tempStore.changeToDiskTable(session);

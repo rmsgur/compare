@@ -183,7 +183,7 @@ final class DataFileDefrag {
         pointerLookup.clear();
         database.logger.logDetailEvent("lookup begins " + table.getName().name
                                        + " " + stopw.elapsedTime());
-        RowStoreSBTDisk.moveDataToSpace(store, dataFileOut, space,
+        RowStoreAVLDisk.moveDataToSpace(store, dataFileOut, space,
                                         pointerLookup);
 
         for (int i = 0; i < table.getIndexCount(); i++) {

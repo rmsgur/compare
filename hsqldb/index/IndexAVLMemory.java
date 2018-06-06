@@ -74,7 +74,7 @@ import org.hsqldb.Constraint;
 import org.hsqldb.HsqlNameManager;
 import org.hsqldb.HsqlNameManager.HsqlName;
 import org.hsqldb.Row;
-import org.hsqldb.RowSBT;
+import org.hsqldb.RowAVL;
 import org.hsqldb.Session;
 import org.hsqldb.Table;
 import org.hsqldb.TableBase;
@@ -84,7 +84,7 @@ import org.hsqldb.persist.PersistentStore;
 import org.hsqldb.types.Type;
 
 /**
- * Implementation of an SBT for memory tables.<p>
+ * Implementation of an AVL for memory tables.<p>
  *
  *  New class derived from Hypersonic SQL code and enhanced in HSQLDB. <p>
  *
@@ -93,7 +93,7 @@ import org.hsqldb.types.Type;
  * @version 1.9.0
  * @since Hypersonic SQL
  */
-public class IndexSBTMemory extends IndexSBT {
+public class IndexAVLMemory extends IndexAVL {
 
     /**
      * Constructor declaration
@@ -111,7 +111,7 @@ public class IndexSBTMemory extends IndexSBT {
      * @param forward is this an auto-index for an FK that refers to a table
      *   defined after this table
      */
-    public IndexSBTMemory(HsqlName name, long id, TableBase table,
+    public IndexAVLMemory(HsqlName name, long id, TableBase table,
                           int[] columns, boolean[] descending,
                           boolean[] nullsLast, Type[] colTypes, boolean pk,
                           boolean unique, boolean constraint,
@@ -125,8 +125,8 @@ public class IndexSBTMemory extends IndexSBT {
         readLock.lock();
 
         try {
-            NodeSBT p = getAccessor(store);
-            NodeSBT f = null;
+            NodeAVL p = getAccessor(store);
+            NodeAVL f = null;
 
             while (p != null) {
                 f = p;
@@ -148,10 +148,10 @@ public class IndexSBTMemory extends IndexSBT {
         }
     }
 
-    void checkNodes(PersistentStore store, NodeSBT p) {
+    void checkNodes(PersistentStore store, NodeAVL p) {
 
-        NodeSBT l = p.nLeft;
-        NodeSBT r = p.nRight;
+        NodeAVL l = p.nLeft;
+        NodeAVL r = p.nRight;
 
         if (l != null && l.getBalance(store) == -2) {
             System.out.print("broken index - deleted");
@@ -175,8 +175,8 @@ public class IndexSBTMemory extends IndexSBT {
      */
     public void insert(Session session, PersistentStore store, Row row) {
 
-        NodeSBT        n;
-        NodeSBT        x;
+        NodeAVL        n;
+        NodeAVL        x;
         boolean        isleft        = true;
         int            compare       = -1;
         final Object[] rowData       = row.getData();
@@ -190,7 +190,7 @@ public class IndexSBTMemory extends IndexSBT {
             x = n;
 
             if (n == null) {
-                store.setAccessor(this, ((RowSBT) row).getNode(position));
+                store.setAccessor(this, ((RowAVL) row).getNode(position));
 
                 return;
             }
@@ -250,7 +250,7 @@ public class IndexSBTMemory extends IndexSBT {
                 }
             }
 
-            x = x.set(store, isleft, ((RowSBT) row).getNode(position));
+            x = x.set(store, isleft, ((RowAVL) row).getNode(position));
 
             balance(store, x, isleft);
         } finally {
@@ -258,13 +258,13 @@ public class IndexSBTMemory extends IndexSBT {
         }
     }
 
-    void delete(PersistentStore store, NodeSBT x) {
+    void delete(PersistentStore store, NodeAVL x) {
 
         if (x == null) {
             return;
         }
 
-        NodeSBT n;
+        NodeAVL n;
 
         writeLock.lock();
 
@@ -274,12 +274,12 @@ public class IndexSBTMemory extends IndexSBT {
             } else if (x.nRight == null) {
                 n = x.nLeft;
             } else {
-                NodeSBT d = x;
+                NodeAVL d = x;
 
                 x = x.nLeft;
 
                 while (true) {
-                    NodeSBT temp = x.nRight;
+                    NodeAVL temp = x.nRight;
 
                     if (temp == null) {
                         break;
@@ -298,8 +298,8 @@ public class IndexSBTMemory extends IndexSBT {
                 d.iBalance = b;
 
                 // set x.parent
-                NodeSBT xp = x.nParent;
-                NodeSBT dp = d.nParent;
+                NodeAVL xp = x.nParent;
+                NodeAVL dp = d.nParent;
 
                 if (d.isRoot(store)) {
                     store.setAccessor(this, x);
@@ -322,13 +322,13 @@ public class IndexSBTMemory extends IndexSBT {
                     if (d.nLeft == x) {
                         x.nLeft = d;
 
-                        NodeSBT dr = d.nRight;
+                        NodeAVL dr = d.nRight;
 
                         x.nRight = dr;
                     } else {
                         x.nRight = d;
 
-                        NodeSBT dl = d.nLeft;
+                        NodeAVL dl = d.nLeft;
 
                         x.nLeft = dl;
                     }
@@ -336,8 +336,8 @@ public class IndexSBTMemory extends IndexSBT {
                     d.nParent = xp;
                     xp.nRight = d;
 
-                    NodeSBT dl = d.nLeft;
-                    NodeSBT dr = d.nRight;
+                    NodeAVL dl = d.nLeft;
+                    NodeAVL dr = d.nRight;
 
                     x.nLeft  = dl;
                     x.nRight = dr;
@@ -383,13 +383,13 @@ public class IndexSBTMemory extends IndexSBT {
                         return;
 
                     case 1 :
-                        NodeSBT r = x.child(store, !isleft);
+                        NodeAVL r = x.child(store, !isleft);
                         int     b = r.iBalance;
 
                         if (b * sign >= 0) {
                             x.replace(store, this, r);
 
-                            NodeSBT child = r.child(store, isleft);
+                            NodeAVL child = r.child(store, isleft);
 
                             x.set(store, !isleft, child);
                             r.set(store, isleft, x);
@@ -405,7 +405,7 @@ public class IndexSBTMemory extends IndexSBT {
                             r.iBalance = 0;
                             x          = r;
                         } else {
-                            NodeSBT l = r.child(store, isleft);
+                            NodeAVL l = r.child(store, isleft);
 
                             x.replace(store, this, l);
 
@@ -433,14 +433,14 @@ public class IndexSBTMemory extends IndexSBT {
         }
     }
 
-    NodeSBT next(PersistentStore store, NodeSBT x) {
+    NodeAVL next(PersistentStore store, NodeAVL x) {
 
-        NodeSBT r = x.nRight;
+        NodeAVL r = x.nRight;
 
         if (r != null) {
             x = r;
 
-            NodeSBT l = x.nLeft;
+            NodeAVL l = x.nLeft;
 
             while (l != null) {
                 x = l;
@@ -450,7 +450,7 @@ public class IndexSBTMemory extends IndexSBT {
             return x;
         }
 
-        NodeSBT ch = x;
+        NodeAVL ch = x;
 
         x = x.nParent;
 
@@ -462,18 +462,18 @@ public class IndexSBTMemory extends IndexSBT {
         return x;
     }
 
-    NodeSBT last(PersistentStore store, NodeSBT x) {
+    NodeAVL last(PersistentStore store, NodeAVL x) {
 
         if (x == null) {
             return null;
         }
 
-        NodeSBT left = x.nLeft;
+        NodeAVL left = x.nLeft;
 
         if (left != null) {
             x = left;
 
-            NodeSBT right = x.nRight;
+            NodeAVL right = x.nRight;
 
             while (right != null) {
                 x     = right;
@@ -483,7 +483,7 @@ public class IndexSBTMemory extends IndexSBT {
             return x;
         }
 
-        NodeSBT ch = x;
+        NodeAVL ch = x;
 
         x = x.nParent;
 
@@ -498,7 +498,7 @@ public class IndexSBTMemory extends IndexSBT {
     /**
      * Balances part of the tree after an alteration to the index.
      */
-    void balance(PersistentStore store, NodeSBT x, boolean isleft) {
+    void balance(PersistentStore store, NodeAVL x, boolean isleft) {
 
         while (true) {
             int sign = isleft ? 1
@@ -516,7 +516,7 @@ public class IndexSBTMemory extends IndexSBT {
                     break;
 
                 case -1 :
-                    NodeSBT l = isleft ? x.nLeft
+                    NodeAVL l = isleft ? x.nLeft
                                        : x.nRight;
 
                     if (l.iBalance == -sign) {
@@ -527,7 +527,7 @@ public class IndexSBTMemory extends IndexSBT {
                         x.iBalance = 0;
                         l.iBalance = 0;
                     } else {
-                        NodeSBT r = !isleft ? l.nLeft
+                        NodeAVL r = !isleft ? l.nLeft
                                             : l.nRight;
 
                         x.replace(store, this, r);

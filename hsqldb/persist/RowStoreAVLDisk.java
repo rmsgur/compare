@@ -35,9 +35,9 @@ import java.io.IOException;
 
 import org.hsqldb.HsqlException;
 import org.hsqldb.Row;
-import org.hsqldb.RowSBT;
-import org.hsqldb.RowSBTDisk;
-import org.hsqldb.RowSBTDiskLarge;
+import org.hsqldb.RowAVL;
+import org.hsqldb.RowAVLDisk;
+import org.hsqldb.RowAVLDiskLarge;
 import org.hsqldb.RowAction;
 import org.hsqldb.Session;
 import org.hsqldb.Table;
@@ -45,8 +45,8 @@ import org.hsqldb.TransactionManager;
 import org.hsqldb.error.Error;
 import org.hsqldb.error.ErrorCode;
 import org.hsqldb.index.Index;
-import org.hsqldb.index.NodeSBT;
-import org.hsqldb.index.NodeSBTDisk;
+import org.hsqldb.index.NodeAVL;
+import org.hsqldb.index.NodeAVLDisk;
 import org.hsqldb.lib.ArrayUtil;
 import org.hsqldb.lib.DoubleIntIndex;
 import org.hsqldb.lib.LongLookup;
@@ -61,13 +61,13 @@ import org.hsqldb.rowio.RowOutputInterface;
  * @version 2.3.0
  * @since 1.9.0
  */
-public class RowStoreSBTDisk extends RowStoreSBT implements PersistentStore {
+public class RowStoreAVLDisk extends RowStoreAVL implements PersistentStore {
 
     DataFileCache      cache;
     RowOutputInterface rowOut;
     boolean            largeData;
 
-    public RowStoreSBTDisk(PersistentStoreCollection manager,
+    public RowStoreAVLDisk(PersistentStoreCollection manager,
                            DataFileCache cache, Table table) {
 
         this(manager, table);
@@ -81,7 +81,7 @@ public class RowStoreSBTDisk extends RowStoreSBT implements PersistentStore {
         tableSpace = cache.spaceManager.getTableSpace(table.getSpaceID());
     }
 
-    protected RowStoreSBTDisk(PersistentStoreCollection manager, Table table) {
+    protected RowStoreAVLDisk(PersistentStoreCollection manager, Table table) {
 
         this.database     = table.database;
         this.manager      = manager;
@@ -131,7 +131,7 @@ public class RowStoreSBTDisk extends RowStoreSBT implements PersistentStore {
 
         int size = object.getRealSize(rowOut);
 
-        size += indexList.length * NodeSBTDisk.SIZE_IN_BYTE;
+        size += indexList.length * NodeAVLDisk.SIZE_IN_BYTE;
         size = rowOut.getStorageSize(size);
 
         object.setStorageSize(size);
@@ -160,9 +160,9 @@ public class RowStoreSBTDisk extends RowStoreSBT implements PersistentStore {
 
         try {
             if (largeData) {
-                return new RowSBTDiskLarge(table, in);
+                return new RowAVLDiskLarge(table, in);
             } else {
-                return new RowSBTDisk(table, in);
+                return new RowAVLDisk(table, in);
             }
         } catch (IOException e) {
             throw Error.error(ErrorCode.DATA_FILE_ERROR, e);
@@ -175,9 +175,9 @@ public class RowStoreSBTDisk extends RowStoreSBT implements PersistentStore {
         Row row;
 
         if (largeData) {
-            row = new RowSBTDiskLarge(table, (Object[]) object, this);
+            row = new RowAVLDiskLarge(table, (Object[]) object, this);
         } else {
-            row = new RowSBTDisk(table, (Object[]) object, this);
+            row = new RowAVLDisk(table, (Object[]) object, this);
         }
 
         add(session, row, tx);
@@ -266,7 +266,7 @@ public class RowStoreSBTDisk extends RowStoreSBT implements PersistentStore {
                 if (txModel == TransactionManager.LOCKS) {
                     row = (Row) get(row, true);
 
-                    ((RowSBT) row).setNewNodes(this);
+                    ((RowAVL) row).setNewNodes(this);
                     row.keepInMemory(false);
                     indexRow(session, row);
                 }
@@ -308,7 +308,7 @@ public class RowStoreSBTDisk extends RowStoreSBT implements PersistentStore {
      * Works only for TEXT TABLE as others need specific spaceManager
      */
     public void setCache(DataFileCache cache) {
-        throw Error.runtimeError(ErrorCode.U_S0500, "RowStoreSBTDisk");
+        throw Error.runtimeError(ErrorCode.U_S0500, "RowStoreAVLDisk");
     }
 
     public void release() {
@@ -322,13 +322,13 @@ public class RowStoreSBTDisk extends RowStoreSBT implements PersistentStore {
 
     public CachedObject getAccessor(Index key) {
 
-        NodeSBT node = (NodeSBT) accessorList[key.getPosition()];
+        NodeAVL node = (NodeAVL) accessorList[key.getPosition()];
 
         if (node == null) {
             return null;
         }
 
-        RowSBT row = (RowSBT) get(node.getRow(this), false);
+        RowAVL row = (RowAVL) get(node.getRow(this), false);
 
         node                            = row.getNode(key.getPosition());
         accessorList[key.getPosition()] = node;
@@ -341,7 +341,7 @@ public class RowStoreSBTDisk extends RowStoreSBT implements PersistentStore {
         CachedObject object = get(accessor, false);
 
         if (object != null) {
-            NodeSBT node = ((RowSBT) object).getNode(key.getPosition());
+            NodeAVL node = ((RowAVL) object).getNode(key.getPosition());
 
             object = node;
         }
@@ -358,7 +358,7 @@ public class RowStoreSBTDisk extends RowStoreSBT implements PersistentStore {
             return;
         }
 
-        throw Error.runtimeError(ErrorCode.U_S0500, "RowStoreSBTDisk");
+        throw Error.runtimeError(ErrorCode.U_S0500, "RowStoreAVLDisk");
     }
 
     public void setReadOnly(boolean readOnly) {}

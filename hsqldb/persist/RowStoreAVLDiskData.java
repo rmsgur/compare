@@ -35,8 +35,8 @@ import java.io.IOException;
 
 import org.hsqldb.HsqlException;
 import org.hsqldb.Row;
-import org.hsqldb.RowSBT;
-import org.hsqldb.RowSBTDiskData;
+import org.hsqldb.RowAVL;
+import org.hsqldb.RowAVLDiskData;
 import org.hsqldb.RowAction;
 import org.hsqldb.Session;
 import org.hsqldb.Table;
@@ -55,12 +55,12 @@ import org.hsqldb.rowio.RowOutputInterface;
  * @version 2.3.0
  * @since 1.9.0
  */
-public class RowStoreSBTDiskData extends RowStoreSBT {
+public class RowStoreAVLDiskData extends RowStoreAVL {
 
     DataFileCache      cache;
     RowOutputInterface rowOut;
 
-    public RowStoreSBTDiskData(PersistentStoreCollection manager,
+    public RowStoreAVLDiskData(PersistentStoreCollection manager,
                                Table table) {
 
         this.database     = table.database;
@@ -112,7 +112,7 @@ public class RowStoreSBTDiskData extends RowStoreSBT {
     public CachedObject get(RowInputInterface in) {
 
         try {
-            RowSBTDiskData row = new RowSBTDiskData(this, table, in);
+            RowAVLDiskData row = new RowAVLDiskData(this, table, in);
 
             row.setPos(in.getPos());
             row.setStorageSize(in.getSize());
@@ -128,7 +128,7 @@ public class RowStoreSBTDiskData extends RowStoreSBT {
     public CachedObject get(CachedObject object, RowInputInterface in) {
 
         try {
-            ((RowSBTDiskData) object).getRowData(table, in);
+            ((RowAVLDiskData) object).getRowData(table, in);
 
             return object;
         } catch (IOException e) {
@@ -139,7 +139,7 @@ public class RowStoreSBTDiskData extends RowStoreSBT {
     public CachedObject getNewCachedObject(Session session, Object object,
                                            boolean tx) {
 
-        Row row = new RowSBTDiskData(this, table, (Object[]) object);
+        Row row = new RowAVLDiskData(this, table, (Object[]) object);
 
         add(session, row, tx);
 
@@ -183,7 +183,7 @@ public class RowStoreSBTDiskData extends RowStoreSBT {
         int position = key.getPosition();
 
         if (position >= accessorList.length) {
-            throw Error.runtimeError(ErrorCode.U_S0500, "RowStoreSBT");
+            throw Error.runtimeError(ErrorCode.U_S0500, "RowStoreAVL");
         }
 
         return accessorList[position];
@@ -236,7 +236,7 @@ public class RowStoreSBTDiskData extends RowStoreSBT {
 
             case RowAction.ACTION_DELETE :
                 if (txModel == TransactionManager.LOCKS) {
-                    ((RowSBT) row).setNewNodes(this);
+                    ((RowAVL) row).setNewNodes(this);
                     indexRow(session, row);
                 }
                 break;

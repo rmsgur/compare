@@ -74,8 +74,8 @@ import java.io.IOException;
 
 import org.hsqldb.error.Error;
 import org.hsqldb.error.ErrorCode;
-import org.hsqldb.index.NodeSBT;
-import org.hsqldb.index.NodeSBTDisk;
+import org.hsqldb.index.NodeAVL;
+import org.hsqldb.index.NodeAVLDisk;
 import org.hsqldb.lib.LongLookup;
 import org.hsqldb.persist.PersistentStore;
 import org.hsqldb.rowio.RowInputInterface;
@@ -98,7 +98,7 @@ import org.hsqldb.rowio.RowOutputInterface;
  * @version 2.2.9
  * @since Hypersonic SQL
  */
-public class RowSBTDisk extends RowSBT {
+public class RowAVLDisk extends RowAVL {
 
     public static final int NO_POS = -1;
 
@@ -126,7 +126,7 @@ public class RowSBTDisk extends RowSBT {
      * @param t table
      * @param o row data
      */
-    public RowSBTDisk(TableBase t, Object[] o, PersistentStore store) {
+    public RowAVLDisk(TableBase t, Object[] o, PersistentStore store) {
 
         super(t, o);
 
@@ -142,7 +142,7 @@ public class RowSBTDisk extends RowSBT {
      * @param in data source
      * @throws IOException
      */
-    public RowSBTDisk(TableBase t, RowInputInterface in) throws IOException {
+    public RowAVLDisk(TableBase t, RowInputInterface in) throws IOException {
 
         super(t, (Object[]) null);
 
@@ -151,23 +151,23 @@ public class RowSBTDisk extends RowSBT {
 
         int indexcount = t.getIndexCount();
 
-        nPrimaryNode = new NodeSBTDisk(this, in, 0);
+        nPrimaryNode = new NodeAVLDisk(this, in, 0);
 
-        NodeSBT n = nPrimaryNode;
+        NodeAVL n = nPrimaryNode;
 
         for (int i = 1; i < indexcount; i++) {
-            n.nNext = new NodeSBTDisk(this, in, i);
+            n.nNext = new NodeAVLDisk(this, in, i);
             n       = n.nNext;
         }
 
         rowData = in.readData(table.getColumnTypes());
     }
 
-    RowSBTDisk(TableBase t) {
+    RowAVLDisk(TableBase t) {
         super(t, (Object[]) null);
     }
 
-    public NodeSBT insertNode(int index) {
+    public NodeAVL insertNode(int index) {
         return null;
     }
 
@@ -256,10 +256,10 @@ public class RowSBTDisk extends RowSBT {
      */
     public void delete(PersistentStore store) {
 
-        RowSBTDisk row = this;
+        RowAVLDisk row = this;
 
         if (!row.keepInMemory(true)) {
-            row = (RowSBTDisk) store.get(row, true);
+            row = (RowAVLDisk) store.get(row, true);
         }
 
         super.delete(store);
@@ -268,10 +268,10 @@ public class RowSBTDisk extends RowSBT {
 
     public void destroy() {
 
-        NodeSBT n = nPrimaryNode;
+        NodeAVL n = nPrimaryNode;
 
         while (n != null) {
-            NodeSBT last = n;
+            NodeAVL last = n;
 
             n          = n.nNext;
             last.nNext = null;
@@ -293,7 +293,7 @@ public class RowSBTDisk extends RowSBT {
 
             if (keepCount < 0) {
                 throw Error.runtimeError(ErrorCode.U_S0500,
-                                         "RowSBTDisk - keep count");
+                                         "RowAVLDisk - keep count");
             }
         }
 
@@ -312,7 +312,7 @@ public class RowSBTDisk extends RowSBT {
             return;
         }
 
-        NodeSBT n = nPrimaryNode;
+        NodeAVL n = nPrimaryNode;
 
         while (n != null) {
             n.setInMemory(in);
@@ -325,12 +325,12 @@ public class RowSBTDisk extends RowSBT {
 
         int indexcount = store.getAccessorKeys().length;
 
-        nPrimaryNode = new NodeSBTDisk(this, 0);
+        nPrimaryNode = new NodeAVLDisk(this, 0);
 
-        NodeSBT n = nPrimaryNode;
+        NodeAVL n = nPrimaryNode;
 
         for (int i = 1; i < indexcount; i++) {
-            n.nNext = new NodeSBTDisk(this, i);
+            n.nNext = new NodeAVLDisk(this, i);
             n       = n.nNext;
         }
     }
@@ -363,7 +363,7 @@ public class RowSBTDisk extends RowSBT {
 
         out.writeSize(storageSize);
 
-        NodeSBT rownode = nPrimaryNode;
+        NodeAVL rownode = nPrimaryNode;
 
         while (rownode != null) {
             rownode.write(out, lookup);
@@ -388,7 +388,7 @@ public class RowSBTDisk extends RowSBT {
 
         out.writeSize(storageSize);
 
-        NodeSBT n = nPrimaryNode;
+        NodeAVL n = nPrimaryNode;
 
         while (n != null) {
             n.write(out);

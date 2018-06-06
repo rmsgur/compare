@@ -33,8 +33,8 @@ package org.hsqldb;
 
 import java.io.IOException;
 
-import org.hsqldb.index.NodeSBT;
-import org.hsqldb.index.NodeSBTDiskLarge;
+import org.hsqldb.index.NodeAVL;
+import org.hsqldb.index.NodeAVLDiskLarge;
 import org.hsqldb.persist.PersistentStore;
 import org.hsqldb.rowio.RowInputInterface;
 
@@ -44,7 +44,7 @@ import org.hsqldb.rowio.RowInputInterface;
  * @version 2.2.9
  * @since 2.2.9
  */
-public class RowSBTDiskLarge extends RowSBTDisk {
+public class RowAVLDiskLarge extends RowAVLDisk {
 
     /**
      *  Constructor for new Rows.  Variable hasDataChanged is set to true in
@@ -53,7 +53,7 @@ public class RowSBTDiskLarge extends RowSBTDisk {
      * @param t table
      * @param o row data
      */
-    public RowSBTDiskLarge(TableBase t, Object[] o, PersistentStore store) {
+    public RowAVLDiskLarge(TableBase t, Object[] o, PersistentStore store) {
 
         super(t, o, store);
     }
@@ -65,7 +65,7 @@ public class RowSBTDiskLarge extends RowSBTDisk {
      * @param in data source
      * @throws IOException
      */
-    public RowSBTDiskLarge(TableBase t, RowInputInterface in) throws IOException {
+    public RowAVLDiskLarge(TableBase t, RowInputInterface in) throws IOException {
 
         super(t);
 
@@ -74,12 +74,12 @@ public class RowSBTDiskLarge extends RowSBTDisk {
 
         int indexcount = t.getIndexCount();
 
-        nPrimaryNode = new NodeSBTDiskLarge(this, in, 0);
+        nPrimaryNode = new NodeAVLDiskLarge(this, in, 0);
 
-        NodeSBT n = nPrimaryNode;
+        NodeAVL n = nPrimaryNode;
 
         for (int i = 1; i < indexcount; i++) {
-            n.nNext = new NodeSBTDiskLarge(this, in, i);
+            n.nNext = new NodeAVLDiskLarge(this, in, i);
             n       = n.nNext;
         }
 
@@ -90,12 +90,12 @@ public class RowSBTDiskLarge extends RowSBTDisk {
 
         int indexcount = store.getAccessorKeys().length;
 
-        nPrimaryNode = new NodeSBTDiskLarge(this, 0);
+        nPrimaryNode = new NodeAVLDiskLarge(this, 0);
 
-        NodeSBT n = nPrimaryNode;
+        NodeAVL n = nPrimaryNode;
 
         for (int i = 1; i < indexcount; i++) {
-            n.nNext = new NodeSBTDiskLarge(this, i);
+            n.nNext = new NodeAVLDiskLarge(this, i);
             n       = n.nNext;
         }
     }

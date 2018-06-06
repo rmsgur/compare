@@ -33,7 +33,7 @@ package org.hsqldb;
 
 import java.io.IOException;
 
-import org.hsqldb.index.NodeSBT;
+import org.hsqldb.index.NodeAVL;
 import org.hsqldb.persist.PersistentStore;
 import org.hsqldb.rowio.RowInputInterface;
 import org.hsqldb.rowio.RowOutputInterface;
@@ -50,7 +50,7 @@ import org.hsqldb.rowio.RowOutputInterface;
  * @version 2.2.9
  * @version 1.7.0
  */
-public class RowSBTDiskData extends RowSBT {
+public class RowAVLDiskData extends RowAVL {
 
     PersistentStore store;
     int             accessCount;
@@ -60,7 +60,7 @@ public class RowSBTDiskData extends RowSBT {
     /**
      *  Constructor for new rows.
      */
-    public RowSBTDiskData(PersistentStore store, TableBase t, Object[] o) {
+    public RowAVLDiskData(PersistentStore store, TableBase t, Object[] o) {
 
         super(t, o);
 
@@ -74,7 +74,7 @@ public class RowSBTDiskData extends RowSBT {
      *  Constructor when read from the disk into the Cache. The link with
      *  the Nodes is made separetly.
      */
-    public RowSBTDiskData(PersistentStore store, TableBase t,
+    public RowAVLDiskData(PersistentStore store, TableBase t,
                           RowInputInterface in) throws IOException {
 
         super(t, (Object[]) null);
@@ -133,20 +133,20 @@ public class RowSBTDiskData extends RowSBT {
 
         int index = store.getAccessorKeys().length;
 
-        nPrimaryNode = new NodeSBT(this);
+        nPrimaryNode = new NodeAVL(this);
 
-        NodeSBT n = nPrimaryNode;
+        NodeAVL n = nPrimaryNode;
 
         for (int i = 1; i < index; i++) {
-            n.nNext = new NodeSBT(this);
+            n.nNext = new NodeAVL(this);
             n       = n.nNext;
         }
     }
 
-    public NodeSBT insertNode(int index) {
+    public NodeAVL insertNode(int index) {
 
-        NodeSBT backnode = getNode(index - 1);
-        NodeSBT newnode  = new NodeSBT(this);
+        NodeAVL backnode = getNode(index - 1);
+        NodeAVL newnode  = new NodeAVL(this);
 
         newnode.nNext  = backnode.nNext;
         backnode.nNext = newnode;

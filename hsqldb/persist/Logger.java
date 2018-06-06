@@ -59,8 +59,8 @@ import org.hsqldb.TransactionManagerMVCC;
 import org.hsqldb.error.Error;
 import org.hsqldb.error.ErrorCode;
 import org.hsqldb.index.Index;
-import org.hsqldb.index.IndexSBT;
-import org.hsqldb.index.IndexSBTMemory;
+import org.hsqldb.index.IndexAVL;
+import org.hsqldb.index.IndexAVLMemory;
 import org.hsqldb.lib.ArrayUtil;
 import org.hsqldb.lib.FileAccess;
 import org.hsqldb.lib.FileUtil;
@@ -1396,21 +1396,21 @@ public class Logger {
                     break;
                 }
 
-                return new RowStoreSBTDisk(collection, cache, (Table) table);
+                return new RowStoreAVLDisk(collection, cache, (Table) table);
 
             case TableBase.MEMORY_TABLE :
             case TableBase.SYSTEM_TABLE :
-                return new RowStoreSBTMemory(collection, (Table) table);
+                return new RowStoreAVLMemory(collection, (Table) table);
 
             case TableBase.TEXT_TABLE :
-                return new RowStoreSBTDiskData(collection, (Table) table);
+                return new RowStoreAVLDiskData(collection, (Table) table);
 
             case TableBase.INFO_SCHEMA_TABLE :
-                return new RowStoreSBTHybridExtended(session, collection,
+                return new RowStoreAVLHybridExtended(session, collection,
                                                      table, false);
 
             case TableBase.TEMP_TABLE :
-                return new RowStoreSBTHybridExtended(session, collection,
+                return new RowStoreAVLHybridExtended(session, collection,
                                                      table, true);
 
             case TableBase.CHANGE_SET_TABLE :
@@ -1425,7 +1425,7 @@ public class Logger {
                     return null;
                 }
 
-                return new RowStoreSBTHybrid(session, collection, table, true);
+                return new RowStoreAVLHybrid(session, collection, table, true);
         }
 
         throw Error.runtimeError(ErrorCode.U_S0500, "Logger");
@@ -1442,7 +1442,7 @@ public class Logger {
             case TableBase.INFO_SCHEMA_TABLE :
             case TableBase.SYSTEM_TABLE :
             case TableBase.MEMORY_TABLE :
-                return new IndexSBTMemory(name, id, table, columns,
+                return new IndexAVLMemory(name, id, table, columns,
                                           descending, nullsLast, colTypes, pk,
                                           unique, constraint, forward);
 
@@ -1455,7 +1455,7 @@ public class Logger {
             case TableBase.SYSTEM_SUBQUERY :
             case TableBase.VIEW_TABLE :
             case TableBase.TRANSITION_TABLE :
-                return new IndexSBT(name, id, table, columns, descending,
+                return new IndexAVL(name, id, table, columns, descending,
                                     nullsLast, colTypes, pk, unique,
                                     constraint, forward);
         }

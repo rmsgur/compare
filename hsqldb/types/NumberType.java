@@ -1,4 +1,4 @@
-/* Copyright (c) 2001-2016, The HSQL Development Group
+/* Copyright (c) 2001-2011, The HSQL Development Group
  * All rights reserved.
  *
  * Redistribution and use in source and binary forms, with or without
@@ -47,7 +47,7 @@ import org.hsqldb.map.ValuePool;
  * Type subclass for all NUMBER types.<p>
  *
  * @author Fred Toussi (fredt@users dot sourceforge.net)
- * @version 2.3.5
+ * @version 2.3.0
  * @since 1.9.0
  */
 public final class NumberType extends Type {
@@ -181,11 +181,9 @@ public final class NumberType extends Type {
             case Types.SQL_REAL :
             case Types.SQL_FLOAT :
             case Types.SQL_DOUBLE :
-                return displaySize() - 1;
-
             case Types.SQL_NUMERIC :
             case Types.SQL_DECIMAL :
-                return (int) precision;
+                return displaySize() - 1;
 
             default :
                 throw Error.runtimeError(ErrorCode.U_S0500, "NumberType");
@@ -609,6 +607,7 @@ public final class NumberType extends Type {
                 return getAggregateType(other);
         }
 
+        // resolution for ADD and MULTIPLY only
         if (!other.isNumberType()) {
             throw Error.error(ErrorCode.X_42562);
         }
@@ -618,15 +617,8 @@ public final class NumberType extends Type {
             return Type.SQL_DOUBLE;
         }
 
-        // resolution for INTEGER types
         if (operation != OpTypes.DIVIDE || session.database.sqlAvgScale == 0) {
-            int sum;
-
-            if (operation == OpTypes.DIVIDE) {
-                sum = typeWidth;
-            } else {
-                sum = typeWidth + ((NumberType) other).typeWidth;
-            }
+            int sum = typeWidth + ((NumberType) other).typeWidth;
 
             if (sum <= INTEGER_WIDTH) {
                 return Type.SQL_INTEGER;
@@ -645,17 +637,15 @@ public final class NumberType extends Type {
             case OpTypes.ADD :
                 newScale = scale > other.scale ? scale
                                                : other.scale;
-                newDigits = getDecimalPrecision() - scale
-                            > ((NumberType) other).getDecimalPrecision()
-                              - other.scale ? getDecimalPrecision() - scale
-                                            : ((NumberType) other).getDecimalPrecision()
-                                              - other.scale;
+                newDigits = precision - scale > other.precision - other.scale
+                            ? precision - scale
+                            : other.precision - other.scale;
 
                 newDigits++;
                 break;
 
             case OpTypes.DIVIDE :
-                newDigits = getDecimalPrecision() - scale + other.scale;
+                newDigits = precision - scale + other.scale;
                 newScale  = scale > other.scale ? scale
                                                 : other.scale;
 
@@ -665,10 +655,8 @@ public final class NumberType extends Type {
                 break;
 
             case OpTypes.MULTIPLY :
-                newDigits = getDecimalPrecision() - scale
-                            + ((NumberType) other).getDecimalPrecision()
-                            - other.scale;
-                newScale = scale + other.scale;
+                newDigits = precision - scale + other.precision - other.scale;
+                newScale  = scale + other.scale;
                 break;
 
             default :
@@ -714,7 +702,6 @@ public final class NumberType extends Type {
                                                 : 0);
                 } else if (b instanceof BigDecimal) {
                     BigDecimal ad = convertToDecimal(a);
-
                     return ad.compareTo((BigDecimal) b);
                 }
             }
@@ -731,13 +718,10 @@ public final class NumberType extends Type {
                 } else if (b instanceof Double) {
                     BigDecimal ad =
                         BigDecimal.valueOf(((Number) a).longValue());
-                    BigDecimal bd =
-                        BigDecimal.valueOf(((Double) b).doubleValue());
-
+                    BigDecimal bd = new BigDecimal(((Double) b).doubleValue());
                     return ad.compareTo(bd);
                 } else if (b instanceof BigDecimal) {
                     BigDecimal ad = convertToDecimal(a);
-
                     return ad.compareTo((BigDecimal) b);
                 }
             }
@@ -765,7 +749,6 @@ public final class NumberType extends Type {
             case Types.SQL_NUMERIC :
             case Types.SQL_DECIMAL : {
                 BigDecimal bd = convertToDecimal(b);
-
                 return ((BigDecimal) a).compareTo(bd);
             }
             default :
@@ -900,8 +883,6 @@ public final class NumberType extends Type {
 
                     break;
                 }
-
-            // fall through
             default :
                 throw Error.error(ErrorCode.X_42561);
         }
@@ -1359,8 +1340,6 @@ public final class NumberType extends Type {
                         || otherType.typeCode == Types.SQL_DOUBLE) {
                     return 0;
                 }
-
-            // fall through
             default :
         }
 
@@ -1369,52 +1348,34 @@ public final class NumberType extends Type {
 
     public int compareToTypeRange(Object o) {
 
-        if (o instanceof Integer || o instanceof Long
-                || o instanceof BigDecimal) {
+        if (!(o instanceof Number)) {
+            return 0;
+        }
+
+        if (o instanceof Integer || o instanceof Long) {
             long temp = ((Number) o).longValue();
             int  min;
             int  max;
-            int  result;
 
             switch (typeCode) {
 
                 case Types.TINYINT :
-                    result = compareBigDecimalToLongLimits(o);
-
-                    if (result != 0) {
-                        return result;
-                    }
-
                     min = Byte.MIN_VALUE;
                     max = Byte.MAX_VALUE;
                     break;
 
                 case Types.SQL_SMALLINT :
-                    result = compareBigDecimalToLongLimits(o);
-
-                    if (result != 0) {
-                        return result;
-                    }
-
                     min = Short.MIN_VALUE;
                     max = Short.MAX_VALUE;
                     break;
 
                 case Types.SQL_INTEGER :
-                    result = compareBigDecimalToLongLimits(o);
-
-                    if (result != 0) {
-                        return result;
-                    }
-
                     min = Integer.MIN_VALUE;
                     max = Integer.MAX_VALUE;
                     break;
 
                 case Types.SQL_BIGINT :
-                    result = compareBigDecimalToLongLimits(o);
-
-                    return result;
+                    return 0;
 
                 case Types.SQL_DECIMAL :
                 case Types.SQL_NUMERIC : {
@@ -1681,25 +1642,13 @@ public final class NumberType extends Type {
             throw Error.error(ErrorCode.X_42561);
         }
 
-        a = truncate(a, scale);
-        b = ((NumberType) otherType).truncate(b, otherType.scale);
-
         Object temp = divide(null, a, b);
 
-        switch (typeCode) {
-
-            case Types.SQL_REAL :
-            case Types.SQL_FLOAT :
-            case Types.SQL_DOUBLE :
-            case Types.SQL_NUMERIC :
-            case Types.SQL_DECIMAL :
-                temp = truncate(temp, 0);
-        }
-
         temp = multiply(temp, b);
+        temp = convertToDefaultType(null, temp);
         temp = subtract(session, a, temp, this);
 
-        return otherType.convertToType(null, temp, this);
+        return convertToTypeLimits(null, temp);
     }
 
     public Object absolute(Object a) {
@@ -1828,7 +1777,35 @@ public final class NumberType extends Type {
     }
 
     public boolean isNegative(Object a) {
-        return compareToZero(a) < 0;
+
+        if (a == null) {
+            return false;
+        }
+
+        switch (typeCode) {
+
+            case Types.SQL_REAL :
+            case Types.SQL_FLOAT :
+            case Types.SQL_DOUBLE : {
+                double ad = ((Number) a).doubleValue();
+
+                return ad < 0;
+            }
+            case Types.SQL_NUMERIC :
+            case Types.SQL_DECIMAL :
+                return ((BigDecimal) a).signum() < 0;
+
+            case Types.TINYINT :
+            case Types.SQL_SMALLINT :
+            case Types.SQL_INTEGER :
+                return ((Number) a).intValue() < 0;
+
+            case Types.SQL_BIGINT :
+                return ((Number) a).longValue() < 0;
+
+            default :
+                throw Error.runtimeError(ErrorCode.U_S0500, "NumberType");
+        }
     }
 
     public int compareToZero(Object a) {
@@ -1895,37 +1872,16 @@ public final class NumberType extends Type {
         return value.movePointRight(scale).longValue();
     }
 
-    public static int compareBigDecimalToLongLimits(Object value) {
+    public static boolean isInLongLimits(BigDecimal result) {
 
-        if (value instanceof BigDecimal) {
-            int compare = compareToLongLimits((BigDecimal) value);
-
-            return compare;
-        }
-
-        return 0;
+       return NumberType.MIN_LONG.compareTo(result) <= 0
+                && NumberType.MAX_LONG.compareTo(result) >= 0;
     }
 
-    public static int compareToLongLimits(BigDecimal value) {
+    public static boolean isInLongLimits(BigInteger result) {
 
-        if (NumberType.MIN_LONG.compareTo(value) > 0) {
-            return -1;
-        } else if (NumberType.MAX_LONG.compareTo(value) < 0) {
-            return 1;
-        }
-
-        return 0;
-    }
-
-    public static int compareToLongLimits(BigInteger value) {
-
-        if (NumberType.MIN_LONG_BI.compareTo(value) > 0) {
-            return -1;
-        } else if (NumberType.MAX_LONG_BI.compareTo(value) < 0) {
-            return 1;
-        }
-
-        return 0;
+        return NumberType.MIN_LONG_BI.compareTo(result) <= 0
+                && NumberType.MAX_LONG_BI.compareTo(result) >= 0;
     }
 
     public Object ceiling(Object a) {

@@ -1,4 +1,4 @@
-/* Copyright (c) 2001-2017, The HSQL Development Group
+/* Copyright (c) 2001-2011, The HSQL Development Group
  * All rights reserved.
  *
  * Redistribution and use in source and binary forms, with or without
@@ -76,7 +76,7 @@ import org.hsqldb.types.Type.TypedComparator;
  * Implementation of SQL sessions.
  *
  * @author Fred Toussi (fredt@users dot sourceforge.net)
- * @version 2.3.5
+ * @version 2.3.0
  * @since 1.7.0
  */
 public class Session implements SessionInterface {
@@ -104,7 +104,6 @@ public class Session implements SessionInterface {
     boolean                 isPreTransaction;
     boolean                 isTransaction;
     boolean                 isBatch;
-    volatile boolean        abortAction;
     volatile boolean        abortTransaction;
     volatile boolean        redoAction;
     HsqlArrayList           rowActionList;
@@ -112,8 +111,8 @@ public class Session implements SessionInterface {
     public OrderedHashSet   waitedSessions;
     public OrderedHashSet   waitingSessions;
     OrderedHashSet          tempSet;
-    OrderedHashSet          actionSet;
     public CountUpDownLatch latch = new CountUpDownLatch();
+    Statement               lockStatement;
     TimeoutManager          timeoutManager;
 
     // current settings
@@ -122,11 +121,9 @@ public class Session implements SessionInterface {
     int                timeZoneSeconds;
     boolean            isNetwork;
     private int        sessionMaxRows;
-    int                sessionOptimization = 8;
     private final long sessionId;
     int                sessionTxId = -1;
     private boolean    ignoreCase;
-    private long       sessionStartTimestamp;
 
     // internal connection
     private JDBCConnection intConnection;
@@ -151,9 +148,6 @@ public class Session implements SessionInterface {
     //
     public StatementManager statementManager;
 
-    //
-    public Object special;
-
     /**
      * Constructs a new Session object.
      *
@@ -177,7 +171,6 @@ public class Session implements SessionInterface {
         waitedSessions              = new OrderedHashSet();
         waitingSessions             = new OrderedHashSet();
         tempSet                     = new OrderedHashSet();
-        actionSet                   = new OrderedHashSet();
         isolationLevelDefault       = database.defaultIsolationLevel;
         ignoreCase                  = database.sqlIgnoreCase;
         isolationLevel              = isolationLevelDefault;
@@ -190,15 +183,14 @@ public class Session implements SessionInterface {
                                                  : Boolean.FALSE;
         sessionContext.isReadOnly   = isReadOnlyDefault ? Boolean.TRUE
                                                         : Boolean.FALSE;
-        parser                      = new ParserCommand(this, new Scanner());
+        parser = new ParserCommand(this, new Scanner(database));
 
         setResultMemoryRowCount(database.getResultMaxMemoryRows());
         resetSchema();
 
-        sessionData           = new SessionData(database, this);
-        statementManager      = new StatementManager(database);
-        timeoutManager        = new TimeoutManager();
-        sessionStartTimestamp = System.currentTimeMillis();
+        sessionData      = new SessionData(database, this);
+        statementManager = new StatementManager(database);
+        timeoutManager   = new TimeoutManager();
     }
 
     void resetSchema() {
@@ -213,10 +205,6 @@ public class Session implements SessionInterface {
      */
     public long getId() {
         return sessionId;
-    }
-
-    public int getRandomId() {
-        return randomId;
     }
 
     /**
@@ -237,20 +225,18 @@ public class Session implements SessionInterface {
         sessionData.closeAllNavigators();
         sessionData.persistentStoreCollection.release();
         statementManager.reset();
+        database.sessionManager.removeSession(this);
+        database.closeIfLast();
 
         // keep sessionContext and sessionData
         rowActionList.clear();
 
-        isClosed                    = true;
+        database                    = null;
         user                        = null;
         sessionContext.savepoints   = null;
         sessionContext.lastIdentity = null;
         intConnection               = null;
-
-        database.sessionManager.removeSession(this);
-        database.closeIfLast();
-
-        database = null;
+        isClosed                    = true;
     }
 
     /**
@@ -350,7 +336,7 @@ public class Session implements SessionInterface {
      * @return this Session's User object
      */
     public User getUser() {
-        return user;
+        return (User) user;
     }
 
     public Grantee getGrantee() {
@@ -388,17 +374,6 @@ public class Session implements SessionInterface {
      */
     void setSQLMaxRows(int rows) {
         sessionMaxRows = rows;
-    }
-
-    void setFeature(String feature, boolean value) {
-
-        int number = 8;
-
-        if (value) {
-            sessionOptimization |= number;
-        } else {
-            sessionOptimization &= ~number;
-        }
     }
 
     /**
@@ -449,11 +424,8 @@ public class Session implements SessionInterface {
 
 //        tempActionHistory.add("add delete action " + actionTimestamp);
         if (abortTransaction) {
-            throw Error.error(ErrorCode.X_40001);
-        }
 
-        if (abortAction) {
-            throw Error.error(ErrorCode.X_40502);
+//            throw Error.error(ErrorCode.X_40001);
         }
 
         database.txManager.addDeleteAction(this, table, store, row, colMap);
@@ -468,16 +440,9 @@ public class Session implements SessionInterface {
 
         // abort only after adding so that the new row gets removed from indexes
         if (abortTransaction) {
-            throw Error.error(ErrorCode.X_40001);
-        }
 
-        if (abortAction) {
-            throw Error.error(ErrorCode.X_40502);
+//            throw Error.error(ErrorCode.X_40001);
         }
-    }
-
-    public HsqlArrayList getRowActionList() {
-        return rowActionList;
     }
 
     /**
@@ -492,15 +457,10 @@ public class Session implements SessionInterface {
             return;
         }
 
-        if (sessionContext.depth > 0) {
-            return;
-        }
-
         if (sessionContext.isAutoCommit.booleanValue() != autocommit) {
             commit(false);
 
-            sessionContext.isAutoCommit = autocommit ? Boolean.TRUE
-                                                     : Boolean.FALSE;
+            sessionContext.isAutoCommit = ValuePool.getBoolean(autocommit);
         }
     }
 
@@ -515,8 +475,6 @@ public class Session implements SessionInterface {
     public void endAction(Result result) {
 
 //        tempActionHistory.add("endAction " + actionTimestamp);
-        abortAction = false;
-
         sessionData.persistentStoreCollection.clearStatementTables();
 
         if (result.mode == ResultConstants.ERROR) {
@@ -536,9 +494,22 @@ public class Session implements SessionInterface {
 //        tempActionHistory.add("endAction ends " + actionTimestamp);
     }
 
-    /**
-     * Explicit start of transaction by user
-     */
+    public boolean hasLocks(Statement statement) {
+
+        if (lockStatement == statement) {
+            if (isolationLevel == SessionInterface.TX_REPEATABLE_READ
+                    || isolationLevel == SessionInterface.TX_SERIALIZABLE) {
+                return true;
+            }
+
+            if (statement.getTableNamesForRead().length == 0) {
+                return true;
+            }
+        }
+
+        return false;
+    }
+
     public void startTransaction() {
         database.txManager.beginTransaction(this);
     }
@@ -558,14 +529,14 @@ public class Session implements SessionInterface {
         if (!database.txManager.prepareCommitActions(this)) {
 
 //            tempActionHistory.add("commit aborts " + actionTimestamp);
-            rollbackNoCheck(false);
+            rollback(false);
 
             throw Error.error(ErrorCode.X_40001);
         }
     }
 
     /**
-     * Commits any uncommitted transaction this Session may have open
+     * Commits any uncommited transaction this Session may have open
      *
      * @throws  HsqlException
      */
@@ -580,14 +551,21 @@ public class Session implements SessionInterface {
             return;
         }
 
-        if (isTransaction) {
-            if (!database.txManager.commitTransaction(this)) {
+        if (!isTransaction && rowActionList.size() == 0) {
+            sessionContext.isReadOnly = isReadOnlyDefault ? Boolean.TRUE
+                                                          : Boolean.FALSE;
 
-                // tempActionHistory.add("commit aborts " + actionTimestamp);
-                rollbackNoCheck(chain);
+            setIsolation(isolationLevelDefault);
 
-                throw Error.error(ErrorCode.X_40001);
-            }
+            return;
+        }
+
+        if (!database.txManager.commitTransaction(this)) {
+
+//            tempActionHistory.add("commit aborts " + actionTimestamp);
+            rollback(chain);
+
+            throw Error.error(ErrorCode.X_40001);
         }
 
         endTransaction(true, chain);
@@ -599,44 +577,37 @@ public class Session implements SessionInterface {
     }
 
     /**
-     * Rolls back any uncommitted transaction this Session may have open.
+     * Rolls back any uncommited transaction this Session may have open.
      *
      * @throws  HsqlException
      */
     public synchronized void rollback(boolean chain) {
 
         //        tempActionHistory.add("rollback " + actionTimestamp);
-        if (sessionContext.depth > 0) {
-            return;
-        }
-
-        rollbackNoCheck(chain);
-    }
-
-    synchronized void rollbackNoCheck(boolean chain) {
-
         if (isClosed) {
             return;
         }
 
-        if (isTransaction) {
-            database.txManager.rollback(this);
+        if (sessionContext.depth > 0) {
+            return;
         }
 
+        database.txManager.rollback(this);
         endTransaction(false, chain);
     }
 
     private void endTransaction(boolean commit, boolean chain) {
 
-        abortTransaction = false;
-
-        sessionContext.resetStack();
         sessionContext.savepoints.clear();
         sessionContext.savepointTimestamps.clear();
         rowActionList.clear();
         sessionData.persistentStoreCollection.clearTransactionTables();
         sessionData.closeAllTransactionNavigators();
         sessionData.clearLobOps();
+
+        lockStatement = null;
+
+        logSequences();
 
         if (!chain) {
             sessionContext.isReadOnly = isReadOnlyDefault ? Boolean.TRUE
@@ -645,11 +616,10 @@ public class Session implements SessionInterface {
             setIsolation(isolationLevelDefault);
         }
 
-        if (database.logger.getSqlEventLogLevel() > 0) {
-            Statement endTX = commit ? StatementSession.commitNoChainStatement
-                                     : StatementSession
-                                         .rollbackNoChainStatement;
+        Statement endTX = commit ? StatementSession.commitNoChainStatement
+                                 : StatementSession.rollbackNoChainStatement;
 
+        if (database.logger.getSqlEventLogLevel() > 0) {
             database.logger.logStatementEvent(this, endTX, null,
                                               Result.updateZeroResult,
                                               SimpleLog.LOG_ERROR);
@@ -662,7 +632,6 @@ public class Session implements SessionInterface {
 
     /**
      * Clear structures and reset variables to original. For JDBC use only.
-     * Note: sets autocommit true
      */
     public synchronized void resetSession() {
 
@@ -670,7 +639,7 @@ public class Session implements SessionInterface {
             return;
         }
 
-        rollbackNoCheck(false);
+        rollback(false);
         sessionData.closeAllNavigators();
         sessionData.persistentStoreCollection.clearAllTables();
         sessionData.clearLobOps();
@@ -746,6 +715,8 @@ public class Session implements SessionInterface {
         if (isClosed) {
             return;
         }
+
+        String name = (String) sessionContext.savepoints.getKey(0);
 
         database.txManager.rollbackSavepoint(this, 0);
     }
@@ -881,7 +852,7 @@ public class Session implements SessionInterface {
     }
 
     /**
-     * Retrieves the external JDBC connection
+     * Retreives the external JDBC connection
      */
     public JDBCConnection getJDBCConnection() {
         return extConnection;
@@ -892,14 +863,14 @@ public class Session implements SessionInterface {
     }
 
     public String getDatabaseUniqueName() {
-        return database.getNameString();
+        return database.getUniqueName();
     }
 
-// campbell-burnet@users 20020810 metadata 1.7.2
+// boucherb@users 20020810 metadata 1.7.2
 //----------------------------------------------------------------
     private final long connectTime = System.currentTimeMillis();
 
-// more efficient for MetaData concerns than checkAdmin
+// more effecient for MetaData concerns than checkAdmin
 
     /**
      * Getter for admin attribute.
@@ -920,7 +891,7 @@ public class Session implements SessionInterface {
     }
 
     /**
-     * Count of actions in current transaction.
+     * Count of acctions in current transaction.
      *
      * @return the current value
      */
@@ -934,7 +905,7 @@ public class Session implements SessionInterface {
 
     public Statement compileStatement(String sql, int props) {
 
-        parser.reset(this, sql);
+        parser.reset(sql);
 
         Statement cs = parser.compileStatement(props);
 
@@ -943,7 +914,7 @@ public class Session implements SessionInterface {
 
     public Statement compileStatement(String sql) {
 
-        parser.reset(this, sql);
+        parser.reset(sql);
 
         Statement cs =
             parser.compileStatement(ResultProperties.defaultPropsValue);
@@ -1043,6 +1014,11 @@ public class Session implements SessionInterface {
                     cs = statementManager.compile(this, cmd);
                 } catch (Throwable t) {
                     String errorString = cmd.getMainString();
+
+                    if (database.getProperties().getErrorLevel()
+                            == HsqlDatabaseProperties.NO_MESSAGE) {
+                        errorString = null;
+                    }
 
                     return Result.newErrorResult(t, errorString);
                 }
@@ -1230,28 +1206,10 @@ public class Session implements SessionInterface {
             return Result.newErrorResult(e);
         }
 
-        Result   result         = null;
-        boolean  recompile      = false;
-        HsqlName originalSchema = getCurrentSchemaHsqlName();
+        Result result = null;
 
         for (int i = 0; i < list.size(); i++) {
             Statement cs = (Statement) list.get(i);
-
-            if (i > 0) {
-                if (cs.getCompileTimestamp()
-                        > database.txManager.getGlobalChangeTimestamp()) {
-                    recompile = true;
-                }
-
-                if (cs.getSchemaName() != null
-                        && cs.getSchemaName() != originalSchema) {
-                    recompile = true;
-                }
-            }
-
-            if (recompile) {
-                cs = compileStatement(cs.getSQL(), cmd.getExecuteProperties());
-            }
 
             cs.setGeneratedColumnInfo(cmd.getGeneratedResultType(),
                                       cmd.getGeneratedResultMetaData());
@@ -1286,7 +1244,9 @@ public class Session implements SessionInterface {
         Result r;
 
         if (abortTransaction) {
-            return handleAbortTransaction();
+            rollback(false);
+
+            return Result.newErrorResult(Error.error(ErrorCode.X_40001));
         }
 
         if (sessionContext.depth > 0) {
@@ -1334,17 +1294,10 @@ public class Session implements SessionInterface {
             return r;
         }
 
-        repeatLoop:
         while (true) {
             actionIndex = rowActionList.size();
 
             database.txManager.beginAction(this, cs);
-
-            if (redoAction) {
-                redoAction = false;
-
-                continue;
-            }
 
             cs = sessionContext.currentStatement;
 
@@ -1353,37 +1306,40 @@ public class Session implements SessionInterface {
             }
 
             if (abortTransaction) {
-                return handleAbortTransaction();
+                rollback(false);
+
+                sessionContext.currentStatement = null;
+
+                return Result.newErrorResult(Error.error(ErrorCode.X_40001));
             }
 
             timeoutManager.startTimeout(timeout);
 
-            while (true) {
-                try {
-                    latch.await();
-                } catch (InterruptedException e) {
-                    Thread.interrupted();
-
-                    continue;
-                }
-
-                break;
+            try {
+                latch.await();
+            } catch (InterruptedException e) {
+                abortTransaction = true;
             }
 
-            if (abortAction) {
+            boolean abort = timeoutManager.endTimeout();
+
+            if (abort) {
                 r = Result.newErrorResult(Error.error(ErrorCode.X_40502));
 
                 endAction(r);
 
-                break repeatLoop;
+                break;
             }
 
             if (abortTransaction) {
-                return handleAbortTransaction();
+                rollback(false);
+
+                sessionContext.currentStatement = null;
+
+                return Result.newErrorResult(Error.error(ErrorCode.X_40001));
             }
 
             database.txManager.beginActionResume(this);
-            timeoutManager.resumeTimeout();
 
             //        tempActionHistory.add("sql execute " + cs.sql + " " + actionTimestamp + " " + rowActionList.size());
             sessionContext.setDynamicArguments(pvals);
@@ -1396,34 +1352,31 @@ public class Session implements SessionInterface {
                                                   SimpleLog.LOG_NORMAL);
             }
 
+            lockStatement = sessionContext.currentStatement;
+
             //        tempActionHistory.add("sql execute end " + actionTimestamp + " " + rowActionList.size());
             endAction(r);
 
             if (abortTransaction) {
-                break repeatLoop;
+                rollback(false);
+
+                sessionContext.currentStatement = null;
+
+                return Result.newErrorResult(Error.error(r.getException(),
+                        ErrorCode.X_40001, null));
             }
 
             if (redoAction) {
                 redoAction = false;
 
-                while (true) {
-                    try {
-                        latch.await();
-                    } catch (InterruptedException e) {
-                        Thread.interrupted();
-
-                        continue;
-                    }
-
-                    break;
+                try {
+                    latch.await();
+                } catch (InterruptedException e) {
+                    abortTransaction = true;
                 }
             } else {
-                break repeatLoop;
+                break;
             }
-        }
-
-        if (abortTransaction) {
-            return handleAbortTransaction();
         }
 
         if (sessionContext.depth == 0
@@ -1431,7 +1384,7 @@ public class Session implements SessionInterface {
                     || cs.isAutoCommitStatement())) {
             try {
                 if (r.mode == ResultConstants.ERROR) {
-                    rollbackNoCheck(false);
+                    rollback(false);
                 } else {
                     commit(false);
                 }
@@ -1446,15 +1399,6 @@ public class Session implements SessionInterface {
         sessionContext.currentStatement = null;
 
         return r;
-    }
-
-    private Result handleAbortTransaction() {
-
-        rollbackNoCheck(false);
-
-        sessionContext.currentStatement = null;
-
-        return Result.newErrorResult(Error.error(ErrorCode.X_40001));
     }
 
     private Result executeCompiledBatchStatement(Result cmd) {
@@ -1494,8 +1438,8 @@ public class Session implements SessionInterface {
 
         Result error = null;
 
-        while (nav.next()) {
-            Object[] pvals = nav.getCurrent();
+        while (nav.hasNext()) {
+            Object[] pvals = (Object[]) nav.getNext();
             Result in = executeCompiledStatement(cs, pvals, cmd.queryTimeout);
 
             // On the client side, iterate over the vals and throw
@@ -1506,8 +1450,8 @@ public class Session implements SessionInterface {
                     RowSetNavigator navgen =
                         in.getChainedResult().getNavigator();
 
-                    while (navgen.next()) {
-                        Object[] generatedRow = navgen.getCurrent();
+                    while (navgen.hasNext()) {
+                        Object[] generatedRow = navgen.getNext();
 
                         generatedResult.getNavigator().add(generatedRow);
                     }
@@ -1520,7 +1464,7 @@ public class Session implements SessionInterface {
                 // to differentiate between things like
                 // stored procedure calls to methods with
                 // void return type and select statements with
-                // a single row/column containing null
+                // a single row/column containg null
                 updateCounts[count++] = ResultConstants.SUCCESS_NO_INFO;
             } else if (in.mode == ResultConstants.CALL_RESPONSE) {
                 updateCounts[count++] = ResultConstants.SUCCESS_NO_INFO;
@@ -1551,9 +1495,9 @@ public class Session implements SessionInterface {
 
         Result error = null;
 
-        while (nav.next()) {
+        while (nav.hasNext()) {
             Result   in;
-            Object[] data = nav.getCurrent();
+            Object[] data = (Object[]) nav.getNext();
             String   sql  = (String) data[0];
 
             try {
@@ -1567,7 +1511,7 @@ public class Session implements SessionInterface {
                 // if (t instanceof OutOfMemoryError) {
                 // System.gc();
                 // }
-                // "in" already equals "err"
+                // "in" alread equals "err"
                 // maybe test for OOME and do a gc() ?
                 // t.printStackTrace();
             }
@@ -1580,7 +1524,7 @@ public class Session implements SessionInterface {
                 // to differentiate between things like
                 // stored procedure calls to methods with
                 // void return type and select statements with
-                // a single row/column containing null
+                // a single row/column containg null
                 updateCounts[count++] = ResultConstants.SUCCESS_NO_INFO;
             } else if (in.mode == ResultConstants.CALL_RESPONSE) {
                 updateCounts[count++] = ResultConstants.SUCCESS_NO_INFO;
@@ -1613,12 +1557,15 @@ public class Session implements SessionInterface {
             return Result.newErrorResult(Error.error(ErrorCode.X_24501));
         }
 
-        Object[]       pvals     = (Object[]) cmd.valueData;
-        Type[]         types     = cmd.metaData.columnTypes;
-        StatementQuery statement = (StatementQuery) result.getStatement();
+        Object[]        pvals     = (Object[]) cmd.valueData;
+        Type[]          types     = cmd.metaData.columnTypes;
+        StatementQuery  statement = (StatementQuery) result.getStatement();
+        QueryExpression qe        = statement.queryExpression;
+        Table           baseTable = qe.getBaseTable();
+        int[]           columnMap = qe.getBaseTableColumnMap();
 
         sessionContext.rowUpdateStatement.setRowActionProperties(result,
-                actionType, statement, types);
+                actionType, baseTable, types, columnMap);
 
         Result resultOut =
             executeCompiledStatement(sessionContext.rowUpdateStatement, pvals,
@@ -1675,8 +1622,8 @@ public class Session implements SessionInterface {
         if (withZone) {
             if (currentTime == null) {
                 int seconds =
-                    (int) (HsqlDateTime.getNormalisedTime(
-                        getCalendarGMT(), currentMillis)) / 1000;
+                    (int) (HsqlDateTime.getNormalisedTime(currentMillis))
+                    / 1000;
                 int nanos = (int) (currentMillis % 1000) * 1000000;
 
                 currentTime = new TimeData(seconds, nanos, getZoneSeconds());
@@ -1687,8 +1634,7 @@ public class Session implements SessionInterface {
             if (localTime == null) {
                 int seconds =
                     (int) (HsqlDateTime.getNormalisedTime(
-                        getCalendarGMT(),
-                        currentMillis + getZoneSeconds() * 1000L)) / 1000;
+                        currentMillis + getZoneSeconds() * 1000)) / 1000;
                 int nanos = (int) (currentMillis % 1000) * 1000000;
 
                 localTime = new TimeData(seconds, nanos, 0);
@@ -1984,23 +1930,11 @@ public class Session implements SessionInterface {
         return DatabaseURL.S_URL_PREFIX + database.getURI();
     }
 
-    public Result cancel(Result result) {
-
-        if (result.getType() == ResultConstants.SQLCANCEL) {
-            if (result.getSessionRandomID() == randomId) {
-                database.txManager.resetSession(
-                    null, this, TransactionManager.resetSessionAbort);
-            }
-        }
-
-        return Result.updateZeroResult;
-    }
-
-    public boolean isProcessingScript() {
+    boolean isProcessingScript() {
         return isProcessingScript;
     }
 
-    public boolean isProcessingLog() {
+    boolean isProcessingLog() {
         return isProcessingLog;
     }
 
@@ -2120,6 +2054,7 @@ public class Session implements SessionInterface {
     }
 
     public void setZoneSeconds(int seconds) {
+
         timeZoneSeconds = seconds;
     }
 
@@ -2159,16 +2094,20 @@ public class Session implements SessionInterface {
     }
 
     // services
-    TypedComparator  typedComparator = Type.newComparator(this);
+    TypedComparator  typedComparator;
     Scanner          secondaryScanner;
     SimpleDateFormat simpleDateFormat;
     SimpleDateFormat simpleDateFormatGMT;
     Random           randomGenerator = new Random();
     long             seed            = -1;
-    public final int randomId        = randomGenerator.nextInt();
 
     //
     public TypedComparator getComparator() {
+
+        if (typedComparator == null) {
+            typedComparator = Type.newComparator(this);
+        }
+
         return typedComparator;
     }
 
@@ -2207,9 +2146,6 @@ public class Session implements SessionInterface {
             clientProperties.setProperty(
                 HsqlDatabaseProperties.jdbc_translate_tti_types,
                 database.sqlTranslateTTI);
-            clientProperties.setProperty(
-                HsqlDatabaseProperties.sql_live_object,
-                database.sqlLiveObject);
         }
 
         return clientProperties;
@@ -2307,6 +2243,7 @@ public class Session implements SessionInterface {
     // timeouts
     class TimeoutManager {
 
+        boolean          added;
         volatile long    actionTimestamp;
         volatile int     currentTimeout;
         volatile boolean aborted;
@@ -2322,11 +2259,11 @@ public class Session implements SessionInterface {
             currentTimeout  = timeout;
             actionTimestamp = Session.this.actionTimestamp;
 
-            database.timeoutRunner.addSession(Session.this);
-        }
+            if (!added) {
+                database.timeoutRunner.addSession(Session.this);
 
-        void resumeTimeout() {
-            actionTimestamp = Session.this.actionTimestamp;
+                added = true;
+            }
         }
 
         boolean endTimeout() {
@@ -2359,8 +2296,7 @@ public class Session implements SessionInterface {
                 currentTimeout = 0;
                 aborted        = true;
 
-                database.txManager.resetSession(
-                    null, Session.this, TransactionManager.resetSessionAbort);
+                latch.setCount(0);
 
                 return true;
             }

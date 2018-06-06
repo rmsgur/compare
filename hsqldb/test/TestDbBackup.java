@@ -1,4 +1,4 @@
-/* Copyright (c) 2001-2014, The HSQL Development Group
+/* Copyright (c) 2001-2011, The HSQL Development Group
  * All rights reserved.
  *
  * Redistribution and use in source and binary forms, with or without
@@ -41,14 +41,13 @@ import java.sql.SQLException;
 import java.sql.Statement;
 import java.text.SimpleDateFormat;
 
-import org.hsqldb.lib.tar.DbBackupMain;
+import org.hsqldb.lib.tar.DbBackup;
 import org.hsqldb.lib.tar.TarMalformatException;
 
 import junit.framework.Test;
 import junit.framework.TestSuite;
-import junit.framework.TestCase;
 
-public class TestDbBackup extends TestCase {
+public class TestDbBackup extends junit.framework.TestCase {
 
     public TestDbBackup() throws IOException, SQLException {}
 
@@ -73,7 +72,7 @@ public class TestDbBackup extends TestCase {
      * @see #tearDown()
      */
     protected void setupConn(String id) throws SQLException {
-        conn        = getConnection(id);
+        conn = getConnection(id);
         alreadyShut = false;
     }
 
@@ -82,17 +81,13 @@ public class TestDbBackup extends TestCase {
         if (conn == null) {
             return;
         }
-
         if (!alreadyShut) {
             conn.createStatement().executeUpdate("SHUTDOWN");
-
             alreadyShut = true;
         }
-
         if (verbose) {
             System.err.println("Shut down 'db1'");
         }
-
         conn.close();
 
         conn = null;
@@ -103,8 +98,8 @@ public class TestDbBackup extends TestCase {
      *
      * @see #setupConn(String)
      */
-    protected Connection conn        = null;
-    protected boolean    alreadyShut = false;
+    protected Connection conn = null;
+    protected boolean alreadyShut = false;
 
     /**
      * Remove the specified directory and all of it's descendants.
@@ -151,7 +146,6 @@ public class TestDbBackup extends TestCase {
 
         if (baseDir.exists()) {
             rmR(baseDir);
-
             if (verbose) {
                 System.err.println("Tore down");
             }
@@ -166,15 +160,15 @@ public class TestDbBackup extends TestCase {
      * Invoked before each test*() invocation by JUnit.
      */
     protected void setUp() throws IOException, SQLException {
-
         if (verbose) {
             System.err.println("Set-upping");
         }
 
         if (baseDir.exists()) {
-            throw new IOException("Please wipe out work directory '" + baseDir
-                                  + ", which is probably left over from an "
-                                  + "aborted test run");
+            throw new IOException(
+                    "Please wipe out work directory '"
+                    + baseDir + ", which is probably left over from an "
+                    + "aborted test run");
         }
 
         try {
@@ -201,9 +195,9 @@ public class TestDbBackup extends TestCase {
             + baseDir.getAbsolutePath() + '/' + id + "/dbfile", "SA", "");
 
         if (verbose) {
-            System.err.println("Opening JDBC URL '" + "jdbc:hsqldb:file:"
-                               + baseDir.getAbsolutePath() + '/' + id
-                               + "/dbfile");
+            System.err.println("Opening JDBC URL '"
+                    + "jdbc:hsqldb:file:" + baseDir.getAbsolutePath()
+                    + '/' + id + "/dbfile");
         }
 
         c.setAutoCommit(false);
@@ -216,7 +210,6 @@ public class TestDbBackup extends TestCase {
      * unit tests, and without dealing with Ant or unrelated test suites.
      */
     public static void main(String[] sa) {
-
         if (sa.length > 0 && !sa[sa.length - 1].equals("-g")) {
             TestDbBackup.baseDir = new File(sa[0]);
 
@@ -230,13 +223,11 @@ public class TestDbBackup extends TestCase {
             System.err.println("Using user-specified base dir: "
                                + baseDir.getAbsolutePath());
         }
+            junit.textui.TestRunner runner = new junit.textui.TestRunner();
+            junit.framework.TestResult result =
+                runner.run(runner.getTest(TestDbBackup.class.getName()));
 
-        junit.textui.TestRunner runner = new junit.textui.TestRunner();
-        junit.framework.TestResult result =
-            runner.run(runner.getTest(TestDbBackup.class.getName()));
-
-        System.exit(result.wasSuccessful() ? 0
-                                           : 1);
+            System.exit(result.wasSuccessful() ? 0 : 1);
     }
 
     public void testSanity() throws SQLException {
@@ -269,22 +260,18 @@ public class TestDbBackup extends TestCase {
      */
     public void testOnlineBackup()
     throws SQLException, IOException, TarMalformatException {
-
         onlineBackupAndRestore("online.tar", true, false, "db11");
         onlineBackupAndRestore("online.tar.gz", false, true, "db12");
         onlineBackupAndRestore("online.tgz", false, true, "db13");
     }
 
-    public void onlineBackupAndRestore(String baseTarName, boolean populate,
-                                       boolean compress,
-                                       String restoreDest)
-                                       throws SQLException, IOException,
-                                           TarMalformatException {
+    public void onlineBackupAndRestore(String baseTarName,
+            boolean populate, boolean compress, String restoreDest)
+    throws SQLException, IOException, TarMalformatException {
 
         try {
             setupConn("db1");
             conn.createStatement().executeUpdate("DELETE FROM t");
-
             // For this case, we wipe the data that we so carefully set up,
             // so that we can call this method repeatedly without worrying
             // about left-over data from a previous run.
@@ -299,14 +286,12 @@ public class TestDbBackup extends TestCase {
                                                  + baseDir.getAbsolutePath()
                                                  + '/' + baseTarName
                                                  + "' BLOCKING"
-                                                 + (compress ? ""
-                                                             : " NOT COMPRESSED"));
-            conn.createStatement().executeUpdate("INSERT INTO t VALUES(6)");
+                    + (compress ? "" : " NOT COMPRESSED"));
+            conn.createStatement().executeUpdate(
+                    "INSERT INTO t VALUES(6)");
             conn.commit();
             conn.createStatement().executeUpdate("SHUTDOWN");
-
             alreadyShut = true;
-
             if (verbose) {
                 System.err.println("Shut down 'db1'");
             }
@@ -321,7 +306,7 @@ public class TestDbBackup extends TestCase {
                                   + destDir.getAbsolutePath());
         }
 
-        DbBackupMain.main(new String[] {
+        DbBackup.main(new String[] {
             "--extract", baseDir.getAbsolutePath() + '/' + baseTarName,
             destDir.getAbsolutePath()
         });
@@ -330,11 +315,10 @@ public class TestDbBackup extends TestCase {
             setupConn(restoreDest);
             conn.createStatement().executeUpdate("ROLLBACK");
 
-            ResultSet rs = conn.createStatement().executeQuery(
-                "SELECT count(*) c FROM t;");
+            ResultSet rs =
+                conn.createStatement().executeQuery("SELECT count(*) c FROM t;");
 
             rs.next();
-
             // 3 committed, 5 uncommited before saving:
             assertEquals("Wrong table 't' contents", 5, rs.getInt("c"));
         } finally {
@@ -345,7 +329,7 @@ public class TestDbBackup extends TestCase {
     public void mainBackupAndRestore(String baseTarName)
     throws SQLException, IOException, TarMalformatException {
 
-        DbBackupMain.main(new String[] {
+        DbBackup.main(new String[] {
             "--save", baseDir.getAbsolutePath() + '/' + baseTarName,
             baseDir.getAbsolutePath() + "/db1/dbfile"
         });
@@ -357,7 +341,7 @@ public class TestDbBackup extends TestCase {
                                   + destDir.getAbsolutePath());
         }
 
-        DbBackupMain.main(new String[] {
+        DbBackup.main(new String[] {
             "--extract", baseDir.getAbsolutePath() + '/' + baseTarName,
             destDir.getAbsolutePath()
         });
@@ -365,8 +349,7 @@ public class TestDbBackup extends TestCase {
         try {
             setupConn("mainrestored");
 
-            ResultSet rs =
-                conn.createStatement().executeQuery("SELECT * FROM t;");
+            ResultSet rs = conn.createStatement().executeQuery("SELECT * FROM t;");
 
             rs.next();
             assertEquals("Wrong table 't' contents", 34, rs.getInt("i"));
@@ -382,7 +365,7 @@ public class TestDbBackup extends TestCase {
             setupConn("db1");
 
             try {
-                DbBackupMain.main(new String[] {
+                DbBackup.main(new String[] {
                     "--save", baseDir.getAbsolutePath() + "/mainOpen.tar",
                     baseDir.getAbsolutePath() + "/db1/dbfile"
                 });
@@ -403,7 +386,6 @@ public class TestDbBackup extends TestCase {
     throws SQLException, IOException, TarMalformatException {
 
         boolean caught;
-
         try {
             setupConn("db1");
             conn.createStatement().executeUpdate("INSERT INTO t VALUES(2)");
@@ -411,140 +393,118 @@ public class TestDbBackup extends TestCase {
 
             // #1:  COMPRESSED -> no-extension
             caught = false;
-
             try {
-                conn.createStatement().executeUpdate(
-                    "BACKUP DATABASE TO '" + baseDir.getAbsolutePath()
-                    + "/x/bad' BLOCKING COMPRESSED");
+                conn.createStatement().executeUpdate("BACKUP DATABASE TO '"
+                        + baseDir.getAbsolutePath()
+                        + "/x/bad' BLOCKING COMPRESSED");
             } catch (SQLException se) {
                 caught = true;
             }
-
             if (!caught) {
                 fail("BACKUP did not throw even though requested compression "
-                     + "to file '/x/bad'");
+                        + "to file '/x/bad'");
             }
-
             // #2:  NOT COMPRESSED -> no-extension
             caught = false;
-
             try {
-                conn.createStatement().executeUpdate(
-                    "BACKUP DATABASE TO '" + baseDir.getAbsolutePath()
-                    + "/x/bad' BLOCKING NOT COMPRESSED");
+                conn.createStatement().executeUpdate("BACKUP DATABASE TO '"
+                        + baseDir.getAbsolutePath()
+                        + "/x/bad' BLOCKING NOT COMPRESSED");
             } catch (SQLException se) {
                 caught = true;
             }
-
             if (!caught) {
                 fail("BACKUP did not throw even though requested "
-                     + "no-compression to file '/x/bad'");
+                        + "no-compression to file '/x/bad'");
             }
-
             // #3:  COMPRESSED -> *.txt
             caught = false;
-
             try {
-                conn.createStatement().executeUpdate(
-                    "BACKUP DATABASE TO '" + baseDir.getAbsolutePath()
-                    + "/x/bad.txt' BLOCKING COMPRESSED");
+                conn.createStatement().executeUpdate("BACKUP DATABASE TO '"
+                        + baseDir.getAbsolutePath()
+                        + "/x/bad.txt' BLOCKING COMPRESSED");
             } catch (SQLException se) {
                 caught = true;
             }
-
             if (!caught) {
                 fail("BACKUP did not throw even though requested compression "
-                     + "to file '/x/bad.txt'");
+                        + "to file '/x/bad.txt'");
             }
-
             // #4:  NOT COMPRESSED -> *.txt
             caught = false;
-
             try {
-                conn.createStatement().executeUpdate(
-                    "BACKUP DATABASE TO '" + baseDir.getAbsolutePath()
-                    + "/x/bad.txt' BLOCKING NOT COMPRESSED");
+                conn.createStatement().executeUpdate("BACKUP DATABASE TO '"
+                        + baseDir.getAbsolutePath()
+                        + "/x/bad.txt' BLOCKING NOT COMPRESSED");
             } catch (SQLException se) {
                 caught = true;
             }
-
             if (!caught) {
                 fail("BACKUP did not throw even though requested "
-                     + "no-compression to file '/x/bad.txt'");
+                        + "no-compression to file '/x/bad.txt'");
             }
-
             // #5:  DEFAULT -> *.tar
             caught = false;
-
             try {
-                conn.createStatement().executeUpdate(
-                    "BACKUP DATABASE TO '" + baseDir.getAbsolutePath()
-                    + "/x/bad.tar' BLOCKING");
+                conn.createStatement().executeUpdate("BACKUP DATABASE TO '"
+                        + baseDir.getAbsolutePath()
+                        + "/x/bad.tar' BLOCKING");
             } catch (SQLException se) {
                 caught = true;
             }
-
             if (!caught) {
                 fail("BACKUP did not throw even though requested default "
-                     + "to file '/x/bad.tar'");
+                        + "to file '/x/bad.tar'");
             }
-
             // #6:  COMPRESSION -> *.tar
             caught = false;
-
             try {
-                conn.createStatement().executeUpdate(
-                    "BACKUP DATABASE TO '" + baseDir.getAbsolutePath()
-                    + "/x/bad.tar' BLOCKING COMPRESSED");
+                conn.createStatement().executeUpdate("BACKUP DATABASE TO '"
+                        + baseDir.getAbsolutePath()
+                        + "/x/bad.tar' BLOCKING COMPRESSED");
             } catch (SQLException se) {
                 caught = true;
             }
-
             if (!caught) {
                 fail("BACKUP did not throw even though requested compression "
-                     + "to file '/x/bad.tar'");
+                        + "to file '/x/bad.tar'");
             }
-
             // #7:  NOT COMPRESSED -> *.tar.gz
             caught = false;
-
             try {
-                conn.createStatement().executeUpdate(
-                    "BACKUP DATABASE TO '" + baseDir.getAbsolutePath()
-                    + "/x/bad.tar.gz' BLOCKING NOT COMPRESSED");
+                conn.createStatement().executeUpdate("BACKUP DATABASE TO '"
+                        + baseDir.getAbsolutePath()
+                        + "/x/bad.tar.gz' BLOCKING NOT COMPRESSED");
             } catch (SQLException se) {
                 caught = true;
             }
-
             if (!caught) {
                 fail("BACKUP did not throw even though requested "
-                     + "non-compression to file '/x/bad.tar.gz'");
+                        + "non-compression to file '/x/bad.tar.gz'");
             }
-
             // #8:  NOT COMPRESSED -> *.tgz
             caught = false;
-
             try {
-                conn.createStatement().executeUpdate(
-                    "BACKUP DATABASE TO '" + baseDir.getAbsolutePath()
-                    + "/x/bad.tgz' BLOCKING NOT COMPRESSED");
+                conn.createStatement().executeUpdate("BACKUP DATABASE TO '"
+                        + baseDir.getAbsolutePath()
+                        + "/x/bad.tgz' BLOCKING NOT COMPRESSED");
             } catch (SQLException se) {
                 caught = true;
             }
-
             if (!caught) {
                 fail("BACKUP did not throw even though requested "
-                     + "non-compression to file '/x/bad.tgz'");
+                        + "non-compression to file '/x/bad.tgz'");
             }
 
             // Finally run a test to ensure that the attempts above didn't
             // fail for some unexpected reason.
-            conn.createStatement().executeUpdate(
-                "BACKUP DATABASE TO '" + baseDir.getAbsolutePath()
-                + "/positivetest.tar' BLOCKING NOT COMPRESSED");
+            conn.createStatement().executeUpdate("BACKUP DATABASE TO '"
+                    + baseDir.getAbsolutePath()
+                    + "/positivetest.tar' BLOCKING NOT COMPRESSED");
         } finally {
             shutdownAndCloseConn();
         }
+
     }
 
     /**
@@ -559,81 +519,59 @@ public class TestDbBackup extends TestCase {
     throws SQLException, IOException, TarMalformatException {
 
         boolean caught;
-        int     fileCount;
-
+        int fileCount;
         try {
             setupConn("db1");
             conn.createStatement().executeUpdate("INSERT INTO t VALUES(2)");
             conn.commit();
 
             fileCount = baseDir.listFiles(autoTarFilenameFilter).length;
-
-            if (fileCount != 0) {
-                throw new IllegalStateException(
-                    Integer.toString(fileCount)
-                    + " auto-tar files exist in baseDir '"
-                    + baseDir.getAbsolutePath()
-                    + "' before starting testAutoNaming");
-            }
-
+            if (fileCount != 0)
+                throw new IllegalStateException(Integer.toString(fileCount)
+                        + " auto-tar files exist in baseDir '"
+                        + baseDir.getAbsolutePath()
+                        + "' before starting testAutoNaming");
             fileCount = baseDir.listFiles(autoTarGzFilenameFilter).length;
-
-            if (fileCount != 0) {
-                throw new IllegalStateException(
-                    Integer.toString(fileCount)
-                    + " auto-tar.gz files exist in baseDir '"
-                    + baseDir.getAbsolutePath()
-                    + "' before starting testAutoNaming");
-            }
-
-            conn.createStatement().executeUpdate(
-                "BACKUP DATABASE TO '" + baseDir.getAbsolutePath()
-                + "/' BLOCKING NOT COMPRESSED");
-
-            fileCount = baseDir.listFiles(autoTarFilenameFilter).length;
-
-            if (fileCount != 1) {
-                fail(Integer.toString(fileCount)
-                     + " auto-tar files exist in baseDir '"
-                     + baseDir.getAbsolutePath()
-                     + "' after writing a non-compressed backup");
-            }
-
-            fileCount = baseDir.listFiles(autoTarGzFilenameFilter).length;
-
-            if (fileCount != 0) {
-                fail(Integer.toString(fileCount)
-                     + " auto-tar.gz files exist in baseDir '"
-                     + baseDir.getAbsolutePath()
-                     + "' after writing a non-compressed backup");
-            }
-
+            if (fileCount != 0)
+                throw new IllegalStateException(Integer.toString(fileCount)
+                        + " auto-tar.gz files exist in baseDir '"
+                        + baseDir.getAbsolutePath()
+                        + "' before starting testAutoNaming");
             conn.createStatement().executeUpdate("BACKUP DATABASE TO '"
-                                                 + baseDir.getAbsolutePath()
-                                                 + "/' BLOCKING COMPRESSED");
-
+                    + baseDir.getAbsolutePath()
+                    + "/' BLOCKING NOT COMPRESSED");
             fileCount = baseDir.listFiles(autoTarFilenameFilter).length;
-
-            if (fileCount != 1) {
+            if (fileCount != 1)
                 fail(Integer.toString(fileCount)
-                     + " auto-tar files exist in baseDir '"
-                     + baseDir.getAbsolutePath()
-                     + "' after writing both backups");
-            }
-
+                        + " auto-tar files exist in baseDir '"
+                        + baseDir.getAbsolutePath()
+                        + "' after writing a non-compressed backup");
             fileCount = baseDir.listFiles(autoTarGzFilenameFilter).length;
-
-            if (fileCount != 1) {
+            if (fileCount != 0)
                 fail(Integer.toString(fileCount)
-                     + " auto-tar.gz files exist in baseDir '"
-                     + baseDir.getAbsolutePath()
-                     + "' after writing a compressed backup");
-            }
+                        + " auto-tar.gz files exist in baseDir '"
+                        + baseDir.getAbsolutePath()
+                        + "' after writing a non-compressed backup");
+            conn.createStatement().executeUpdate("BACKUP DATABASE TO '"
+                    + baseDir.getAbsolutePath()
+                    + "/' BLOCKING COMPRESSED");
+            fileCount = baseDir.listFiles(autoTarFilenameFilter).length;
+            if (fileCount != 1)
+                fail(Integer.toString(fileCount)
+                        + " auto-tar files exist in baseDir '"
+                        + baseDir.getAbsolutePath()
+                        + "' after writing both backups");
+            fileCount = baseDir.listFiles(autoTarGzFilenameFilter).length;
+            if (fileCount != 1)
+                fail(Integer.toString(fileCount)
+                        + " auto-tar.gz files exist in baseDir '"
+                        + baseDir.getAbsolutePath()
+                        + "' after writing a compressed backup");
         } finally {
             shutdownAndCloseConn();
         }
-    }
 
+    }
     public static Test suite() throws IOException, SQLException {
 
         TestSuite newSuite = new TestSuite();
@@ -649,47 +587,39 @@ public class TestDbBackup extends TestCase {
         return newSuite;
     }
 
-    private String autoMiddlingString =
-        "-" + new SimpleDateFormat("yyyyMMdd").format(new java.util.Date())
-        + 'T';
+    private String autoMiddlingString = "-"
+            + new SimpleDateFormat("yyyyMMdd").format(new java.util.Date())
+            + 'T';
+
     FilenameFilter autoTarFilenameFilter = new FilenameFilter() {
-
         private String suffixFormat = "-yyyyMMddTHHmmss.tar";
-
         public boolean accept(File dir, String name) {
-
             if (name.length() < suffixFormat.length() + 1) {
-
                 // Require variable name length >= 1 char
                 return false;
             }
-
             int suffixPos = name.length() - suffixFormat.length();
-
             // Would like to use Java 1.4's java.util.regex here.
-            return name.endsWith(".tar") && name.substring(
-                suffixPos, suffixPos + autoMiddlingString.length()).equals(
-                autoMiddlingString);
+            return name.endsWith(".tar")
+                    && name.substring(suffixPos,
+                    suffixPos + autoMiddlingString.length())
+                    .equals(autoMiddlingString);
         }
     };
+
     FilenameFilter autoTarGzFilenameFilter = new FilenameFilter() {
-
         private String suffixFormat = "-yyyyMMddTHHmmss.tar.gz";
-
         public boolean accept(File dir, String name) {
-
             if (name.length() < suffixFormat.length() + 1) {
-
                 // Require variable name length >= 1 char
                 return false;
             }
-
             int suffixPos = name.length() - suffixFormat.length();
-
             // Would like to use Java 1.4's java.util.regex here.
-            return name.endsWith(".tar.gz") && name.substring(
-                suffixPos, suffixPos + autoMiddlingString.length()).equals(
-                autoMiddlingString);
+            return name.endsWith(".tar.gz")
+                    && name.substring(suffixPos,
+                    suffixPos + autoMiddlingString.length())
+                    .equals(autoMiddlingString);
         }
     };
 }

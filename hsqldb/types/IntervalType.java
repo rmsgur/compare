@@ -1,4 +1,4 @@
-/* Copyright (c) 2001-2017, The HSQL Development Group
+/* Copyright (c) 2001-2011, The HSQL Development Group
  * All rights reserved.
  *
  * Redistribution and use in source and binary forms, with or without
@@ -43,10 +43,10 @@ import org.hsqldb.error.ErrorCode;
 import org.hsqldb.lib.ArrayUtil;
 
 /**
- * Type subclass for various types of INTERVAL.<p>
+ * Type subclass for various typs of INTERVAL.<p>
  *
  * @author Fred Toussi (fredt@users dot sourceforge.net)
- * @version 2.4.0
+ * @version 2.2.1
  * @since 1.9.0
  */
 public final class IntervalType extends DTIType {
@@ -306,7 +306,7 @@ public final class IntervalType extends DTIType {
         return true;
     }
 
-    public boolean isIntervalYearMonthType() {
+    public boolean isYearMonthIntervalType() {
 
         switch (typeCode) {
 
@@ -320,7 +320,7 @@ public final class IntervalType extends DTIType {
         }
     }
 
-    public boolean isIntervalDaySecondType() {
+    public boolean isDaySecondIntervalType() {
 
         switch (typeCode) {
 
@@ -532,7 +532,7 @@ public final class IntervalType extends DTIType {
             case Types.SQL_NUMERIC :
             case Types.SQL_DECIMAL : {
                 if (a instanceof BigDecimal) {
-                    if (NumberType.compareToLongLimits((BigDecimal) a) != 0) {
+                    if (!NumberType.isInLongLimits((BigDecimal) a)) {
                         throw Error.error(ErrorCode.X_22015);
                     }
                 }
@@ -572,7 +572,7 @@ public final class IntervalType extends DTIType {
                 }
             }
             case Types.SQL_INTERVAL_YEAR : {
-                long months = (((IntervalMonthData) a).units / 12) * 12L;
+                long months = (((IntervalMonthData) a).units / 12) * 12;
 
                 return new IntervalMonthData(months, this);
             }
@@ -643,47 +643,9 @@ public final class IntervalType extends DTIType {
     }
 
     public Object convertJavaToSQL(SessionInterface session, Object a) {
-
-        Object o = convertJavaTimeObject(session, a);
-
-        if (o != null) {
-            return o;
-        }
-
         return convertToDefaultType(session, a);
     }
 
-//#ifdef JAVA8
-/*
-    Object convertJavaTimeObject(SessionInterface session, Object a) {
-
-        if (this.isIntervalYearMonthType()) {
-            if (a instanceof java.time.Period) {
-                java.time.Period v = (java.time.Period) a;
-                int months = v.getYears() * 12 + v.getMonths();
-
-                return new IntervalMonthData(months, this);
-            }
-        } else {
-            if (a instanceof java.time.Duration) {
-                java.time.Duration v = (java.time.Duration) a;
-                long second = v.getSeconds();
-                int nano   = v.getNano();
-
-                return new IntervalSecondData(second, nano, this, true);
-            }
-        }
-
-        return null;
-    }
-*/
-
-//#else
-    TimestampData convertJavaTimeObject(SessionInterface session, Object a) {
-        return null;
-    }
-
-//#endif JAVA8
     public String convertToString(Object a) {
 
         if (a == null) {
@@ -754,8 +716,8 @@ public final class IntervalType extends DTIType {
             return false;
         }
 
-        return isIntervalYearMonthType()
-               == otherType.isIntervalYearMonthType();
+        return !(isYearMonthIntervalType()
+                 ^ ((IntervalType) otherType).isYearMonthIntervalType());
     }
 
     public int canMoveFrom(Type otherType) {
@@ -857,23 +819,6 @@ public final class IntervalType extends DTIType {
         }
     }
 
-    public boolean isNegative(Object a) {
-
-        if (a instanceof IntervalMonthData) {
-            return ((IntervalMonthData) a).units < 0;
-        } else {
-            long units = ((IntervalSecondData) a).units;
-
-            if (units < 0) {
-                return true;
-            } else if (units == 0) {
-                return ((IntervalSecondData) a).nanos < 0;
-            } else {
-                return false;
-            }
-        }
-    }
-
     public Object add(Session session, Object a, Object b, Type otherType) {
 
         if (a == null || b == null) {
@@ -933,8 +878,9 @@ public final class IntervalType extends DTIType {
                 } else if (a instanceof TimestampData
                            && b instanceof TimestampData) {
                     boolean isYear = typeCode == Types.SQL_INTERVAL_YEAR;
-                    long months = DateTimeType.subtractMonths(session,
-                        (TimestampData) a, (TimestampData) b, isYear);
+                    long months =
+                        DateTimeType.subtractMonths((TimestampData) a,
+                                                    (TimestampData) b, isYear);
 
                     return new IntervalMonthData(months, this);
                 }
@@ -1057,7 +1003,7 @@ public final class IntervalType extends DTIType {
                                 factor)
                             : (BigDecimal) factorType.multiply(units, factor);
 
-        if (NumberType.compareToLongLimits(result) != 0) {
+        if (!NumberType.isInLongLimits(result)) {
             throw Error.error(ErrorCode.X_22015);
         }
 
@@ -1073,7 +1019,7 @@ public final class IntervalType extends DTIType {
                                           true);
         } else {
             if (isYearMonth) {
-                return Long.valueOf(result.longValue());
+                return result.longValue();
             } else {
                 return result;
             }
@@ -1245,32 +1191,24 @@ public final class IntervalType extends DTIType {
             case Types.SQL_INTERVAL_YEAR :
                 if (precision == DTIType.defaultIntervalPrecision) {
                     return SQL_INTERVAL_YEAR;
-                } else if (precision == DTIType.maxIntervalPrecision) {
-                    return SQL_INTERVAL_YEAR_MAX_PRECISION;
                 }
                 break;
 
             case Types.SQL_INTERVAL_YEAR_TO_MONTH :
                 if (precision == DTIType.defaultIntervalPrecision) {
                     return SQL_INTERVAL_YEAR_TO_MONTH;
-                } else if (precision == DTIType.maxIntervalPrecision) {
-                    return SQL_INTERVAL_YEAR_TO_MONTH_MAX_PRECISION;
                 }
                 break;
 
             case Types.SQL_INTERVAL_MONTH :
                 if (precision == DTIType.defaultIntervalPrecision) {
                     return SQL_INTERVAL_MONTH;
-                } else if (precision == DTIType.maxIntervalPrecision) {
-                    return SQL_INTERVAL_MONTH_MAX_PRECISION;
                 }
                 break;
 
             case Types.SQL_INTERVAL_DAY :
                 if (precision == DTIType.defaultIntervalPrecision) {
                     return SQL_INTERVAL_DAY;
-                } else if (precision == DTIType.maxIntervalPrecision) {
-                    return SQL_INTERVAL_DAY_MAX_PRECISION;
                 }
                 break;
 
@@ -1297,8 +1235,6 @@ public final class IntervalType extends DTIType {
             case Types.SQL_INTERVAL_HOUR :
                 if (precision == DTIType.defaultIntervalPrecision) {
                     return SQL_INTERVAL_HOUR;
-                } else if (precision == DTIType.maxIntervalPrecision) {
-                    return SQL_INTERVAL_HOUR_MAX_PRECISION;
                 }
                 break;
 
@@ -1311,8 +1247,6 @@ public final class IntervalType extends DTIType {
             case Types.SQL_INTERVAL_MINUTE :
                 if (precision == DTIType.defaultIntervalPrecision) {
                     return SQL_INTERVAL_MINUTE;
-                } else if (precision == DTIType.maxIntervalPrecision) {
-                    return SQL_INTERVAL_MINUTE_MAX_PRECISION;
                 }
                 break;
 
@@ -1615,7 +1549,7 @@ public final class IntervalType extends DTIType {
         switch (part) {
 
             case Types.SQL_INTERVAL_YEAR :
-                return ((IntervalMonthData) interval).units / 12;
+                return (int) (((IntervalMonthData) interval).units / 12);
 
             case Types.SQL_INTERVAL_MONTH :
                 units = ((IntervalMonthData) interval).units;
@@ -1645,15 +1579,6 @@ public final class IntervalType extends DTIType {
                 return part == startIntervalType ? (int) units
                                                  : (int) (units % 60);
             }
-            case MILLISECOND :
-                return ((IntervalSecondData) interval).nanos / 1000000;
-
-            case MICROSECOND :
-                return ((IntervalSecondData) interval).nanos / 1000;
-
-            case NANOSECOND :
-                return ((IntervalSecondData) interval).nanos;
-
             default :
                 throw Error.runtimeError(ErrorCode.U_S0500, "IntervalType");
         }
@@ -1722,35 +1647,6 @@ public final class IntervalType extends DTIType {
         }
     }
 
-    public double convertToDouble(Object interval) {
-
-        if (this.isIntervalYearMonthType()) {
-            double months = ((IntervalMonthData) interval).units;
-
-            return months;
-        } else {
-            double seconds = ((IntervalSecondData) interval).units;
-
-            seconds += ((double) ((IntervalSecondData) interval).nanos)
-                       / nanoScaleFactors[0];
-
-            return seconds;
-        }
-    }
-
-    public Object convertFromDouble(double value) {
-
-        long units = (long) value;
-
-        if (this.isIntervalYearMonthType()) {
-            return new IntervalMonthData(units);
-        } else {
-            int nanos = (int) ((value - units) * nanoScaleFactors[0]);
-
-            return new IntervalSecondData(units, nanos);
-        }
-    }
-
     public CharacterType getCharacterType() {
 
         CharacterType type = CharacterType.getCharacterType(Types.SQL_VARCHAR,
@@ -1759,14 +1655,5 @@ public final class IntervalType extends DTIType {
         type.nameString = getNameString();
 
         return type;
-    }
-
-    public Object getValue(long units, int nanos) {
-
-        if (this.isIntervalYearMonthType()) {
-            return new IntervalMonthData(units, this);
-        } else {
-            return new IntervalSecondData(units, nanos, this, true);
-        }
     }
 }

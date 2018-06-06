@@ -1,4 +1,4 @@
-/* Copyright (c) 2001-2017, The HSQL Development Group
+/* Copyright (c) 2001-2011, The HSQL Development Group
  * All rights reserved.
  *
  * Redistribution and use in source and binary forms, with or without
@@ -34,7 +34,6 @@ package org.hsqldb.jdbc;
 import java.io.PrintWriter;
 import java.io.Serializable;
 import java.sql.SQLException;
-import java.sql.SQLFeatureNotSupportedException;
 import java.util.Properties;
 
 //#ifdef JAVA6
@@ -45,24 +44,10 @@ import javax.sql.CommonDataSource;
 /**
  * Common base for DataSource implementations.
  *
- * This class implements the methods used for setting the properties for new
- * connections.
- *
- * The setUrl() or setDatabase() methods are used to set the URL.
- *
- * It is possible to set all the rest of required properties in a Properties
- * file and use the setProperties() method.
- *
- * Alternatively, the setXXX() methods for user and password can be used.
- *
- * It is best to use only one method for setting the properties.
- *
- * If setXXX() methods are used, the values override the values set in a
- * call made to setProperties() before or after calling setXXX().
- *
  * @author Fred Toussi (fredt@users dot sourceforge.net)
- * @version 2.3.3
+ * @version 2.0.1
  * @since JDK 1.2, HSQLDB 2.0
+ * @revised JDK 1.7, HSQLDB 2.0.1
  */
 //#ifdef JAVA6
 public abstract class JDBCCommonDataSource
@@ -228,15 +213,6 @@ public abstract class JDBCCommonDataSource implements Serializable {
     }
 
     /**
-     * Retrieves the jdbc database connection url attribute. <p>
-     *
-     * @return the jdbc database connection url attribute
-     */
-    public String getURL() {
-        return url;
-    }
-
-    /**
      * Retrieves the user name for the connection. <p>
      *
      * @return the username for the connection
@@ -274,16 +250,6 @@ public abstract class JDBCCommonDataSource implements Serializable {
     }
 
     /**
-     * Sets the jdbc database URL. <p>
-     *
-     * @param url the new value of this object's jdbc database connection
-     *      url attribute
-     */
-    public void setURL(String url) {
-        this.url = url;
-    }
-
-    /**
      * Sets the password for the user name.
      *
      * @param password the password
@@ -308,7 +274,7 @@ public abstract class JDBCCommonDataSource implements Serializable {
     }
 
     /**
-     * Sets connection properties. If user / password / loginTimeout has been
+     * Sets connection properties. If user / password / logginTimeout has been
      * set with one of the setXXX() methods it will be added to the Properties
      * object.
      *
@@ -321,15 +287,15 @@ public abstract class JDBCCommonDataSource implements Serializable {
                                           : (Properties) props.clone();
 
         if (user != null) {
-            connectionProps.setProperty("user", user);
+            props.setProperty("user", user);
         }
 
         if (password != null) {
-            connectionProps.setProperty("password", password);
+            props.setProperty("password", password);
         }
 
         if (loginTimeout != 0) {
-            connectionProps.setProperty("loginTimeout", Integer.toString(loginTimeout));
+            props.setProperty("loginTimeout", Integer.toString(loginTimeout));
         }
     }
 
@@ -343,7 +309,7 @@ public abstract class JDBCCommonDataSource implements Serializable {
      * In the worst case, this may be the root Logger.
      *
      * @return the parent Logger for this data source
-     * @throws SQLFeatureNotSupportedException if the data source does not use <code>java.util.logging</code>.
+     * @throws SQLFeatureNotSupportedException if the data source does not use <code>java.util.logging<code>.
      * @since JDK 1.7 M11 2010/09/10 (b123), HSQLDB 2.0.1
      */
 //#ifdef JAVA6

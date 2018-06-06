@@ -1,4 +1,4 @@
-/* Copyright (c) 2001-2015, The HSQL Development Group
+/* Copyright (c) 2001-2009, The HSQL Development Group
  * All rights reserved.
  *
  * Redistribution and use in source and binary forms, with or without
@@ -31,12 +31,14 @@
 
 package org.hsqldb.rowio;
 
+import java.io.IOException;
+
 import org.hsqldb.persist.Crypto;
 import org.hsqldb.types.Type;
 
 /**
  * @author Fred Toussi (fredt@users dot sourceforge.net)
- * @version 2.3.3
+ * @version 1.9.0
  * @since 1.9.0
  */
 public class RowInputBinaryDecode extends RowInputBinary {
@@ -50,7 +52,7 @@ public class RowInputBinaryDecode extends RowInputBinary {
         this.crypto = crypto;
     }
 
-    public Object[] readData(Type[] colTypes) {
+    public Object[] readData(Type[] colTypes) throws IOException {
 
         if (crypto != null) {
             int start = pos;

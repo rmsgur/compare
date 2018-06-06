@@ -1,4 +1,4 @@
-/* Copyright (c) 2001-2017, The HSQL Development Group
+/* Copyright (c) 2001-2011, The HSQL Development Group
  * All rights reserved.
  *
  * Redistribution and use in source and binary forms, with or without
@@ -44,7 +44,7 @@ import org.hsqldb.persist.PersistentStore;
  * Manages rows involved in transactions
  *
  * @author Fred Toussi (fredt@users dot sourceforge.net)
- * @version 2.3.5
+ * @version 2.3.0
  * @since 2.0.0
  */
 public class TransactionManagerMVCC extends TransactionManagerCommon
@@ -58,7 +58,7 @@ implements TransactionManager {
     boolean isLockedMode;
     Session catalogWriteSession;
 
-    // information
+    //
     long lockTxTs;
     long lockSessionId;
     long unlockTxTs;
@@ -70,19 +70,14 @@ implements TransactionManager {
     //
     public TransactionManagerMVCC(Database db) {
 
-        super(db);
-
+        database     = db;
         lobSession   = database.sessionManager.getSysLobSession();
-        rowActionMap = new LongKeyHashMap(8192);
+        rowActionMap = new LongKeyHashMap(10000);
         txModel      = MVCC;
     }
 
     public long getGlobalChangeTimestamp() {
         return globalChangeTimestamp.get();
-    }
-
-    public void setGlobalChangeTimestamp(long ts) {
-        globalChangeTimestamp.set(ts);
     }
 
     public boolean isMVRows() {
@@ -91,10 +86,6 @@ implements TransactionManager {
 
     public boolean isMVCC() {
         return true;
-    }
-
-    public boolean is2PL() {
-        return false;
     }
 
     public int getTransactionControl() {
@@ -123,7 +114,7 @@ implements TransactionManager {
             for (int i = 0; i < limit; i++) {
                 RowAction action = (RowAction) session.rowActionList.get(i);
 
-                if (!action.canCommit(session, session.actionSet)) {
+                if (!action.canCommit(session, session.tempSet)) {
 
 //                System.out.println("commit conflicts " + session + " " + session.actionTimestamp);
                     return false;
@@ -138,9 +129,9 @@ implements TransactionManager {
                 action.prepareCommit(session);
             }
 
-            for (int i = 0; i < session.actionSet.size(); i++) {
+            for (int i = 0; i < session.tempSet.size(); i++) {
                 Session current =
-                    ((RowActionBase) session.actionSet.get(i)).session;
+                    ((RowActionBase) session.tempSet.get(i)).session;
 
                 current.abortTransaction = true;
             }
@@ -148,7 +139,7 @@ implements TransactionManager {
             return true;
         } finally {
             writeLock.unlock();
-            session.actionSet.clear();
+            session.tempSet.clear();
         }
     }
 
@@ -166,7 +157,7 @@ implements TransactionManager {
             for (int i = 0; i < limit; i++) {
                 RowAction action = (RowAction) session.rowActionList.get(i);
 
-                if (!action.canCommit(session, session.actionSet)) {
+                if (!action.canCommit(session, session.tempSet)) {
 
 //                  System.out.println("commit conflicts " + session + " " + session.actionTimestamp);
                     return false;
@@ -185,9 +176,9 @@ implements TransactionManager {
                 action.commit(session);
             }
 
-            for (int i = 0; i < session.actionSet.size(); i++) {
+            for (int i = 0; i < session.tempSet.size(); i++) {
                 Session current =
-                    ((RowActionBase) session.actionSet.get(i)).session;
+                    ((RowActionBase) session.tempSet.get(i)).session;
 
                 current.abortTransaction = true;
             }
@@ -229,8 +220,8 @@ implements TransactionManager {
 
             countDownLatches(session);
         } finally {
-            session.actionSet.clear();
             writeLock.unlock();
+            session.tempSet.clear();
         }
 
         return true;
@@ -247,7 +238,6 @@ implements TransactionManager {
 
             rollbackPartial(session, 0, session.transactionTimestamp);
             endTransaction(session);
-            session.logSequences();
             endTransactionTPL(session);
 
             session.isTransaction = false;
@@ -290,43 +280,27 @@ implements TransactionManager {
             return;
         }
 
-        for (int i = limit - 1; i >= start; i--) {
+        for (int i = start; i < limit; i++) {
             RowAction action = (RowAction) session.rowActionList.get(i);
 
-            if (action == null || action.type == RowActionBase.ACTION_NONE
-                    || action.type == RowActionBase.ACTION_DELETE_FINAL) {
-                continue;
+            if (action == null) {
+                throw Error.runtimeError(ErrorCode.GENERAL_ERROR,
+                                         "TXManager - null rollback action ");
             }
 
-            Row row = action.memoryRow;
+            action.rollback(session, timestamp);
+        }
 
-            if (row == null) {
-                row = (Row) action.store.get(action.getPos(), false);
-            }
+        // rolled back transactions can always be merged as they have never been
+        // seen by other sessions
+        writeLock.lock();
 
-            if (row == null) {
-                continue;
-            }
+        try {
+            Object[] list = session.rowActionList.getArray();
 
-            writeLock.lock();
-
-            try {
-                action.rollback(session, timestamp);
-
-                int type = action.mergeRollback(session, timestamp, row);
-
-                if (action.type == RowActionBase.ACTION_DELETE_FINAL) {
-                    if (action.deleteComplete) {
-                        continue;
-                    }
-
-                    action.deleteComplete = true;
-                }
-
-                action.store.rollbackRow(session, row, type, txModel);
-            } finally {
-                writeLock.unlock();
-            }
+            mergeRolledBackTransaction(session, timestamp, list, start, limit);
+        } finally {
+            writeLock.unlock();
         }
 
         session.rowActionList.setSize(start);
@@ -350,7 +324,7 @@ implements TransactionManager {
                 if (session.isolationLevel == SessionInterface
                         .TX_REPEATABLE_READ || session
                         .isolationLevel == SessionInterface.TX_SERIALIZABLE) {
-                    session.actionSet.clear();
+                    session.tempSet.clear();
 
                     session.redoAction       = false;
                     session.abortTransaction = session.txConflictRollback;
@@ -360,7 +334,7 @@ implements TransactionManager {
 
                 // can redo when conflicting action is already committed
                 if (row.rowAction != null && row.rowAction.isDeleted()) {
-                    session.actionSet.clear();
+                    session.tempSet.clear();
 
                     session.redoAction = true;
 
@@ -369,13 +343,13 @@ implements TransactionManager {
                     throw Error.error(ErrorCode.X_40501);
                 }
 
-                redoAction = !session.actionSet.isEmpty();
+                redoAction = !session.tempSet.isEmpty();
 
                 if (redoAction) {
                     actionSession =
-                        ((RowActionBase) session.actionSet.get(0)).session;
+                        ((RowActionBase) session.tempSet.get(0)).session;
 
-                    session.actionSet.clear();
+                    session.tempSet.clear();
 
                     if (actionSession != null) {
                         redoAction = checkDeadlock(session, actionSession);
@@ -388,7 +362,7 @@ implements TransactionManager {
                     if (actionSession != null) {
                         actionSession.waitingSessions.add(session);
                         session.waitedSessions.add(actionSession);
-                        session.latch.setCount(session.waitedSessions.size());
+                        session.latch.countUp();
                     }
 
                     redoCount++;
@@ -426,7 +400,7 @@ implements TransactionManager {
         try {
             store.indexRow(session, row);
         } catch (HsqlException e) {
-            if (session.actionSet.isEmpty()) {
+            if (session.tempSet.isEmpty()) {
                 throw e;
             }
 
@@ -435,12 +409,6 @@ implements TransactionManager {
         }
 
         if (!redoAction) {
-            if (table.persistenceScope == Table.SCOPE_ROUTINE) {
-                row.rowAction = null;
-
-                return;
-            }
-
             session.rowActionList.add(action);
 
             return;
@@ -451,12 +419,11 @@ implements TransactionManager {
         try {
             rollbackAction(session);
 
-            RowActionBase otherAction =
-                (RowActionBase) session.actionSet.get(0);
+            RowActionBase otherAction = (RowActionBase) session.tempSet.get(0);
 
             actionSession = otherAction.session;
 
-            session.actionSet.clear();
+            session.tempSet.clear();
 
             if (otherAction.commitTimestamp != 0) {
                 redoWait = false;
@@ -479,7 +446,7 @@ implements TransactionManager {
                 if (redoWait) {
                     actionSession.waitingSessions.add(session);
                     session.waitedSessions.add(actionSession);
-                    session.latch.setCount(session.waitedSessions.size());
+                    session.latch.countUp();
                 }
 
                 redoCount++;
@@ -547,15 +514,15 @@ implements TransactionManager {
                 if (result) {
                     session.rowActionList.add(row.rowAction);
                 } else {
-                    if (!session.actionSet.isEmpty()) {
-                        Session current = ((RowActionBase) session.actionSet.get(0)).session;
+                    if (!session.tempSet.isEmpty()) {
+                        Session current = (Session) session.tempSet.get(0);
 
                         session.redoAction = true;
 
                         session.latch.countUp();
                         current.waitingSessions.add(session);
                         session.waitedSessions.add(current);
-                        session.actionSet.clear();
+                        session.tempSet.clear();
 
                         throw Error.error(ErrorCode.X_40501);
                     }
@@ -635,7 +602,16 @@ implements TransactionManager {
      * remove the transaction info
      */
     public void removeTransactionInfo(CachedObject object) {
-        rowActionMap.remove(object.getPos());
+
+        if (object.isMemory()) {
+            return;
+        }
+
+        Row row = (Row) object;
+
+        if (row.getTable().tableType == TableBase.CACHED_TABLE) {
+            rowActionMap.remove(row.getPos());
+        }
     }
 
     public void removeTransactionInfo(long id) {
@@ -717,7 +693,6 @@ implements TransactionManager {
             if (!session.isTransaction) {
                 session.actionTimestamp      = getNextGlobalChangeTimestamp();
                 session.transactionTimestamp = session.actionTimestamp;
-                session.isPreTransaction     = false;
                 session.isTransaction        = true;
 
                 liveTransactionTimestamps.addLast(
@@ -731,7 +706,8 @@ implements TransactionManager {
     }
 
     /**
-     * Update statement if out-of-date
+     * add session to the end of queue when a transaction starts
+     * (depending on isolation mode)
      */
     public void beginAction(Session session, Statement cs) {
 
@@ -746,25 +722,19 @@ implements TransactionManager {
         writeLock.lock();
 
         try {
-            if (hasExpired) {
-                session.redoAction = true;
+            if (cs.getCompileTimestamp()
+                    < database.schemaManager.getSchemaChangeTimestamp()) {
+                cs = session.statementManager.getStatement(session, cs);
+                session.sessionContext.currentStatement = cs;
 
-                return;
-            }
-
-            cs = updateCurrentStatement(session, cs);
-
-            if (cs == null) {
-                return;
-            }
-
-            if (session.abortTransaction) {
-                return;
+                if (cs == null) {
+                    return;
+                }
             }
 
             session.isPreTransaction = true;
 
-            if (!isLockedMode && !cs.isCatalogLock(txModel)) {
+            if (!isLockedMode && !cs.isCatalogLock()) {
                 return;
             }
 
@@ -776,26 +746,26 @@ implements TransactionManager {
 
     /**
      * add session to the end of queue when a transaction starts
+     * (depending on isolation mode)
      */
     public void beginActionResume(Session session) {
 
         writeLock.lock();
 
         try {
-            session.actionTimestamp      = getNextGlobalChangeTimestamp();
-            session.actionStartTimestamp = session.actionTimestamp;
+            session.actionTimestamp = getNextGlobalChangeTimestamp();
 
-            if (session.isTransaction) {
-                return;
+            if (!session.isTransaction) {
+                session.transactionTimestamp = session.actionTimestamp;
+                session.isTransaction        = true;
+
+                liveTransactionTimestamps.addLast(
+                    session.transactionTimestamp);
+
+                transactionCount++;
             }
 
-            session.transactionTimestamp = session.actionTimestamp;
-            session.isPreTransaction     = false;
-            session.isTransaction        = true;
-
-            liveTransactionTimestamps.addLast(session.transactionTimestamp);
-
-            transactionCount++;
+            session.isPreTransaction = false;
         } finally {
             writeLock.unlock();
         }
@@ -825,25 +795,25 @@ implements TransactionManager {
                             if (action != null) {
                                 addTransactionInfo(row);
                             }
-                        } else {
+                        }
+                        else {
                             row.rowAction = action;
                             action = RowAction.addDeleteAction(session, table,
                                                                row, colMap);
                         }
-                    } finally {
+                    }
+                    finally {
                         rowActionMap.getWriteLock().unlock();
                     }
-
                     break;
                 }
                 case TableBase.TEMP_TABLE : {
                     action = RowAction.addDeleteAction(session, table, row,
-                                                       colMap);
+                        colMap);
 
                     store.delete(session, row);
 
                     row.rowAction = null;
-
                     break;
                 }
                 case TableBase.MEMORY_TABLE :
@@ -881,13 +851,27 @@ implements TransactionManager {
             Session current = (Session) session.waitingSessions.get(i);
 
             current.waitedSessions.remove(session);
-            current.latch.setCount(current.waitedSessions.size());
+            current.latch.countDown();
         }
 
-        // waitedSessions is not empty if the latch is zeroed by a
-        // different administrative session
-        session.waitedSessions.clear();
         session.waitingSessions.clear();
+    }
+
+    void getTransactionSessions(HashSet set) {
+
+        Session[] sessions = database.sessionManager.getAllSessions();
+
+        for (int i = 0; i < sessions.length; i++) {
+            long timestamp = sessions[i].getTransactionTimestamp();
+
+            if (liveTransactionTimestamps.contains(timestamp)) {
+                set.add(sessions[i]);
+            } else if (sessions[i].isPreTransaction) {
+                set.add(sessions[i]);
+            } else if (sessions[i].isTransaction) {
+                set.add(sessions[i]);
+            }
+        }
     }
 
     void endTransactionTPL(Session session) {
@@ -896,14 +880,15 @@ implements TransactionManager {
             return;
         }
 
-        //
         Session nextSession = null;
+
+        session.waitingSessions.size();
 
         for (int i = 0; i < session.waitingSessions.size(); i++) {
             Session   current = (Session) session.waitingSessions.get(i);
             Statement st      = current.sessionContext.currentStatement;
 
-            if (st != null && st.isCatalogLock(txModel)) {
+            if (st != null && st.isCatalogLock()) {
                 nextSession = current;
 
                 break;
@@ -920,7 +905,7 @@ implements TransactionManager {
                 if (current != nextSession) {
                     current.waitedSessions.add(nextSession);
                     nextSession.waitingSessions.add(current);
-                    current.latch.setCount(current.waitedSessions.size());
+                    current.latch.countUp();
                 }
             }
 
@@ -933,23 +918,31 @@ implements TransactionManager {
 
     boolean beginActionTPL(Session session, Statement cs) {
 
+        if (cs == null) {
+            return true;
+        }
+
+        if (session.abortTransaction) {
+            return false;
+        }
+
         if (session == catalogWriteSession) {
             return true;
         }
 
         session.tempSet.clear();
 
-        if (cs.isCatalogLock(txModel)) {
+        if (cs.isCatalogLock()) {
             if (catalogWriteSession == null) {
                 catalogWriteSession = session;
                 isLockedMode        = true;
                 lockTxTs            = session.actionTimestamp;
                 lockSessionId       = session.getId();
 
-                getTransactionAndPreSessions(session);
+                getTransactionSessions(session.tempSet);
+                session.tempSet.remove(session);
 
                 if (!session.tempSet.isEmpty()) {
-                    session.waitedSessions.addAll(session.tempSet);
                     setWaitingSessionTPL(session);
                 }
 
@@ -971,6 +964,8 @@ implements TransactionManager {
                     == SqlInvariants.LOBS_SCHEMA_HSQLNAME) {
                 return true;
             }
+        } else {
+            return true;
         }
 
         if (session.waitingSessions.contains(catalogWriteSession)) {
@@ -979,14 +974,9 @@ implements TransactionManager {
 
         if (catalogWriteSession.waitingSessions.add(session)) {
             session.waitedSessions.add(catalogWriteSession);
-            session.latch.setCount(session.waitedSessions.size());
+            session.latch.countUp();
         }
 
         return true;
-    }
-
-    public void resetSession(Session session, Session targetSession,
-                             int mode) {
-        super.resetSession(session, targetSession, mode);
     }
 }

@@ -1,4 +1,4 @@
-/* Copyright (c) 2001-2016, The HSQL Development Group
+/* Copyright (c) 2001-2011, The HSQL Development Group
  * All rights reserved.
  *
  * Redistribution and use in source and binary forms, with or without
@@ -40,11 +40,11 @@ import org.hsqldb.error.ErrorCode;
 import org.hsqldb.lib.java.JavaSystem;
 
 /**
- * This class is used as an InputStream to retrieve data from a Clob.
+ * This class is used as an InputStream to retrieve data from a Blob.
  * mark() and reset() are not supported.
  *
  * @author Fred Toussi (fredt@users dot sourceforge.net)
- * @version 2.3.4
+ * @version 2.0.1
  * @since 1.9.0
  */
 public final class ClobInputStream extends Reader {
@@ -99,7 +99,7 @@ public final class ClobInputStream extends Reader {
 
         checkClosed();
 
-        if (currentPosition >= availableLength) {
+        if (currentPosition == availableLength) {
             return -1;
         }
 
@@ -107,7 +107,7 @@ public final class ClobInputStream extends Reader {
             len = (int) (availableLength - currentPosition);
         }
 
-        for (int i = off; i < off + len && i < cbuf.length; i++) {
+        for (int i = off; i < len; i++) {
             cbuf[i] = (char) read();
         }
 
@@ -157,9 +157,7 @@ public final class ClobInputStream extends Reader {
 
         long readLength = availableLength - currentPosition;
 
-        if (readLength <= 0) {
-            return;
-        }
+        if (readLength <= 0) {}
 
         if (readLength > streamBlockSize) {
             readLength = streamBlockSize;

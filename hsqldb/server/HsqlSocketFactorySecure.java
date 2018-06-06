@@ -1,4 +1,4 @@
-/* Copyright (c) 2001-2017, The HSQL Development Group
+/* Copyright (c) 2001-2011, The HSQL Development Group
  * All rights reserved.
  *
  * Redistribution and use in source and binary forms, with or without
@@ -36,7 +36,9 @@ import java.net.ServerSocket;
 import java.net.Socket;
 import java.net.UnknownHostException;
 import java.security.Principal;
+import java.security.Provider;
 import java.security.PublicKey;
+import java.security.Security;
 
 import javax.net.ssl.HandshakeCompletedEvent;
 import javax.net.ssl.HandshakeCompletedListener;
@@ -54,10 +56,10 @@ import org.hsqldb.lib.StringConverter;
 /**
  * The default secure socket factory implementation.
  *
- * @author Campbell Burnet (campbell-burnet@users dot sourceforge.net)
+ * @author Campbell Boucher-Burnet (boucherb@users dot sourceforge.net)
  * @author Blaine Simpson (blaine dot simpson at admc dot com)
  *
- * @version 2.3.1
+ * @version 2.3.0
  * @since 1.7.2
  */
 public final class HsqlSocketFactorySecure extends HsqlSocketFactory
@@ -72,7 +74,7 @@ implements HandshakeCompletedListener {
     protected Object serverSocketFactory;
 
     /**
-     * Monitor object to guard against concurrent modification
+     * Monitor object to guard against conncurrent modification
      * of the underlying socket factory implementation member.
      */
     protected final Object socket_factory_mutex = new Object();
@@ -86,11 +88,24 @@ implements HandshakeCompletedListener {
 // ------------------------------ constructors ---------------------------------
 
     /**
-     * External construction disabled.  New factory instances are retrieved
+     * External construction disabled.  New factory instances are retreived
      * through the newHsqlSocketFactory method instead.
      */
     protected HsqlSocketFactorySecure() throws Exception {
+
         super();
+
+        Provider p;
+        String   cls;
+
+        if (Security.getProvider("SunJSSE") == null) {
+            try {
+                p = (Provider) Class.forName(
+                    "com.sun.net.ssl.internal.ssl.Provider").newInstance();
+
+                Security.addProvider(p);
+            } catch (Exception e) {}
+        }
     }
 
 // ----------------------------- subclass overrides ----------------------------
@@ -175,7 +190,7 @@ implements HandshakeCompletedListener {
     }
 
     /**
-     * if socket argument is not null, creates a secure Socket as a wrapper for
+     * if socket argurment is not null, creates a secure Socket as a wapper for
      * the normal, non-SSL socket. If the socket is null, create a new secure
      * socket. The secure socket is configured using the
      * socket options established for this factory.
@@ -230,7 +245,7 @@ implements HandshakeCompletedListener {
 // handler (which is only available in Java >= 1.4), then we need to do
 // the verification: hostname == cert CN
 //
-// campbell-burnet@users 20030503:
+// boucherb@users 20030503:
 // CHEKME/TODO:
 //
 // Stricter verify?  Either require SunJSSE (assume its trust manager properly
@@ -241,13 +256,13 @@ implements HandshakeCompletedListener {
 //
 // Reference:  http://www.securitytracker.com/alerts/2002/Aug/1005030.html
 //
-// That is, we can't guarantee that installed/preferred provider trust manager
+// That is, we can't guarantee that installed/prefered provider trust manager
 // implementations verify the whole chain properly and there are still
 // v1 certs out there (i.e. have no basic constraints, etc.), meaning that
 // we should check for and reject any intermediate certs that are not v3+
 // (cannot be checked for basic constraints).  Only root and intermediate
 // certs found in the trust store should be allowed to be v1 (since we must
-// be trusting them for them to be there).  All other intermediate signers,
+// be trusing them for them to be there).  All other intermediate signers,
 // however, should be required to be v3+, otherwise anybody with any kind
 // of cert issued somehow via a trust chain from the root can pose as an
 // intermediate signing CA and hence leave things open to man-in-the-middle
@@ -323,7 +338,7 @@ implements HandshakeCompletedListener {
     }
 
     /**
-     * Verifies the certificate chain presented by the server to which
+     * Verifyies the certificate chain presented by the server to which
      * a secure Socket has just connected.  Specifically, the provided host
      * name is checked against the Common Name of the server certificate;
      * additional checks may or may not be performed.

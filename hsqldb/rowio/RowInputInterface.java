@@ -1,4 +1,4 @@
-/* Copyright (c) 2001-2016, The HSQL Development Group
+/* Copyright (c) 2001-2011, The HSQL Development Group
  * All rights reserved.
  *
  * Redistribution and use in source and binary forms, with or without
@@ -31,6 +31,8 @@
 
 package org.hsqldb.rowio;
 
+import java.io.IOException;
+
 import org.hsqldb.types.Type;
 
 /**
@@ -38,34 +40,30 @@ import org.hsqldb.types.Type;
  *
  * @author Bob Preston (sqlbob@users dot sourceforge.net)
  * @author Fred Toussi (fredt@users dot sourceforge.net)
- * @version 2.3.3
+ * @version 2.2.9
  * @since 1.7.0
  */
 public interface RowInputInterface {
 
     long getPos();
 
-    long getFilePosition();
-
     int getSize();
 
-    int readType();
+    int readType() throws IOException;
 
-    String readString();
+    String readString() throws IOException;
 
-    byte readByte();
+    byte readByte() throws IOException;
 
-    char readChar();
+    char readChar() throws IOException;
 
-    short readShort();
+    short readShort() throws IOException;
 
-    int readInt();
+    int readInt() throws IOException;
 
-    long readLong();
+    long readLong() throws IOException;
 
-    Object readData(Type type);
-
-    Object[] readData(Type[] colTypes);
+    Object[] readData(Type[] colTypes) throws IOException;
 
     void resetRow(long filePos, int size);
 

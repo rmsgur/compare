@@ -1,4 +1,4 @@
-/* Copyright (c) 2001-2017, The HSQL Development Group
+/* Copyright (c) 2001-2011, The HSQL Development Group
  * All rights reserved.
  *
  * Redistribution and use in source and binary forms, with or without
@@ -63,7 +63,7 @@ import java.io.Writer;
  * exhibit true Closable behaviour, both in response to internally tracked
  * events and to client invocation of the <tt>Writer.close()</tt> method.
  *
- * @author campbell-burnet@users
+ * @author boucherb@users
  * @version 1.8.x
  * @since 1.8.x
  */
@@ -148,7 +148,7 @@ public class ClosableCharArrayWriter extends Writer {
      *      In particular, an <tt>IOException</tt> may be thrown
      *      if this writer has been {@link #close() closed}.
      */
-    public synchronized void write(char[] c, int off,
+    public synchronized void write(char c[], int off,
                                    int len) throws IOException {
 
         checkClosed();
@@ -338,7 +338,7 @@ public class ClosableCharArrayWriter extends Writer {
     }
 
     /**
-     * Performs an efficient (zero-copy) conversion of the character data
+     * Performs an effecient (zero-copy) conversion of the character data
      * accumulated in this writer to a reader. <p>
      *
      * To ensure the integrity of the resulting reader, {@link #free()

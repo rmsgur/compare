@@ -1,4 +1,4 @@
-/* Copyright (c) 2001-2017, The HSQL Development Group
+/* Copyright (c) 2001-2011, The HSQL Development Group
  * All rights reserved.
  *
  * Redistribution and use in source and binary forms, with or without
@@ -35,7 +35,7 @@ package org.hsqldb.server;
  * An enumeration of the property keys and default property values used by
  * HSQLDB servers
  *
- * @author  campbell-burnet@users
+ * @author  boucherb@users
  * @version 2.1.1
  * @since 1.7.2
  */
@@ -46,6 +46,7 @@ public interface ServerConstants {
     int SERVER_STATE_OPENING  = 4;
     int SERVER_STATE_CLOSING  = 8;
     int SERVER_STATE_SHUTDOWN = 16;
+    int SC_DATABASE_SHUTDOWN  = 0;
 
     // use default address for server socket
     String SC_DEFAULT_ADDRESS = "0.0.0.0";

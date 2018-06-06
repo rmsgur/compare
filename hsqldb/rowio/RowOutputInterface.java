@@ -1,4 +1,4 @@
-/* Copyright (c) 2001-2015, The HSQL Development Group
+/* Copyright (c) 2001-2011, The HSQL Development Group
  * All rights reserved.
  *
  * Redistribution and use in source and binary forms, with or without
@@ -41,12 +41,10 @@ import org.hsqldb.types.Type;
  *
  * @author Bob Preston (sqlbob@users dot sourceforge.net)
  * @author Fred Toussi (fredt@users dot sourceforge.net)
- * @version 2.3.3
+ * @version 2.0.1
  * @since 1.7.0
  */
 public interface RowOutputInterface extends Cloneable {
-
-    void setStorageSize(int size);
 
     void writeEnd();
 
@@ -64,9 +62,9 @@ public interface RowOutputInterface extends Cloneable {
 
     void writeInt(int i);
 
-    void writeLong(long i);
+    void writeIntData(int i, int position);
 
-    void writeData(Object object, Type type);
+    void writeLong(long i);
 
     void writeData(Row row, Type[] types);
 
@@ -94,5 +92,5 @@ public interface RowOutputInterface extends Cloneable {
     // returns the current size
     int size();
 
-    RowOutputInterface duplicate();
+    public RowOutputInterface duplicate();
 }

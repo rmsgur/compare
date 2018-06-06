@@ -1,4 +1,4 @@
-/* Copyright (c) 2001-2017, The HSQL Development Group
+/* Copyright (c) 2001-2011, The HSQL Development Group
  * All rights reserved.
  *
  * Redistribution and use in source and binary forms, with or without
@@ -31,20 +31,19 @@
 
 package org.hsqldb.auth;
 
-import java.security.Principal;
 import java.util.ArrayList;
 import java.util.List;
-import java.util.regex.Matcher;
 import java.util.regex.Pattern;
-import javax.security.auth.Subject;
+import java.util.regex.Matcher;
+import javax.security.auth.login.LoginContext;
+import javax.security.auth.login.LoginException;
 import javax.security.auth.callback.Callback;
-import javax.security.auth.callback.CallbackHandler;
 import javax.security.auth.callback.NameCallback;
 import javax.security.auth.callback.PasswordCallback;
 import javax.security.auth.callback.UnsupportedCallbackException;
-import javax.security.auth.login.LoginContext;
-import javax.security.auth.login.LoginException;
-
+import javax.security.auth.callback.CallbackHandler;
+import javax.security.auth.Subject;
+import java.security.Principal;
 import org.hsqldb.lib.FrameworkLogger;
 
 /**
@@ -53,12 +52,12 @@ import org.hsqldb.lib.FrameworkLogger;
  * <P>
  * <b>JAAS modules used must have both a NameCallback and a PasswordCallback.</b>
  * This is how we pass the JDBC-provided user name and password to the module.
- * <P>
+ * </P> <P>
  * JAAS setup is Java-implementation-specific.
  * For Sun Java, you set up a JAAS configuration file which resides at
  * <code>$HOME/.java.login.config</code> or at the location that you set with
  * Java system property <code>java.security.auth.login.config</code>.
- * <P>
+ * </P> <P>
  * You can use this bean to manage just access, or also to manage roles or
  * initial schemas.
  * To use for roles or initial schemas, you must set the roleSchemaValuePattern
@@ -66,6 +65,7 @@ import org.hsqldb.lib.FrameworkLogger;
  * By default, all JAAS-module-provided Principles will be candidates.
  * If you set property roleSchemaViaCredential to true, then all
  * JAAS-module-provided public Credentials will be candidates instead.
+ * </P>
  *
  * @see AuthFunctionBean
  * @see NameCallback
@@ -95,8 +95,7 @@ public class JaasAuthBean implements AuthFunctionBean {
      * <P>
      * Do not set roleSchemaViaCredential to true unless roleSchemaValuePattern
      * is set.
-     *
-     * @param roleSchemaViaCredential boolean
+     * </P>
      */
     public void setRoleSchemaViaCredential(boolean roleSchemaViaCredential) {
         this.roleSchemaViaCredential = roleSchemaViaCredential;
@@ -125,8 +124,6 @@ public class JaasAuthBean implements AuthFunctionBean {
      *
      * For Sun's JAAS implementation, this is the "application" identifier for
      * a stanza in the JAAS configuration file.
-     *
-     * @param applicationKey key
      */
     public void setApplicationKey(String applicationKey) {
         this.applicationKey = applicationKey;
@@ -148,7 +145,7 @@ public class JaasAuthBean implements AuthFunctionBean {
      * values "one", "two", "three", then if you set this pattern to ".+",
      * HyperSQL will attempt to assign initial schema and roles for the values
      * "one", "two", and "three".
-     * <P>
+     * </P><P>
      * These are two distinct and important purposes for the specified Pattern.
      * <OL>
      *   <LI>
@@ -166,24 +163,23 @@ public class JaasAuthBean implements AuthFunctionBean {
      *      acceptance decision, and the JAAS-provided value will be returned
      *      verbatim.
      * </OL>
-     * <P>
+     * </P><P>
      * N.b. this Pattern will be used for the matches() operation, therefore it
      * must match the entire candidate value strings (this is different than
      * the find operation which does not need to satisfy the entire candidate
      * value).
-     * <P>Example1 :<PRE><CODE>
+     * </P><P>Example1 :<CODE><PRE>
      *     cn=([^,]+),ou=dbRole,dc=admc,dc=com
-     * </CODE></PRE>
+     * </PRE></CODE>
      *     will extract the CN value from matching attribute values.
-     * <P>Example1 :<PRE><CODE>
+     * </P><P>Example1 :<CODE><PRE>
      *     cn=[^,]+,ou=dbRole,dc=admc,dc=com
-     * </CODE></PRE>
+     * </PRE></CODE>
      *     will return the entire <CODE>cn...com</CODE> string for matching
      *     attribute values.
+     * </P>
      *
      * @see Matcher#matches()
-     *
-     * @param roleSchemaValuePattern pattern
      */
     public void setRoleSchemaValuePattern(Pattern roleSchemaValuePattern) {
         this.roleSchemaValuePattern = roleSchemaValuePattern;
@@ -194,9 +190,8 @@ public class JaasAuthBean implements AuthFunctionBean {
      *
      * Use the (x?) Pattern constructs to set options.
      *
+     * @throws java.util.regex.PatternSyntaxException
      * @see #setRoleSchemaValuePattern(Pattern)
-     * @param patternString pattern
-     * @throws java.util.regex.PatternSyntaxException exception
      */
     public void setRoleSchemaValuePatternString(String patternString) {
         setRoleSchemaValuePattern(Pattern.compile(patternString));

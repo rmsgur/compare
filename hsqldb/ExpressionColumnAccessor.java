@@ -1,4 +1,4 @@
-/* Copyright (c) 2001-2016, The HSQL Development Group
+/* Copyright (c) 2001-2011, The HSQL Development Group
  * All rights reserved.
  *
  * Redistribution and use in source and binary forms, with or without
@@ -130,7 +130,7 @@ public class ExpressionColumnAccessor extends Expression {
     }
 
     /**
-     * SIMPLE_COLUMN expressions can be of different Expression subclass types
+     * SIMPLE_COLUMN expressions can be of different Java types
      */
     public boolean equals(Expression other) {
 
@@ -142,11 +142,11 @@ public class ExpressionColumnAccessor extends Expression {
             return false;
         }
 
-        if (opType != other.opType) {
+        if (opType != ((Expression) other).opType) {
             return false;
         }
 
-        return column == other.getColumn();
+        return column == ((Expression) other).getColumn();
     }
 
     void replaceRangeVariables(RangeVariable[] ranges,

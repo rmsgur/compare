@@ -1,4 +1,4 @@
-/* Copyright (c) 2001-2016, The HSQL Development Group
+/* Copyright (c) 2001-2011, The HSQL Development Group
  * All rights reserved.
  *
  * Redistribution and use in source and binary forms, with or without
@@ -43,7 +43,7 @@ import org.hsqldb.types.Type;
  * Implementation of ORDER BY and LIMIT properties of query expressions.
  *
  * @author Fred Toussi (fredt@users dot sourceforge.net)
- * @version 2.3.5
+ * @version 2.3.0
  * @since 1.9.0
  */
 public final class SortAndSlice {
@@ -132,7 +132,7 @@ public final class SortAndSlice {
         }
     }
 
-    public void prepareExtraColumn(int degree) {
+    public void prepare(int degree) {
 
         columnCount = exprList.size();
 
@@ -155,7 +155,7 @@ public final class SortAndSlice {
         }
     }
 
-    public void prepare(int startColumn) {
+    public void prepare(QuerySpecification select) {
 
         columnCount = exprList.size();
 
@@ -171,7 +171,7 @@ public final class SortAndSlice {
             ExpressionOrderBy sort = (ExpressionOrderBy) exprList.get(i);
 
             if (sort.getLeftNode().queryTableColumnIndex == -1) {
-                sortOrder[i] = startColumn + i;
+                sortOrder[i] = select.indexStartOrderBy + i;
             } else {
                 sortOrder[i] = sort.getLeftNode().queryTableColumnIndex;
             }
@@ -245,7 +245,8 @@ public final class SortAndSlice {
                 return;
             }
 
-            if (e.getRangeVariable() != select.rangeVariables[0]) {
+            if (((ExpressionColumn) e).getRangeVariable()
+                    != select.rangeVariables[0]) {
                 return;
             }
 
@@ -333,7 +334,8 @@ public final class SortAndSlice {
             return false;
         }
 
-        if (e.getRangeVariable() != select.rangeVariables[0]) {
+        if (((ExpressionColumn) e).getRangeVariable()
+                != select.rangeVariables[0]) {
             return false;
         }
 
@@ -343,14 +345,10 @@ public final class SortAndSlice {
             return false;
         }
 
-        if (select.rangeVariables[0].hasAnyTerminalCondition()) {
-            return false;
-        }
-
         if (select.rangeVariables[0].hasSingleIndexCondition()) {
             int[] colIndexes = rangeIndex.getColumns();
 
-            if (colIndexes[0] != e.getColumnIndex()) {
+            if (colIndexes[0] != ((ExpressionColumn) e).getColumnIndex()) {
                 return false;
             }
 
@@ -361,7 +359,8 @@ public final class SortAndSlice {
             return false;
         } else {
             Table table = select.rangeVariables[0].getTable();
-            Index index = table.getIndexForColumn(session, e.getColumnIndex());
+            Index index = table.getIndexForColumn(
+                session, ((ExpressionColumn) e).getColumnIndex());
 
             if (index == null) {
                 return false;

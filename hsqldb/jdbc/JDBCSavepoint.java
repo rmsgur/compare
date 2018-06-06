@@ -1,4 +1,4 @@
-/* Copyright (c) 2001-2017, The HSQL Development Group
+/* Copyright (c) 2001-2011, The HSQL Development Group
  * All rights reserved.
  *
  * Redistribution and use in source and binary forms, with or without
@@ -34,7 +34,7 @@ package org.hsqldb.jdbc;
 import java.sql.SQLException;
 import java.sql.Savepoint;
 
-/* $Id: JDBCSavepoint.java 5728 2017-03-27 12:25:15Z fredt $ */
+/* $Id: JDBCSavepoint.java 5160 2013-02-02 20:10:25Z fredt $ */
 
 // Revision 1.10  2006/07/12 12:38:22  boucherb
 // - full synch up to Mustang b90
@@ -64,7 +64,7 @@ import java.sql.Savepoint;
  * <!-- end release-specific documentation -->
  *
  *
- * @author Campbell Burnet (campbell-burnet@users dot sourceforge.net)
+ * @author boucherb@users
  * @since JDK 1.4, HSQLDB 1.7.2
  */
 public class JDBCSavepoint implements Savepoint {

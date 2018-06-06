@@ -1,4 +1,4 @@
-/* Copyright (c) 2001-2016, The HSQL Development Group
+/* Copyright (c) 2001-2011, The HSQL Development Group
  * All rights reserved.
  *
  * Redistribution and use in source and binary forms, with or without
@@ -46,7 +46,7 @@ import org.hsqldb.rights.Grantee;
  *
  * @author Fred Toussi (fredt@users dot sourceforge.net)
  *
- * @version 2.3.4
+ * @version 2.0.1
  * @since 1.9.0
 */
 public final class Schema implements SchemaObject {
@@ -64,10 +64,8 @@ public final class Schema implements SchemaObject {
     SchemaObjectSet  functionLookup;
     SchemaObjectSet  specificRoutineLookup;
     SchemaObjectSet  assertionLookup;
-    SchemaObjectSet  referenceLookup;
     HashMappedList   tableList;
     HashMappedList   sequenceList;
-    HashMappedList   referenceList;
     long             changeTimestamp;
 
     public Schema(HsqlName name, Grantee owner) {
@@ -86,10 +84,8 @@ public final class Schema implements SchemaObject {
         specificRoutineLookup =
             new SchemaObjectSet(SchemaObject.SPECIFIC_ROUTINE);
         assertionLookup = new SchemaObjectSet(SchemaObject.ASSERTION);
-        referenceLookup = new SchemaObjectSet(SchemaObject.REFERENCE);
         tableList       = (HashMappedList) tableLookup.map;
         sequenceList    = (HashMappedList) sequenceLookup.map;
-        referenceList   = (HashMappedList) referenceLookup.map;
         name.owner      = owner;
     }
 
@@ -106,7 +102,7 @@ public final class Schema implements SchemaObject {
     }
 
     public HsqlName getCatalogName() {
-        return name.schema;
+        return null;
     }
 
     public Grantee getOwner() {
@@ -151,27 +147,50 @@ public final class Schema implements SchemaObject {
         return sb.toString();
     }
 
-    public HsqlArrayList getSQLArray(OrderedHashSet resolved,
-                                     OrderedHashSet unresolved) {
+    public String[] getSQLArray(OrderedHashSet resolved,
+                                OrderedHashSet unresolved) {
 
         HsqlArrayList list      = new HsqlArrayList();
         String        setSchema = getSetSchemaSQL(name);
 
         list.add(setSchema);
-        sequenceLookup.getSQL(list, resolved, unresolved);
-        tableLookup.getSQL(list, resolved, unresolved);
-        functionLookup.getSQL(list, resolved, unresolved);
-        procedureLookup.getSQL(list, resolved, unresolved);
-        referenceLookup.getSQL(list, resolved, unresolved);
 
+        //
+        String[] subList;
+
+        subList = sequenceLookup.getSQL(resolved, unresolved);
+
+        list.addAll(subList);
+
+        subList = tableLookup.getSQL(resolved, unresolved);
+
+        list.addAll(subList);
+
+        subList = functionLookup.getSQL(resolved, unresolved);
+
+        list.addAll(subList);
+
+        subList = procedureLookup.getSQL(resolved, unresolved);
+
+        list.addAll(subList);
+
+        subList = assertionLookup.getSQL(resolved, unresolved);
+
+        list.addAll(subList);
+
+//
         if (list.size() == 1) {
-            list.clear();
+            return new String[]{};
         }
 
-        return list;
+        String[] array = new String[list.size()];
+
+        list.toArray(array);
+
+        return array;
     }
 
-    public HsqlArrayList getSequenceRestartSQL() {
+    public String[] getSequenceRestartSQL() {
 
         HsqlArrayList list = new HsqlArrayList();
         Iterator      it   = sequenceLookup.map.values().iterator();
@@ -183,10 +202,14 @@ public final class Schema implements SchemaObject {
             list.add(ddl);
         }
 
-        return list;
+        String[] array = new String[list.size()];
+
+        list.toArray(array);
+
+        return array;
     }
 
-    public HsqlArrayList getTriggerSQL() {
+    public String[] getTriggerSQL() {
 
         HsqlArrayList list = new HsqlArrayList();
         Iterator      it   = tableLookup.map.values().iterator();
@@ -198,7 +221,11 @@ public final class Schema implements SchemaObject {
             list.addAll(ddl);
         }
 
-        return list;
+        String[] array = new String[list.size()];
+
+        list.toArray(array);
+
+        return array;
     }
 
     public void addSimpleObjects(OrderedHashSet unresolved) {
@@ -265,9 +292,6 @@ public final class Schema implements SchemaObject {
             case SchemaObject.TRIGGER :
                 return triggerLookup;
 
-            case SchemaObject.REFERENCE :
-                return referenceLookup;
-
             case SchemaObject.INDEX :
                 return indexLookup;
 
@@ -321,9 +345,6 @@ public final class Schema implements SchemaObject {
             case SchemaObject.TRIGGER :
                 return triggerLookup.map.values().iterator();
 
-            case SchemaObject.REFERENCE :
-                return referenceLookup.map.values().iterator();
-
             case SchemaObject.INDEX :
                 return indexLookup.map.values().iterator();
 
@@ -335,194 +356,6 @@ public final class Schema implements SchemaObject {
         }
     }
 
-    SchemaObject findAnySchemaObject(String name) {
-
-        int[] types = {
-            SchemaObject.SEQUENCE, SchemaObject.TABLE, SchemaObject.ROUTINE
-        };
-
-        for (int type : types) {
-            SchemaObject object = findSchemaObject(name, type);
-
-            if (object != null) {
-                return object;
-            }
-        }
-
-        return null;
-    }
-
-    /**
-     * synonyms are allowed for a table, view, sequence, procedure,
-     * function, package, materialized view, user-defined type.
-     */
-    ReferenceObject findReference(String name, int type) {
-
-        ReferenceObject ref = (ReferenceObject) referenceList.get(name);
-
-        if (ref == null) {
-            return null;
-        }
-
-        if (ref.getTarget().type == type) {
-            return ref;
-        }
-
-        switch (type) {
-
-            case SchemaObject.TABLE :
-                if (ref.getTarget().type == SchemaObject.VIEW) {
-                    return ref;
-                }
-            case SchemaObject.ROUTINE :
-                if (ref.getTarget().type == SchemaObject.FUNCTION
-                        || ref.getTarget().type == SchemaObject.PROCEDURE) {
-                    return ref;
-                }
-        }
-
-        return null;
-    }
-
-    SchemaObject findSchemaObject(String name, int type) {
-
-        SchemaObjectSet set = null;
-        HsqlName        objectName;
-        Table           table;
-
-        switch (type) {
-
-            case SchemaObject.SEQUENCE :
-                return sequenceLookup.getObject(name);
-
-            case SchemaObject.TABLE :
-            case SchemaObject.VIEW :
-                return tableLookup.getObject(name);
-
-            case SchemaObject.CHARSET :
-                return charsetLookup.getObject(name);
-
-            case SchemaObject.COLLATION :
-                return collationLookup.getObject(name);
-
-            case SchemaObject.PROCEDURE :
-                return procedureLookup.getObject(name);
-
-            case SchemaObject.FUNCTION :
-                return functionLookup.getObject(name);
-
-            case SchemaObject.ROUTINE : {
-                SchemaObject object = procedureLookup.getObject(name);
-
-                if (object == null) {
-                    object = functionLookup.getObject(name);
-                }
-
-                return object;
-            }
-            case SchemaObject.SPECIFIC_ROUTINE :
-                return specificRoutineLookup.getObject(name);
-
-            case SchemaObject.DOMAIN :
-            case SchemaObject.TYPE :
-                return typeLookup.getObject(name);
-
-            case SchemaObject.INDEX :
-                set        = indexLookup;
-                objectName = set.getName(name);
-
-                if (objectName == null) {
-                    return null;
-                }
-
-                table = (Table) tableList.get(objectName.parent.name);
-
-                return table.getIndex(name);
-
-            case SchemaObject.CONSTRAINT :
-                set        = constraintLookup;
-                objectName = set.getName(name);
-
-                if (objectName == null) {
-                    return null;
-                }
-
-                table = (Table) tableList.get(objectName.parent.name);
-
-                if (table == null) {
-                    return null;
-                }
-
-                return table.getConstraint(name);
-
-            case SchemaObject.TRIGGER :
-                set        = triggerLookup;
-                objectName = set.getName(name);
-
-                if (objectName == null) {
-                    return null;
-                }
-
-                table = (Table) tableList.get(objectName.parent.name);
-
-                return table.getTrigger(name);
-
-            case SchemaObject.REFERENCE :
-                return referenceLookup.getObject(name);
-
-            default :
-                throw Error.runtimeError(ErrorCode.U_S0500, "SchemaManager");
-        }
-    }
-
-    public void addSchemaObject(HsqlNameManager nameManager,
-                                SchemaObject object, boolean replace) {
-
-        HsqlName        name = object.getName();
-        SchemaObjectSet set  = this.getObjectSet(name.type);
-
-        switch (name.type) {
-
-            case SchemaObject.PROCEDURE :
-            case SchemaObject.FUNCTION : {
-                RoutineSchema routine =
-                    (RoutineSchema) set.getObject(name.name);
-
-                if (routine == null) {
-                    routine = new RoutineSchema(name.type, name);
-
-                    routine.addSpecificRoutine(nameManager, (Routine) object,
-                                               replace);
-                    set.checkAdd(name);
-
-                    SchemaObjectSet specificSet =
-                        getObjectSet(SchemaObject.SPECIFIC_ROUTINE);
-
-                    specificSet.checkAdd(((Routine) object).getSpecificName());
-                    set.add(routine, replace);
-                    specificSet.add(object, replace);
-                } else {
-                    SchemaObjectSet specificSet =
-                        getObjectSet(SchemaObject.SPECIFIC_ROUTINE);
-                    HsqlName specificName =
-                        ((Routine) object).getSpecificName();
-
-                    if (specificName != null) {
-                        specificSet.checkAdd(specificName);
-                    }
-
-                    routine.addSpecificRoutine(nameManager, (Routine) object,
-                                               replace);
-                    specificSet.add(object, replace);
-                }
-
-                return;
-            }
-        }
-
-        set.add(object, replace);
-    }
-
     void release() {
 
         for (int i = 0; i < tableList.size(); i++) {
@@ -531,20 +364,16 @@ public final class Schema implements SchemaObject {
             table.terminateTriggers();
         }
 
-        triggerLookup         = null;
-        indexLookup           = null;
-        constraintLookup      = null;
-        charsetLookup         = null;
-        collationLookup       = null;
-        procedureLookup       = null;
-        functionLookup        = null;
-        specificRoutineLookup = null;
-        sequenceLookup        = null;
-        tableLookup           = null;
-        typeLookup            = null;
-
         tableList.clear();
         sequenceList.clear();
-        referenceList.clear();
+
+        triggerLookup    = null;
+        indexLookup      = null;
+        constraintLookup = null;
+        procedureLookup  = null;
+        functionLookup   = null;
+        sequenceLookup   = null;
+        tableLookup      = null;
+        typeLookup       = null;
     }
 }

@@ -1,4 +1,4 @@
-/* Copyright (c) 2001-2017, The HSQL Development Group
+/* Copyright (c) 2001-2011, The HSQL Development Group
  * All rights reserved.
  *
  * Redistribution and use in source and binary forms, with or without
@@ -49,17 +49,17 @@ import org.hsqldb.lib.java.JavaSystem;
  * Type subclass for CHARACTER, VARCHAR, etc.<p>
  *
  * @author Fred Toussi (fredt@users dot sourceforge.net)
- * @version 2.4.0
+ * @version 2.3.0
  * @since 1.9.0
  */
 public class CharacterType extends Type {
 
-    static final int         defaultCharPrecision    = 256;
-    static final int         defaultVarcharPrecision = 32 * 1024;
+    static final int  defaultCharPrecision    = 256;
+    static final int  defaultVarcharPrecision = 32 * 1024;
     public static final long maxCharPrecision        = Integer.MAX_VALUE;
-    Collation                collation;
-    Charset                  charset;
-    String                   nameString;
+    Collation         collation;
+    Charset           charset;
+    String            nameString;
 
     public CharacterType(Collation collation, int type, long precision) {
 
@@ -416,7 +416,7 @@ public class CharacterType extends Type {
                 }
 
                 if (slen > precision) {
-                    if (getRightTrimSize((String) a, ' ') <= precision) {
+                    if (getRightTrimSise((String) a, ' ') <= precision) {
                         return ((String) a).substring(0, (int) precision);
                     } else {
                         throw Error.error(ErrorCode.X_22001);
@@ -437,7 +437,7 @@ public class CharacterType extends Type {
                 int slen = ((String) a).length();
 
                 if (slen > precision) {
-                    if (getRightTrimSize((String) a, ' ') <= precision) {
+                    if (getRightTrimSise((String) a, ' ') <= precision) {
                         return ((String) a).substring(0, (int) precision);
                     } else {
                         throw Error.error(ErrorCode.X_22001);
@@ -632,52 +632,23 @@ public class CharacterType extends Type {
         } else if (a instanceof String) {
             s = (String) a;
         } else if (a instanceof java.sql.Date) {
-            s = a.toString();
+            s = ((java.sql.Date) a).toString();
         } else if (a instanceof java.sql.Time) {
-            s = a.toString();
+            s = ((java.sql.Time) a).toString();
         } else if (a instanceof java.sql.Timestamp) {
-            s = a.toString();
+            s = ((java.sql.Timestamp) a).toString();
         } else if (a instanceof java.util.Date) {
-            s = HsqlDateTime.getTimestampString(
-                ((java.util.Date) a).getTime());
-        } else if (a instanceof java.util.UUID) {
-            s = a.toString();
+            s = HsqlDateTime.getTimestampString(((java.sql.Date) a).getTime());
         } else {
-            s = convertJavaTimeObject(session, a);
-
-            if (s == null) {
-                throw Error.error(ErrorCode.X_42561);
-            }
+            throw Error.error(ErrorCode.X_42561);
         }
 
         return s;
+
+        // return convertToType(session, a, Type.SQL_VARCHAR);
     }
 
-//#ifdef JAVA8
-/*
-    String convertJavaTimeObject(SessionInterface session, Object a) {
-
-        switch(a.getClass().getName()){
-            case "java.time.LocalDate":
-            case "java.time.LocalTime":
-                return a.toString();
-            case "java.time.LocalDateTime":
-            case "java.time.OffsetDateTime":
-            case "java.time.OffsetTime":
-                return a.toString().replace('T', ' ');
-        }
-
-        return null;
-    }
-*/
-//#else
-    String convertJavaTimeObject(SessionInterface session, Object a) {
-        return null;
-    }
-//#endif JAVA8
-
-
-public Object convertJavaToSQL(SessionInterface session, Object a) {
+    public Object convertJavaToSQL(SessionInterface session, Object a) {
         return convertToDefaultType(session, a);
     }
 
@@ -780,13 +751,6 @@ public Object convertJavaToSQL(SessionInterface session, Object a) {
         return charset;
     }
 
-    /**
-     * can add collation and charset equality
-     */
-    public boolean equals(Object other) {
-        return super.equals(other);
-    }
-
     public long position(SessionInterface session, Object data,
                          Object otherData, Type otherType, long offset) {
 
@@ -836,6 +800,7 @@ public Object convertJavaToSQL(SessionInterface session, Object a) {
 
             if (length > dataLength) {
                 offset = 0;
+                length = dataLength;
             } else {
                 offset = dataLength - length;
             }
@@ -1122,7 +1087,7 @@ public Object convertJavaToSQL(SessionInterface session, Object a) {
         return getCharacterType(this.typeCode, length, this.collation);
     }
 
-    public static int getRightTrimSize(String s, char trim) {
+    public static int getRightTrimSise(String s, char trim) {
 
         int endindex = s.length();
 

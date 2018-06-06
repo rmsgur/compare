@@ -1,4 +1,4 @@
-/* Copyright (c) 2001-2017, The HSQL Development Group
+/* Copyright (c) 2001-2011, The HSQL Development Group
  * All rights reserved.
  *
  * Redistribution and use in source and binary forms, with or without
@@ -41,7 +41,7 @@ import java.lang.reflect.Field;
  * from calls to JDBCResultSetMetaData methods.
  * purposes.<p>
  *
- * @author Campbell Burnet (campbell-burnet@users dot sourceforge.net)
+ * @author Campbell Boucher-Burnet (boucherb@users dot sourceforge.net)
  * @author Fred Toussi (fredt@users dot sourceforge.net)
  * @version 2.0
  * @since HSQLDB 1.7.2
@@ -112,7 +112,7 @@ public final class JDBCColumnMetaData {
     /**
      * Retrieves a String representation of this object.
      *
-     * @return a String representation of this object
+     * @return a Sring representation of this object
      */
     public String toString() {
 
@@ -126,7 +126,7 @@ public final class JDBCColumnMetaData {
     /**
      * Provides the implementation of the toString() method.
      *
-     * @return a String representation of this object
+     * @return a Sring representation of this object
      */
     private String toStringImpl() throws Exception {
 

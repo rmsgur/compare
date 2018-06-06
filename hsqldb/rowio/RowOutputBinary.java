@@ -1,4 +1,4 @@
-/* Copyright (c) 2001-2016, The HSQL Development Group
+/* Copyright (c) 2001-2011, The HSQL Development Group
  * All rights reserved.
  *
  * Redistribution and use in source and binary forms, with or without
@@ -56,28 +56,22 @@ import org.hsqldb.types.Types;
  *
  * @author Bob Preston (sqlbob@users dot sourceforge.net)
  * @author Fred Toussi (fredt@users dot sourceforge.net)
- * @version 2.3.5
+ * @version 2.2.7
  * @since 1.7.0
  */
 public class RowOutputBinary extends RowOutputBase {
 
     public static final int INT_STORE_SIZE = 4;
     int                     storageSize;
-    int                     sizePosition;
     final int               scale;    // 2 to power n where n >= 0
     final int               mask;
-
-    public RowOutputBinary() {
-        this(new byte[64]);
-    }
 
     public RowOutputBinary(int initialSize, int scale) {
 
         super(initialSize);
 
-        this.scale        = scale;
-        this.mask         = ~(scale - 1);
-        this.sizePosition = -1;
+        this.scale = scale;
+        this.mask  = ~(scale - 1);
     }
 
     /**
@@ -89,9 +83,8 @@ public class RowOutputBinary extends RowOutputBase {
 
         super(buffer);
 
-        this.scale        = 1;
-        this.mask         = ~(scale - 1);
-        this.sizePosition = -1;
+        scale     = 1;
+        this.mask = ~(scale - 1);
     }
 
 // fredt@users - comment - methods for writing column type, name and data size
@@ -112,18 +105,10 @@ public class RowOutputBinary extends RowOutputBase {
         super.writeData(row, types);
     }
 
-    public long scalePosition(long position) {
-        return (position + scale - 1) & (long) mask;
-    }
-
-    public void setStorageSize(int size) {
-        storageSize = size;
-    }
-
     public void writeEnd() {
 
         if (count > storageSize) {
-            throw Error.runtimeError(ErrorCode.U_S0500, "RowOutputBinary");
+            Error.runtimeError(ErrorCode.U_S0500, "RowOutputBinary");
         }
 
         for (; count < storageSize; ) {
@@ -133,15 +118,9 @@ public class RowOutputBinary extends RowOutputBase {
 
     public void writeSize(int size) {
 
-        if (sizePosition < 0) {
-            sizePosition = count;
-
-            writeInt(size);
-        } else {
-            writeIntData(size, sizePosition);
-        }
-
         storageSize = size;
+
+        writeInt(size);
     }
 
     public void writeType(int type) {
@@ -265,10 +244,6 @@ public class RowOutputBinary extends RowOutputBase {
         write(o.getBytes(), 0, o.getBytes().length);
     }
 
-    protected void writeUUID(BinaryData o) {
-        writeByteArray(o.getBytes());
-    }
-
     protected void writeBinary(BinaryData o) {
         writeByteArray(o.getBytes());
     }
@@ -288,7 +263,7 @@ public class RowOutputBinary extends RowOutputBase {
         writeInt(o.length);
 
         for (int i = 0; i < o.length; i++) {
-            writeData(o[i], type);
+            writeData(type, o[i]);
         }
     }
 
@@ -306,10 +281,6 @@ public class RowOutputBinary extends RowOutputBase {
     public void writeByteArray(byte[] b) {
         writeInt(b.length);
         write(b, 0, b.length);
-    }
-
-    public void writeByteArray16(byte[] b) {
-        write(b, 0, 16);
     }
 
     // fredt@users - comment - helper and conversion methods
@@ -433,7 +404,6 @@ public class RowOutputBinary extends RowOutputBase {
 
             case Types.SQL_BINARY :
             case Types.SQL_VARBINARY :
-            case Types.SQL_GUID :
                 s += INT_STORE_SIZE;
                 s += ((BinaryData) o).length(null);
                 break;
@@ -487,24 +457,21 @@ public class RowOutputBinary extends RowOutputBase {
 
         super.reset();
 
-        storageSize  = 0;
-        sizePosition = -1;
+        storageSize = 0;
     }
 
     public void reset(int newSize) {
 
         super.reset(newSize);
 
-        storageSize  = 0;
-        sizePosition = -1;
+        storageSize = 0;
     }
 
     public void reset(byte[] buffer) {
 
         super.reset(buffer);
 
-        storageSize  = 0;
-        sizePosition = -1;
+        storageSize = 0;
     }
 
     public RowOutputInterface duplicate() {

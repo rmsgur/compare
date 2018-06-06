@@ -1,4 +1,4 @@
-/* Copyright (c) 2001-2016, The HSQL Development Group
+/* Copyright (c) 2001-2011, The HSQL Development Group
  * All rights reserved.
  *
  * Redistribution and use in source and binary forms, with or without
@@ -56,6 +56,32 @@ import org.hsqldb.lib.StringUtil;
  * @author Blaine Simpson (blaine dot simpson at admc dot com)
  */
 public class TarGenerator {
+
+    /**
+     * Creates specified tar file to contain specified files, or stdin,
+     * using default blocks-per-record and replacing tar file if it already
+     * exists.
+     */
+    public static void main(String[] sa)
+            throws IOException, TarMalformatException {
+        if (sa.length < 1) {
+            System.out.println(
+                RB.TarGenerator_syntax.getString(DbBackup.class.getName()));
+            System.exit(0);
+        }
+
+        TarGenerator generator = new TarGenerator(new File(sa[0]), true, null);
+
+        if (sa.length == 1) {
+            generator.queueEntry("stdin", System.in, 10240);
+        } else {
+            for (int i = 1; i < sa.length; i++) {
+                generator.queueEntry(new File(sa[i]));
+            }
+        }
+
+        generator.write();
+    }
 
     protected TarFileOutputStream      archive;
     protected List<TarEntrySupplicant> entryQueue =
@@ -237,10 +263,10 @@ public class TarGenerator {
      * @author Blaine Simpson (blaine dot simpson at admc dot com)
      */
     static protected class TarEntrySupplicant {
-        static final byte[] HEADER_TEMPLATE =
+        static protected byte[] HEADER_TEMPLATE =
             TarFileOutputStream.ZERO_BLOCK.clone();
         static Character              swapOutDelim = null;
-        final static byte[] ustarBytes   = {
+        final protected static byte[] ustarBytes   = {
             'u', 's', 't', 'a', 'r'
         };
 
@@ -248,7 +274,7 @@ public class TarGenerator {
             char c = System.getProperty("file.separator").charAt(0);
 
             if (c != '/') {
-                swapOutDelim = Character.valueOf(c);
+                swapOutDelim = new Character(c);
             }
 
             try {
@@ -401,7 +427,7 @@ public class TarGenerator {
              *  Really bad to make pseudo-stream just to get a byte array out
              * of it, but it would be a very poor use of development time to
              * re-design this class because the comparative time wasted at
-             * runtime will be negligible compared to storing the data entries.
+             * runtime will be negligable compared to storing the data entries.
              */
             return new TarEntrySupplicant(
                 pif.getName(), new ByteArrayInputStream(pif.toByteArray()),

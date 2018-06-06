@@ -1,4 +1,4 @@
-/* Copyright (c) 2001-2017, The HSQL Development Group
+/* Copyright (c) 2001-2011, The HSQL Development Group
  * All rights reserved.
  *
  * Redistribution and use in source and binary forms, with or without
@@ -65,17 +65,16 @@ import org.hsqldb.types.Type;
  *  query session settings, to allocate and execute statements, etc.) and all
  *  responses (such as exception indications, update counts, result sets and
  *  result set metadata). It also implements the HSQL wire protocol for
- *  communicating all such requests and responses across the network.
+ *  comunicating all such requests and responses across the network.
  *  Uses a navigator for data.
  *
- * @author Campbell Burnet (campbell-burnet@users dot sourceforge.net)
+ * @author Campbell Boucher-Burnet (boucherb@users dot sourceforge.net)
  * @author Fred Toussi (fredt@users dot sourceforge.net)
- * @version 2.3.5
+ * @version 2.3.0
  * @since 1.9.0
  */
 public class Result {
 
-    public static final Result[]       emptyArray = new Result[0];
     public static final ResultMetaData sessionAttributesMetaData;
 
     static {
@@ -245,13 +244,15 @@ public class Result {
     }
 
     public static Result newResult(DataInput dataInput,
-                                   RowInputBinary in) throws IOException {
+                                   RowInputBinary in)
+                                   throws IOException, HsqlException {
         return newResult(null, dataInput.readByte(), dataInput, in);
     }
 
     public static Result newResult(Session session, int mode,
                                    DataInput dataInput,
-                                   RowInputBinary in) throws IOException {
+                                   RowInputBinary in)
+                                   throws IOException, HsqlException {
 
         try {
             if (mode == ResultConstants.LARGE_OBJECT_OP) {
@@ -268,7 +269,8 @@ public class Result {
 
     public void readAdditionalResults(SessionInterface session,
                                       DataInputStream inputStream,
-                                      RowInputBinary in) throws IOException {
+                                      RowInputBinary in)
+                                      throws IOException, HsqlException {
 
         Result currentResult = this;
 
@@ -289,7 +291,8 @@ public class Result {
 
     public void readLobResults(SessionInterface session,
                                DataInputStream inputStream,
-                               RowInputBinary in) throws IOException {
+                               RowInputBinary in)
+                               throws IOException, HsqlException {
 
         Result  currentResult = this;
         boolean hasLob        = false;
@@ -326,7 +329,8 @@ public class Result {
 
     private static Result newResult(Session session, DataInput dataInput,
                                     RowInputBinary in,
-                                    int mode) throws IOException {
+                                    int mode)
+                                    throws IOException, HsqlException {
 
         Result result = newResult(mode);
         int    length = dataInput.readInt();
@@ -409,7 +413,6 @@ public class Result {
                 result.sessionID    = in.readLong();
                 result.databaseName = in.readString();
                 result.mainString   = in.readString();
-                result.generateKeys = in.readInt();
                 break;
 
             case ResultConstants.UPDATECOUNT :
@@ -432,7 +435,6 @@ public class Result {
                     case ResultConstants.TX_ROLLBACK :
                     case ResultConstants.TX_COMMIT_AND_CHAIN :
                     case ResultConstants.TX_ROLLBACK_AND_CHAIN :
-                    case ResultConstants.PREPARECOMMIT :
                         break;
 
                     default :
@@ -461,14 +463,6 @@ public class Result {
 
                 break;
             }
-            case ResultConstants.SQLCANCEL :
-                result.databaseID   = in.readInt();
-                result.sessionID    = in.readLong();
-                result.statementID  = in.readLong();
-                result.generateKeys = in.readInt();
-                result.mainString   = in.readString();
-                break;
-
             case ResultConstants.PREPARE_ACK :
                 result.statementReturnType = in.readByte();
                 result.statementID         = in.readLong();
@@ -609,7 +603,7 @@ public class Result {
 
     /**
      * For SQLPREPARE
-     * For preparation of SQL prepared statements.
+     * For parparation of SQL parepared statements.
      */
     public static Result newPrepareStatementRequest() {
         return newResult(ResultConstants.PREPARE);
@@ -704,7 +698,7 @@ public class Result {
     }
 
     public void addBatchedPreparedExecuteRequest(Object[] parameterValues) {
-        navigator.add(parameterValues);
+        ((RowSetNavigatorClient) navigator).add(parameterValues);
     }
 
     /**
@@ -768,17 +762,16 @@ public class Result {
         return result;
     }
 
-    public static Result newConnectionAcknowledgeResponse(Session session) {
+    public static Result newConnectionAcknowledgeResponse(Database database,
+            long sessionID, int databaseID) {
 
         Result result = newResult(ResultConstants.CONNECTACKNOWLEDGE);
 
-        result.sessionID    = session.getId();
-        result.databaseID   = session.getDatabase().getDatabaseID();
-        result.databaseName = session.getDatabase().getNameString();
+        result.sessionID    = sessionID;
+        result.databaseID   = databaseID;
+        result.databaseName = database.getUniqueName();
         result.mainString =
-            session.getDatabase().getProperties()
-                .getClientPropertiesAsString();
-        result.generateKeys = session.getRandomId();
+            database.getProperties().getClientPropertiesAsString();
 
         return result;
     }
@@ -847,18 +840,6 @@ public class Result {
         return result;
     }
 
-    public static Result newDoubleColumnResult(String colNameA,
-            String colNameB) {
-
-        Result result = newResult(ResultConstants.DATA);
-
-        result.metaData = ResultMetaData.newDoubleColumnMetaData(colNameA,
-                colNameB);
-        result.navigator = new RowSetNavigatorClient(8);
-
-        return result;
-    }
-
     public static Result newPrepareResponse(Statement statement) {
 
         Result r = newResult(ResultConstants.PREPARE_ACK);
@@ -871,17 +852,6 @@ public class Result {
         r.statementReturnType = statement.getStatementReturnType();
         r.metaData            = statement.getResultMetaData();
         r.parameterMetaData   = statement.getParametersMetaData();
-
-        return r;
-    }
-
-    public static Result newCancelRequest(int randomId, long statementId, String sql) {
-
-        Result r = newResult(ResultConstants.SQLCANCEL);
-
-        r.statementID = statementId;
-        r.mainString  = sql;
-        r.generateKeys = randomId;
 
         return r;
     }
@@ -1078,23 +1048,24 @@ public class Result {
             result.mainString = result.exception.getMessage();
             result.subString  = result.exception.getSQLState();
             result.errorCode  = result.exception.getErrorCode();
-        } else if (t instanceof Throwable) {
-            result.exception  = Error.error(ErrorCode.GENERAL_ERROR, t);
-            result.mainString = result.exception.getMessage();
-            result.subString  = result.exception.getSQLState();
-            result.errorCode  = result.exception.getErrorCode();
         } else {
-            result.exception  = Error.error(ErrorCode.GENERAL_ERROR);
-            result.mainString = result.exception.getMessage();
-            result.subString  = result.exception.getSQLState();
-            result.errorCode  = result.exception.getErrorCode();
+            result.exception = Error.error(ErrorCode.GENERAL_ERROR, t);
+            result.mainString = result.exception.getMessage() + " "
+                                + t.toString();
+            result.subString = result.exception.getSQLState();
+            result.errorCode = result.exception.getErrorCode();
+
+            if (statement != null) {
+                result.mainString += " in statement [" + statement + "]";
+            }
         }
 
         return result;
     }
 
     public void write(SessionInterface session, DataOutputStream dataOut,
-                      RowOutputInterface rowOut) throws IOException {
+                      RowOutputInterface rowOut)
+                      throws IOException, HsqlException {
 
         rowOut.reset();
         rowOut.writeByte(mode);
@@ -1171,7 +1142,6 @@ public class Result {
                 rowOut.writeLong(sessionID);
                 rowOut.writeString(databaseName);
                 rowOut.writeString(mainString);
-                rowOut.writeInt(generateKeys);
                 break;
 
             case ResultConstants.UPDATECOUNT :
@@ -1194,7 +1164,6 @@ public class Result {
                     case ResultConstants.TX_ROLLBACK :
                     case ResultConstants.TX_COMMIT_AND_CHAIN :
                     case ResultConstants.TX_ROLLBACK_AND_CHAIN :
-                    case ResultConstants.PREPARECOMMIT :
                         break;
 
                     default :
@@ -1203,14 +1172,6 @@ public class Result {
 
                 break;
             }
-            case ResultConstants.SQLCANCEL :
-                rowOut.writeInt(databaseID);
-                rowOut.writeLong(sessionID);
-                rowOut.writeLong(statementID);
-                rowOut.writeInt(generateKeys);
-                rowOut.writeString(mainString);
-                break;
-
             case ResultConstants.PREPARE_ACK :
                 rowOut.writeByte(statementReturnType);
                 rowOut.writeLong(statementID);
@@ -1310,7 +1271,7 @@ public class Result {
                 throw Error.runtimeError(ErrorCode.U_S0500, "Result");
         }
 
-        rowOut.writeSize(rowOut.size() - startPos);
+        rowOut.writeIntData(rowOut.size() - startPos, startPos);
         dataOut.write(rowOut.getOutputStream().getBuffer(), 0, rowOut.size());
 
         int    count   = getLobCount();
@@ -1496,10 +1457,7 @@ public class Result {
 
     public Object[] getSingleRowData() {
 
-        initialiseNavigator();
-        navigator.next();
-
-        Object[] data = navigator.getCurrent();
+        Object[] data = (Object[]) initialiseNavigator().getNext();
 
         data = (Object[]) ArrayUtil.resizeArrayIfDifferent(data,
                 metaData.getColumnCount());
@@ -1512,11 +1470,7 @@ public class Result {
     }
 
     public Object[] getSessionAttributes() {
-
-        initialiseNavigator();
-        navigator.next();
-
-        return navigator.getCurrent();
+        return (Object[]) initialiseNavigator().getNext();
     }
 
     public void setResultType(int type) {
@@ -1529,14 +1483,6 @@ public class Result {
 
     public int getStatementType() {
         return statementReturnType;
-    }
-
-    public void setSessionRandomID(int id) {
-        generateKeys = id;
-    }
-
-    public int getSessionRandomID() {
-        return generateKeys;
     }
 
     public int getGeneratedResultType() {
@@ -1604,30 +1550,6 @@ public class Result {
     public void clearLobResults() {
         lobResults = null;
         lobCount   = 0;
-    }
-
-    public void addRows(String[] sql) {
-
-        if (sql == null) {
-            return;
-        }
-
-        for (int i = 0; i < sql.length; i++) {
-            String[] s = new String[1];
-
-            s[0] = sql[i];
-
-            initialiseNavigator().add(s);
-        }
-    }
-
-    public void addRow(String[] sql) {
-
-        if (sql == null) {
-            return;
-        }
-
-        initialiseNavigator().add(sql);
     }
 
     private static Object[] readSimple(RowInputBinary in,

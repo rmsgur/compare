@@ -1,4 +1,4 @@
-/* Copyright (c) 2001-2016, The HSQL Development Group
+/* Copyright (c) 2001-2011, The HSQL Development Group
  * All rights reserved.
  *
  * Redistribution and use in source and binary forms, with or without
@@ -31,8 +31,10 @@
 
 package org.hsqldb.rowio;
 
+import java.io.IOException;
 import java.math.BigDecimal;
 
+import org.hsqldb.HsqlException;
 import org.hsqldb.error.Error;
 import org.hsqldb.error.ErrorCode;
 import org.hsqldb.lib.HsqlByteArrayInputStream;
@@ -53,7 +55,7 @@ import org.hsqldb.types.Types;
  *
  * @author Bob Preston (sqlbob@users dot sourceforge.net)
  * @author Fred Toussi (fredt@users dot sourceforge.net)
- * @version 2.3.5
+ * @version 2.2.9
  * @since 1.7.0
  */
 abstract class RowInputBase extends HsqlByteArrayInputStream {
@@ -62,14 +64,10 @@ abstract class RowInputBase extends HsqlByteArrayInputStream {
 
     // fredt - initialisation may be unnecessary as it's done in resetRow()
     protected long filePos = NO_POS;
-    protected int  size;
+    protected int size;
 
     RowInputBase() {
         this(new byte[4]);
-    }
-
-    RowInputBase(int size) {
-        this(new byte[size]);
     }
 
     /**
@@ -82,7 +80,7 @@ abstract class RowInputBase extends HsqlByteArrayInputStream {
         size = buf.length;
     }
 
-    public long getFilePosition() {
+    public long getPos() {
 
         if (filePos == NO_POS) {
 
@@ -97,50 +95,52 @@ abstract class RowInputBase extends HsqlByteArrayInputStream {
     }
 
 // fredt@users - comment - methods used for node and type data
-    public abstract int readType();
+    public abstract int readType() throws IOException;
 
-    public abstract String readString();
+    public abstract String readString() throws IOException;
 
 // fredt@users - comment - methods used for SQL types
-    protected abstract boolean readNull();
+    protected abstract boolean readNull() throws IOException;
 
-    protected abstract String readChar(Type type);
+    protected abstract String readChar(Type type) throws IOException;
 
-    protected abstract Integer readSmallint();
+    protected abstract Integer readSmallint() throws IOException;
 
-    protected abstract Integer readInteger();
+    protected abstract Integer readInteger() throws IOException;
 
-    protected abstract Long readBigint();
+    protected abstract Long readBigint() throws IOException;
 
-    protected abstract Double readReal();
+    protected abstract Double readReal() throws IOException;
 
-    protected abstract BigDecimal readDecimal(Type type);
+    protected abstract BigDecimal readDecimal(Type type) throws IOException;
 
-    protected abstract Boolean readBoole();
+    protected abstract Boolean readBoole() throws IOException;
 
-    protected abstract TimeData readTime(Type type);
+    protected abstract TimeData readTime(Type type) throws IOException;
 
-    protected abstract TimestampData readDate(Type type);
+    protected abstract TimestampData readDate(Type type) throws IOException;
 
-    protected abstract TimestampData readTimestamp(Type type);
+    protected abstract TimestampData readTimestamp(Type type)
+    throws IOException;
 
-    protected abstract IntervalMonthData readYearMonthInterval(Type type);
+    protected abstract IntervalMonthData readYearMonthInterval(Type type)
+    throws IOException;
 
-    protected abstract IntervalSecondData readDaySecondInterval(Type type);
+    protected abstract IntervalSecondData readDaySecondInterval(Type type)
+    throws IOException;
 
-    protected abstract Object readOther();
+    protected abstract Object readOther() throws IOException;
 
-    protected abstract BinaryData readUUID();
+    protected abstract BinaryData readBinary()
+    throws IOException, HsqlException;
 
-    protected abstract BinaryData readBinary();
+    protected abstract BinaryData readBit() throws IOException;
 
-    protected abstract BinaryData readBit();
+    protected abstract ClobData readClob() throws IOException;
 
-    protected abstract ClobData readClob();
+    protected abstract BlobData readBlob() throws IOException;
 
-    protected abstract BlobData readBlob();
-
-    protected abstract Object[] readArray(Type type);
+    protected abstract Object[] readArray(Type type) throws IOException;
 
     /**
      *  reads row data from a stream using the JDBC types in colTypes
@@ -148,7 +148,7 @@ abstract class RowInputBase extends HsqlByteArrayInputStream {
      * @param  colTypes
      * @throws  IOException
      */
-    public Object[] readData(Type[] colTypes) {
+    public Object[] readData(Type[] colTypes) throws IOException {
 
         int      l    = colTypes.length;
         Object[] data = new Object[l];
@@ -162,7 +162,7 @@ abstract class RowInputBase extends HsqlByteArrayInputStream {
         return data;
     }
 
-    public Object readData(Type type) {
+    public Object readData(Type type) throws IOException {
 
         Object o = null;
 
@@ -257,10 +257,6 @@ abstract class RowInputBase extends HsqlByteArrayInputStream {
                 o = readArray(type);
                 break;
 
-            case Types.SQL_GUID :
-                o = readUUID();
-                break;
-
             case Types.SQL_BINARY :
             case Types.SQL_VARBINARY :
                 o = readBinary();
@@ -319,19 +315,19 @@ abstract class RowInputBase extends HsqlByteArrayInputStream {
             buffer = new byte[rowsize];
         }
 
-        filePos = filepos;
-        size    = count = rowsize;
+        filePos   = filepos;
+        size      = count = rowsize;
     }
 
     public byte[] getBuffer() {
         return buffer;
     }
 
-    public int skipBytes(int n) {
+    public int skipBytes(int n) throws IOException {
         throw Error.runtimeError(ErrorCode.U_S0500, "RowInputBase");
     }
 
-    public String readLine() {
+    public String readLine() throws IOException {
         throw Error.runtimeError(ErrorCode.U_S0500, "RowInputBase");
     }
 }

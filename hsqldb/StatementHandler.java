@@ -1,4 +1,4 @@
-/* Copyright (c) 2001-2017, The HSQL Development Group
+/* Copyright (c) 2001-2011, The HSQL Development Group
  * All rights reserved.
  *
  * Redistribution and use in source and binary forms, with or without
@@ -41,7 +41,7 @@ import org.hsqldb.result.Result;
  * Implementation of Statement for condition handler objects.<p>
  *
  * @author Fred Toussi (fredt@users dot sourceforge.net)
- * @version 2.3.3
+ * @version 1.9.0
  * @since 1.9.0
  */
 public class StatementHandler extends Statement {
@@ -61,9 +61,9 @@ public class StatementHandler extends Statement {
     public final int handlerType;
 
     //
-    private OrderedIntHashSet conditionGroups = new OrderedIntHashSet();
-    private OrderedHashSet    conditionStates = new OrderedHashSet();
-    private Statement         statement;
+    OrderedIntHashSet conditionGroups = new OrderedIntHashSet();
+    OrderedHashSet    conditionStates = new OrderedHashSet();
+    Statement         statement;
 
     //
     public static final StatementHandler[] emptyExceptionHandlerArray =
@@ -83,7 +83,7 @@ public class StatementHandler extends Statement {
         result &= conditionGroups.isEmpty();
 
         if (!result) {
-            throw Error.error(ErrorCode.X_42612);
+            throw Error.error(ErrorCode.X_42604);
         }
     }
 
@@ -94,7 +94,7 @@ public class StatementHandler extends Statement {
         result &= conditionStates.isEmpty();
 
         if (!result) {
-            throw Error.error(ErrorCode.X_42612);
+            throw Error.error(ErrorCode.X_42604);
         }
     }
 
@@ -134,11 +134,8 @@ public class StatementHandler extends Statement {
     }
 
     public String[] getConditionStates() {
-
         String[] array = new String[conditionStates.size()];
-
         conditionStates.toArray(array);
-
         return array;
     }
 
@@ -224,7 +221,7 @@ public class StatementHandler extends Statement {
         return sb.toString();
     }
 
-    public boolean isCatalogLock(int model) {
+    public boolean isCatalogLock() {
         return false;
     }
 

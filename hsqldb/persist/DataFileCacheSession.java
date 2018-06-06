@@ -1,4 +1,4 @@
-/* Copyright (c) 2001-2016, The HSQL Development Group
+/* Copyright (c) 2001-2011, The HSQL Development Group
  * All rights reserved.
  *
  * Redistribution and use in source and binary forms, with or without
@@ -32,6 +32,7 @@
 package org.hsqldb.persist;
 
 import org.hsqldb.Database;
+import org.hsqldb.Row;
 import org.hsqldb.error.Error;
 import org.hsqldb.error.ErrorCode;
 import org.hsqldb.lib.FileUtil;
@@ -41,7 +42,7 @@ import org.hsqldb.lib.Iterator;
  * A file-based row store for temporary CACHED table persistence.<p>
  *
  * @author Fred Toussi (fredt@users dot sourceforge.net)
- * @version 2.3.4
+ * @version 2.3.0
  * @since 1.9.0
  */
 public class DataFileCacheSession extends DataFileCache {
@@ -66,7 +67,7 @@ public class DataFileCacheSession extends DataFileCache {
         cachedRowPadding  = dataFileScale;
         initialFreePos    = dataFileScale;
         maxCacheRows      = 2048;
-        maxCacheBytes     = maxCacheRows * 1024L;
+        maxCacheBytes     = maxCacheRows * 1024;
         maxDataFileSize   = (long) Integer.MAX_VALUE * dataFileScale;
     }
 
@@ -76,13 +77,12 @@ public class DataFileCacheSession extends DataFileCache {
     public void open(boolean readonly) {
 
         try {
-            dataFile = new RAFile(database.logger, dataFileName, false, false,
-                                  false);
+            dataFile = new RAFile(database, dataFileName, false, false, false);
             fileFreePosition = initialFreePos;
 
             initBuffers();
 
-            spaceManager = new DataSpaceManagerSimple(this, false);
+            spaceManager = new DataSpaceManagerSimple(this);
         } catch (Throwable t) {
             database.logger.logWarningEvent("Failed to open Session RA file",
                                             t);
@@ -148,7 +148,7 @@ public class DataFileCacheSession extends DataFileCache {
         Iterator it = cache.getIterator();
 
         while (it.hasNext()) {
-            CachedObject row = (CachedObject) it.next();
+            Row row = (Row) it.next();
 
             row.setInMemory(false);
             row.destroy();

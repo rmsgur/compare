@@ -1,4 +1,4 @@
-/* Copyright (c) 2001-2016, The HSQL Development Group
+/* Copyright (c) 2001-2011, The HSQL Development Group
  * All rights reserved.
  *
  * Redistribution and use in source and binary forms, with or without
@@ -45,7 +45,7 @@ import org.hsqldb.types.Type;
  * Implementation of Statement for PSM and trigger assignment.
  *
  * @author Fred Toussi (fredt@users dot sourceforge.net)
- * @version 2.3.3
+ * @version 2.2.9
  * @since 1.9.0
  */
 public class StatementSet extends StatementDMQL {
@@ -67,7 +67,7 @@ public class StatementSet extends StatementDMQL {
      * Trigger SET statement.
      */
     StatementSet(Session session, Expression[] targets, Table table,
-                 RangeVariable[] rangeVars, int[] indexes,
+                 RangeVariable rangeVars[], int[] indexes,
                  Expression[] colExpressions, CompileContext compileContext) {
 
         super(StatementTypes.ASSIGNMENT, StatementTypes.X_SQL_DATA_CHANGE,
@@ -83,7 +83,7 @@ public class StatementSet extends StatementDMQL {
         this.targetRangeVariables = rangeVars;
         isTransactionStatement    = false;
 
-        setDatabaseObjects(session, compileContext);
+        setDatabseObjects(session, compileContext);
         checkAccessRights(session);
     }
 
@@ -102,7 +102,7 @@ public class StatementSet extends StatementDMQL {
         sourceTypes            = expression.getNodeDataTypes();
         isTransactionStatement = false;
 
-        setDatabaseObjects(session, compileContext);
+        setDatabseObjects(session, compileContext);
         checkAccessRights(session);
     }
 
@@ -121,7 +121,7 @@ public class StatementSet extends StatementDMQL {
         sourceTypes            = query.getColumnTypes();
         isTransactionStatement = false;
 
-        setDatabaseObjects(session, compileContext);
+        setDatabseObjects(session, compileContext);
         checkAccessRights(session);
     }
 
@@ -142,7 +142,7 @@ public class StatementSet extends StatementDMQL {
         subQueries.toArray(subQueryArray);
 
         for (int i = 0; i < subqueries.length; i++) {
-            subQueryArray[i].prepareTable(session);
+            subQueryArray[i].prepareTable();
         }
 
         return subQueryArray;
@@ -169,8 +169,13 @@ public class StatementSet extends StatementDMQL {
                     break;
                 }
 
-                result = performAssignment(session, variableIndexes, targets,
-                                           values, sourceTypes);
+                for (int i = 0; i < values.length; i++) {
+                    values[i] =
+                        targets[i].getColumn().getDataType().convertToType(
+                            session, values[i], sourceTypes[i]);
+                }
+
+                result = executeAssignment(session, values);
 
                 break;
             }
@@ -183,8 +188,22 @@ public class StatementSet extends StatementDMQL {
                     break;
                 }
 
-                result = performAssignment(session, variableIndexes, targets,
-                                           values, sourceTypes);
+                for (int i = 0; i < values.length; i++) {
+                    Type targetType;
+
+                    if (targets[i].getType() == OpTypes.ARRAY_ACCESS) {
+                        targetType =
+                            targets[i].getLeftNode().getColumn().getDataType()
+                                .collectionBaseType();
+                    } else {
+                        targetType = targets[i].getColumn().getDataType();
+                    }
+
+                    values[i] = targetType.convertToType(session, values[i],
+                                                         sourceTypes[i]);
+                }
+
+                result = executeAssignment(session, values);
 
                 break;
             }
@@ -195,10 +214,9 @@ public class StatementSet extends StatementDMQL {
         return result;
     }
 
-    /**
-     * extra names may be added to references
-     */
     public void resolve(Session session) {
+
+        references = new OrderedHashSet();
 
         switch (operationType) {
 
@@ -212,6 +230,10 @@ public class StatementSet extends StatementDMQL {
             case StatementSet.VARIABLE_SET : {
                 if (expression != null) {
                     expression.collectObjectNames(references);
+                }
+
+                if (queryExpression != null) {
+                    queryExpression.collectObjectNames(references);
                 }
 
                 break;
@@ -271,7 +293,7 @@ public class StatementSet extends StatementDMQL {
 
             result = getResult(session);
         } catch (Throwable t) {
-            result = Result.newErrorResult(t);
+            result = Result.newErrorResult(t, null);
         }
 
         if (result.isError()) {
@@ -304,19 +326,11 @@ public class StatementSet extends StatementDMQL {
     // this fk references -> other  :  other read lock
     void collectTableNamesForRead(OrderedHashSet set) {
 
-        if (queryExpression != null) {
-            queryExpression.getBaseTableNames(set);
-        }
-
         for (int i = 0; i < rangeVariables.length; i++) {
             Table    rangeTable = rangeVariables[i].rangeTable;
             HsqlName name       = rangeTable.getName();
 
             if (rangeTable.isDataReadOnly() || rangeTable.isTemp()) {
-                continue;
-            }
-
-            if (rangeTable.isView()) {
                 continue;
             }
 
@@ -375,9 +389,7 @@ public class StatementSet extends StatementDMQL {
         return values;
     }
 
-    static Result performAssignment(Session session, int[] variableIndexes,
-                                    Expression[] targets, Object[] values,
-                                    Type[] sourceTypes) {
+    Result executeAssignment(Session session, Object[] values) {
 
         for (int j = 0; j < values.length; j++) {
             Object[] data = ValuePool.emptyObjectArray;
@@ -398,24 +410,14 @@ public class StatementSet extends StatementDMQL {
                     break;
             }
 
-            int    colIndex = variableIndexes[j];
-            Object value    = values[j];
-            Type   targetType;
+            int colIndex = variableIndexes[j];
 
             if (targets[j].getType() == OpTypes.ARRAY_ACCESS) {
-                targetType =
-                    targets[j].getLeftNode().getColumn().getDataType()
-                        .collectionBaseType();
-                value = targetType.convertToType(session, value,
-                                                 sourceTypes[j]);
                 data[colIndex] =
                     ((ExpressionAccessor) targets[j]).getUpdatedArray(session,
-                        (Object[]) data[colIndex], value, true);
+                        (Object[]) data[colIndex], values[j], true);
             } else {
-                targetType = targets[j].getColumn().getDataType();
-                value = targetType.convertToType(session, value,
-                                                 sourceTypes[j]);
-                data[colIndex] = value;
+                data[colIndex] = values[j];
             }
         }
 

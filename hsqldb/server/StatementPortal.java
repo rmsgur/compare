@@ -1,4 +1,4 @@
-/* Copyright (c) 2001-2016, The HSQL Development Group
+/* Copyright (c) 2001-2011, The HSQL Development Group
  * All rights reserved.
  *
  * Redistribution and use in source and binary forms, with or without
@@ -73,20 +73,21 @@ class StatementPortal {
         ackResult          = odbcPs.ackResult;
         session            = odbcPs.session;
         this.containingMap = containingMap;
+        bindResult = Result.newPreparedExecuteRequest(
+            odbcPs.ackResult.parameterMetaData.getParameterTypes(),
+            odbcPs.ackResult.getStatementID());
 
-        Type[] paramTypes = Type.emptyArray;
+        switch (bindResult.getType()) {
 
-        switch (ackResult.getType()) {
-
-            case ResultConstants.PREPARE_ACK :
+            case ResultConstants.EXECUTE :
                 break;
 
             case ResultConstants.ERROR :
-                throw new RecoverableOdbcFailure(ackResult);
+                throw new RecoverableOdbcFailure(bindResult);
             default :
                 throw new RecoverableOdbcFailure(
-                    "Output Result from secondary Statement prep is of "
-                    + "unexpected type: " + ackResult.getType());
+                    "Output Result from seconary Statement prep is of "
+                    + "unexpected type: " + bindResult.getType());
         }
 
         if (paramObjs.length < 1) {
@@ -98,7 +99,7 @@ class StatementPortal {
                 throw new RecoverableOdbcFailure("No metadata for Result ack");
             }
 
-            paramTypes = pmd.getParameterTypes();
+            Type[] paramTypes = pmd.getParameterTypes();
 
             if (paramTypes.length != paramObjs.length) {
                 throw new RecoverableOdbcFailure(
@@ -121,9 +122,6 @@ class StatementPortal {
                 throw new RecoverableOdbcFailure("Typing failure: " + se);
             }
         }
-
-        bindResult = Result.newPreparedExecuteRequest(paramTypes,
-                odbcPs.ackResult.getStatementID());
 
         containingMap.put(handle, this);
     }

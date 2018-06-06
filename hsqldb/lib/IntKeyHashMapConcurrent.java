@@ -1,4 +1,4 @@
-/* Copyright (c) 2001-2016, The HSQL Development Group
+/* Copyright (c) 2001-2011, The HSQL Development Group
  * All rights reserved.
  *
  * Redistribution and use in source and binary forms, with or without
@@ -48,7 +48,7 @@ public class IntKeyHashMapConcurrent extends BaseHashMap {
     Collection values;
 
     //
-    ReentrantReadWriteLock           lock = new ReentrantReadWriteLock(true);
+    ReentrantReadWriteLock           lock      = new ReentrantReadWriteLock(true);
     ReentrantReadWriteLock.ReadLock  readLock  = lock.readLock();
     ReentrantReadWriteLock.WriteLock writeLock = lock.writeLock();
 
@@ -175,23 +175,23 @@ public class IntKeyHashMapConcurrent extends BaseHashMap {
         }
 
         public boolean contains(Object o) {
-            throw new UnsupportedOperationException();
+            throw new RuntimeException();
         }
 
         public Object get(Object key) {
-            throw new UnsupportedOperationException();
+            throw new RuntimeException();
         }
 
         public boolean add(Object value) {
-            throw new UnsupportedOperationException();
+            throw new RuntimeException();
         }
 
         public boolean addAll(Collection c) {
-            throw new UnsupportedOperationException();
+            throw new RuntimeException();
         }
 
         public boolean remove(Object o) {
-            throw new UnsupportedOperationException();
+            throw new RuntimeException();
         }
 
         public boolean isEmpty() {
@@ -214,19 +214,19 @@ public class IntKeyHashMapConcurrent extends BaseHashMap {
         }
 
         public boolean contains(Object o) {
-            throw new UnsupportedOperationException();
+            throw new RuntimeException();
         }
 
         public boolean add(Object value) {
-            throw new UnsupportedOperationException();
+            throw new RuntimeException();
         }
 
         public boolean addAll(Collection c) {
-            throw new UnsupportedOperationException();
+            throw new RuntimeException();
         }
 
         public boolean remove(Object o) {
-            throw new UnsupportedOperationException();
+            throw new RuntimeException();
         }
 
         public boolean isEmpty() {

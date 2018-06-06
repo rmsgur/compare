@@ -1,4 +1,4 @@
-/* Copyright (c) 2001-2017, The HSQL Development Group
+/* Copyright (c) 2001-2011, The HSQL Development Group
  * All rights reserved.
  *
  * Redistribution and use in source and binary forms, with or without
@@ -33,10 +33,7 @@ package org.hsqldb.jdbc.pool;
 
 import java.io.Serializable;
 import java.sql.SQLException;
-import java.util.Iterator;
-import java.util.concurrent.locks.ReentrantReadWriteLock;
-import java.util.HashSet;
-import java.util.HashMap;
+
 import javax.naming.NamingException;
 import javax.naming.Reference;
 import javax.naming.Referenceable;
@@ -56,8 +53,12 @@ import org.hsqldb.jdbc.JDBCCommonDataSource;
 import org.hsqldb.jdbc.JDBCConnection;
 import org.hsqldb.jdbc.JDBCDriver;
 import org.hsqldb.jdbc.JDBCUtil;
+import org.hsqldb.lib.HashMap;
+import org.hsqldb.lib.HashSet;
+import org.hsqldb.lib.Iterator;
+import org.hsqldb.persist.HsqlDatabaseProperties;
 
-// @(#)$Id: JDBCXADataSource.java 5743 2017-04-09 14:22:33Z fredt $
+// @(#)$Id: JDBCXADataSource.java 5198 2013-03-10 21:54:46Z fredt $
 
 /**
  * Connection factory for JDBCXAConnections.
@@ -66,10 +67,10 @@ import org.hsqldb.jdbc.JDBCUtil;
  * The {@link org.hsqldb.jdbc.JDBCDataSourceFactory} can be used to get
  * instances of this class.<p>
  *
- * The methods of the superclass, {@link org.hsqldb.jdbc.JDBCCommonDataSource},
+ * The methods of the superclass, {@link org.hsqldb.jdbc.JDBCommonDataSource},
  * are used for settings the HyperSQL server and user.<p>
  *
- * @version 2.3.3
+ * @version 2.2.9
  * @since 2.0.0
  * @author Blaine Simpson (blaine dot simpson at admc dot com)
  * @see javax.sql.XADataSource
@@ -86,8 +87,6 @@ implements XADataSource, Serializable, Referenceable
 
     /**
      * Get new XAConnection connection, to be managed by a connection manager.
-     * 
-     * @throws SQLException on error
      */
     public XAConnection getXAConnection() throws SQLException {
 
@@ -97,7 +96,7 @@ implements XADataSource, Serializable, Referenceable
                          + ".getXAConnection()...");
 */
 
-        // Use JDBCDriver directly so there is no need to register with DriverManager
+        // Use JDBCDriver directly so there is no need to regiser with DriverManager
         JDBCConnection connection =
             (JDBCConnection) JDBCDriver.getConnection(url, connectionProps);
         JDBCXAConnection xaConnection = new JDBCXAConnection(this, connection);
@@ -115,10 +114,6 @@ implements XADataSource, Serializable, Referenceable
      *                  for this JDBCXADataSource.
      *
      * @see #getXAConnection()
-     * 
-     * @param user the user
-     * @param password the password
-     * @throws SQLException on error
      */
     public XAConnection getXAConnection(String user,
                                         String password) throws SQLException {
@@ -157,16 +152,9 @@ implements XADataSource, Serializable, Referenceable
 
     // ------------------------ internal implementation ------------------------
     private HashMap resources = new HashMap();
-    private ReentrantReadWriteLock lock = new ReentrantReadWriteLock(true);
 
     public void addResource(Xid xid, JDBCXAResource xaResource) {
-        lock.writeLock().lock();
-
-        try {
-            resources.put(xid, xaResource);
-        } finally {
-            lock.writeLock().unlock();
-        }
+        resources.put(xid, xaResource);
     }
 
     public JDBCXADataSource() throws SQLException {
@@ -175,13 +163,7 @@ implements XADataSource, Serializable, Referenceable
     }
 
     public JDBCXAResource removeResource(Xid xid) {
-        lock.writeLock().lock();
-
-        try{
-            return (JDBCXAResource) resources.remove(xid);
-        } finally{
-            lock.writeLock().unlock();
-        }
+        return (JDBCXAResource) resources.remove(xid);
     }
 
     /**
@@ -194,31 +176,24 @@ implements XADataSource, Serializable, Referenceable
      */
     Xid[] getPreparedXids() {
 
-        lock.writeLock().lock();
+        Iterator it = resources.keySet().iterator();
+        Xid      curXid;
+        HashSet  preparedSet = new HashSet();
 
-        try {
+        while (it.hasNext()) {
+            curXid = (Xid) it.next();
 
-            Iterator it = resources.keySet().iterator();
-            Xid curXid;
-            HashSet preparedSet = new HashSet();
-
-            while (it.hasNext()) {
-                curXid = (Xid) it.next();
-
-                if ( ( (JDBCXAResource) resources.get(curXid)).state
+            if (((JDBCXAResource) resources.get(curXid)).state
                     == JDBCXAResource.XA_STATE_PREPARED) {
-                    preparedSet.add(curXid);
-                }
+                preparedSet.add(curXid);
             }
-
-            Xid[] array = new Xid[preparedSet.size()];
-
-            preparedSet.toArray(array);
-
-            return array;
-        } finally {
-            lock.writeLock().unlock();
         }
+
+        Xid[] array = new Xid[preparedSet.size()];
+
+        preparedSet.toArray(array);
+
+        return array;
     }
 
     /**
@@ -231,12 +206,6 @@ implements XADataSource, Serializable, Referenceable
      * @see javax.transaction.xa.XAResource#rollback(Xid)
      */
     JDBCXAResource getResource(Xid xid) {
-        lock.readLock().lock();
-
-        try {
-            return (JDBCXAResource) resources.get(xid);
-        } finally {
-            lock.readLock().unlock();
-        }
+        return (JDBCXAResource) resources.get(xid);
     }
 }

@@ -1,4 +1,4 @@
-/* Copyright (c) 2001-2017, The HSQL Development Group
+/* Copyright (c) 2001-2011, The HSQL Development Group
  * All rights reserved.
  *
  * Redistribution and use in source and binary forms, with or without
@@ -31,19 +31,17 @@
 
 package org.hsqldb.auth;
 
-import java.sql.Connection;
-import java.sql.ResultSet;
-import java.sql.SQLException;
-import java.sql.Statement;
+import java.util.Map;
+import java.util.List;
+import java.util.HashMap;
 import java.util.ArrayList;
 import java.util.Collections;
-import java.util.HashMap;
-import java.util.List;
-import java.util.Map;
-
+import java.sql.Connection;
+import java.sql.SQLException;
+import java.sql.ResultSet;
 import org.hsqldb.jdbc.JDBCArrayBasic;
-import org.hsqldb.lib.FrameworkLogger;
 import org.hsqldb.types.Type;
+import org.hsqldb.lib.FrameworkLogger;
 
 /**
  * This class provides a method which can be used directly as a HyperSQL static
@@ -68,6 +66,9 @@ public class AuthBeanMultiplexer {
 
     private static AuthBeanMultiplexer singleton = new AuthBeanMultiplexer();
 
+    /**
+     * @see #setAuthFunctionBeans(List)
+     */
     private static Map<String, List<AuthFunctionBean>> beans =
             new HashMap<String, List<AuthFunctionBean>>();
 
@@ -101,10 +102,8 @@ public class AuthBeanMultiplexer {
     }
 
     protected static String getUniqueNameFor(Connection c) throws SQLException {
-        Statement st = c.createStatement();
-        ResultSet rs = null;
+        ResultSet rs = c.createStatement().executeQuery("CALL database_name()");
         try {
-            rs = st.executeQuery("CALL database_name()");
             if (!rs.next()) {
                 throw new SQLException(
                         "Engine did not reveal unique database name");
@@ -118,18 +117,11 @@ public class AuthBeanMultiplexer {
                         "Failed to close ResultSet for retrieving db name");
             }
             rs = null;  // Encourage GC
-            try {
-                st.close();
-            } catch (SQLException se) {
-                logger.error(
-                        "Failed to close Statement for retrieving db name");
-            }
-            st = null;  // Encourage GC
         }
     }
 
     /**
-     * Wrapper for {@code setAuthFunctionBeans(String, List<AuthFunctionBean>)}
+     * Wrapper for setAuthFunctioNBeans(String, List<AuthFunctionBean>)
      *
      * @param c  An open Connection to the desired database.
      * @throws SQLException if failed to obtain unique name from given
@@ -228,7 +220,8 @@ public class AuthBeanMultiplexer {
      *       resulting in a SQLException for the authenticating application.
      * </OL>
      *
-     * @see "HyperSQL User Guide, System Management chapter, Authentication Settings subsection."
+     * @see HyperSQL User Guide, System Management
+     *         chapter, Authentication Settings subsection.
      * @throws IllegalArgumentException if no AuthFunctionBean has been set for
      *         specified dbName.
      * @throws RuntimeException if all matching AuthFunctionBeans threw
@@ -246,7 +239,7 @@ public class AuthBeanMultiplexer {
         /* This method both logs and throws because due to JDBC requirements,
          * the Exception messages will not make it to applications.
          * Though these messages won't make it to the end user, at least the
-         * application administer will have access to problem details. */
+         * application adminster will have access to problem details. */
         if (database == null || database.length() != 16) {
             throw new IllegalStateException("Internal problem.  "
                     + "Database name not exactly 16 characters long: "

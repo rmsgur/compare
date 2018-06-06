@@ -1,4 +1,4 @@
-/* Copyright (c) 2001-2014, The HSQL Development Group
+/* Copyright (c) 2001-2011, The HSQL Development Group
  * All rights reserved.
  *
  * Redistribution and use in source and binary forms, with or without
@@ -51,18 +51,20 @@ public class TestDateTime extends TestBase {
         super(s);
     }
 
-    protected void setUp() throws Exception {
+    protected void setUp() {
 
         super.setUp();
 
-        Connection connection = super.newConnection();
-        Statement  statement  = connection.createStatement();
+        try {
+            Connection connection = super.newConnection();
+            Statement  statement  = connection.createStatement();
 
-        statement.execute("drop table time_test if exists");
-        statement.execute("drop table date_test if exists");
-        statement.execute("create table time_test(time_test time)");
-        statement.execute("create table date_test(date_test date)");
-        connection.close();
+            statement.execute("drop table time_test if exists");
+            statement.execute("drop table date_test if exists");
+            statement.execute("create table time_test(time_test time)");
+            statement.execute("create table date_test(date_test date)");
+            connection.close();
+        } catch (Exception e) {}
     }
 
     /**
@@ -82,7 +84,8 @@ public class TestDateTime extends TestBase {
         // See OracleTests class why we need to select tablename.*
         final String SELECT_DATE =
             "select date_test.* from date_test where date_test = ?";
-        final String DELETE_DATE = "delete from date_test where date_test = ?";
+        final String DELETE_DATE =
+            "delete from date_test where date_test = ?";
         Calendar          calGenerate = Calendar.getInstance();
         java.sql.Date     insertDate;
         Connection        connection = super.newConnection();
@@ -159,7 +162,8 @@ public class TestDateTime extends TestBase {
         // See OracleTests class why we need to select tablename.*
         final String SELECT_TIME =
             "select time_test.* from time_test where time_test = ?";
-        final String DELETE_TIME = "delete from time_test where time_test = ?";
+        final String DELETE_TIME =
+            "delete from time_test where time_test = ?";
         java.sql.Time     insertTime;
         Connection        connection = super.newConnection();
         PreparedStatement insertStatement;
@@ -186,7 +190,8 @@ public class TestDateTime extends TestBase {
         java.sql.Time     selectTime;
 
         selectStatement = connection.prepareStatement(SELECT_TIME);
-        selectTime      = new java.sql.Time(3600000);
+
+        selectTime = new java.sql.Time(3600000);
 
         selectStatement.setTime(1, selectTime);
 
@@ -215,9 +220,11 @@ public class TestDateTime extends TestBase {
             retrievedTime);
 
         // Ignore milliseconds when comparing dates
-        String  selectString    = selectTime.toString();
-        String  retrievedString = retrievedTime.toString();
-        boolean result          = retrievedString.equals(selectString);
+        String selectString = selectTime.toString();
+        String retrievedString = retrievedTime.toString();
+
+        boolean result =
+            retrievedString.equals(selectString);
 
         Assert.assertTrue(
             "The time retrieved from database "
@@ -246,7 +253,8 @@ public class TestDateTime extends TestBase {
         // See OracleTests class why we need to select tablename.*
         final String SELECT_TIME =
             "select time_test.* from time_test where time_test = ?";
-        final String DELETE_TIME = "delete from time_test where time_test = ?";
+        final String DELETE_TIME =
+            "delete from time_test where time_test = ?";
         Calendar          calGenerate = Calendar.getInstance();
         java.sql.Time     insertTime;
         Connection        connection = super.newConnection();
@@ -312,9 +320,11 @@ public class TestDateTime extends TestBase {
             retrievedTime);
 
         // Ignore milliseconds when comparing dates
-        String  selectString    = selectTime.toString();
-        String  retrievedString = retrievedTime.toString();
-        boolean result          = retrievedString.equals(selectString);
+        String selectString = selectTime.toString();
+        String retrievedString = retrievedTime.toString();
+
+        boolean result =
+            retrievedString.equals(selectString);
 
         Assert.assertTrue(
             "The time retrieved from database "

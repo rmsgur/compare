@@ -1,4 +1,4 @@
-/* Copyright (c) 2001-2014, The HSQL Development Group
+/* Copyright (c) 2001-2011, The HSQL Development Group
  * All rights reserved.
  *
  * Redistribution and use in source and binary forms, with or without
@@ -42,7 +42,7 @@ import java.util.ArrayList;
  *
  * @author Blaine Simpson (blaine dot simpson at admc dot com)
  * @since    HSQLDB 1.8.0
- * @version  $Revision: 5337 $, $Date: 2014-01-24 14:26:47 -0500 (Fri, 24 Jan 2014) $
+ * @version  $Revision: 4141 $, $Date: 2011-03-14 01:35:49 +0000 (Mon, 14 Mar 2011) $
  */
 public class MainInvoker {
 
@@ -108,7 +108,7 @@ public class MainInvoker {
         }
     }
 
-    public static final String LS = System.getProperty("line.separator");
+    public static String LS = System.getProperty("line.separator");
     private static String SYNTAX_MSG =
         "    java org.hsqldb.util.MainInvoker "
         + "[package1.Class1 [arg1a arg1b...] \"\"]... \\\n"

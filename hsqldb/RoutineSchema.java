@@ -1,4 +1,4 @@
-/* Copyright (c) 2001-2015, The HSQL Development Group
+/* Copyright (c) 2001-2011, The HSQL Development Group
  * All rights reserved.
  *
  * Redistribution and use in source and binary forms, with or without
@@ -46,7 +46,7 @@ import org.hsqldb.types.Type;
  *
  * @author Fred Toussi (fredt@users dot sourceforge.net)
  *
- * @version 2.3.3
+ * @version 1.9.0
  * @since 1.9.0
  */
 public class RoutineSchema implements SchemaObject {
@@ -128,19 +128,15 @@ public class RoutineSchema implements SchemaObject {
         return array;
     }
 
-    public void addSpecificRoutine(HsqlNameManager nameManager,
-                                   Routine routine, boolean replace) {
+    public void addSpecificRoutine(Database database, Routine routine) {
 
-        int    signature     = routine.getParameterSignature();
-        Type[] types         = routine.getParameterTypes();
-        int    matchPosition = routines.length;
+        int    signature = routine.getParameterSignature();
+        Type[] types     = routine.getParameterTypes();
 
         for (int i = 0; i < this.routines.length; i++) {
             if (routines[i].parameterTypes.length == types.length) {
                 if (routineType == SchemaObject.PROCEDURE) {
-                    if (!replace) {
-                        throw Error.error(ErrorCode.X_42605);
-                    }
+                    throw Error.error(ErrorCode.X_42605);
                 }
 
                 if (routines[i].isAggregate() != routine.isAggregate()) {
@@ -158,21 +154,14 @@ public class RoutineSchema implements SchemaObject {
                 }
 
                 if (match) {
-                    if (replace) {
-                        routine.setSpecificName(routines[i].getSpecificName());
-
-                        matchPosition = i;
-
-                        break;
-                    } else {
-                        throw Error.error(ErrorCode.X_42605);
-                    }
+                    throw Error.error(ErrorCode.X_42605);
                 }
             }
         }
 
         if (routine.getSpecificName() == null) {
-            HsqlName specificName = nameManager.newSpecificRoutineName(name);
+            HsqlName specificName =
+                database.nameManager.newSpecificRoutineName(name);
 
             routine.setSpecificName(specificName);
         } else {
@@ -183,13 +172,9 @@ public class RoutineSchema implements SchemaObject {
         routine.setName(name);
 
         routine.routineSchema = this;
-
-        if (matchPosition == routines.length) {
-            routines = (Routine[]) ArrayUtil.resizeArray(routines,
-                    routines.length + 1);
-        }
-
-        routines[matchPosition] = routine;
+        routines = (Routine[]) ArrayUtil.resizeArray(routines,
+                routines.length + 1);
+        routines[routines.length - 1] = routine;
     }
 
     public void removeSpecificRoutine(Routine routine) {

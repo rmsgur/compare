@@ -1,4 +1,4 @@
-/* Copyright (c) 2001-2014, The HSQL Development Group
+/* Copyright (c) 2001-2011, The HSQL Development Group
  * All rights reserved.
  *
  * Redistribution and use in source and binary forms, with or without
@@ -29,37 +29,48 @@
  */
 
 
-package org.hsqldb.lib.tar;
+package org.hsqldb.test;
 
-import java.io.File;
-import java.io.IOException;
+import java.sql.Timestamp;
 
-public class TarGeneratorMain {
+import org.hsqldb.lib.StopWatch;
 
-    /**
-     * Creates specified tar file to contain specified files, or stdin,
-     * using default blocks-per-record and replacing tar file if it already
-     * exists.
-     */
-    public static void main(String[] sa)
-    throws IOException, TarMalformatException {
+public class TestObjectSize {
 
-        if (sa.length < 1) {
-            System.out.println(
-                RB.TarGenerator_syntax.getString(DbBackup.class.getName()));
-            System.exit(0);
+    public TestObjectSize() {
+
+        StopWatch sw        = new StopWatch();
+        int       testCount = 2350000;
+
+        System.out.println("Fill Memory with Objects ");
+
+        Object[] objectArray = new Object[testCount];
+
+        for (int j = 0; j < objectArray.length; j++) {
+            objectArray[j] = new Timestamp(0);
         }
 
-        TarGenerator generator = new TarGenerator(new File(sa[0]), true, null);
+        System.out.println("Array Filled " + sw.elapsedTime());
 
-        if (sa.length == 1) {
-            generator.queueEntry("stdin", System.in, 10240);
-        } else {
-            for (int i = 1; i < sa.length; i++) {
-                generator.queueEntry(new File(sa[i]));
-            }
+        for (int j = 0; j < objectArray.length; j++) {
+            objectArray[j] = null;
         }
 
-        generator.write();
+        Object[] objectArray2 = new Object[testCount];
+        Object[] objectArray3 = new Object[testCount];
+        Object[] objectArray4 = new Object[testCount];
+        Object[] objectArray5 = new Object[testCount];
+        Object[] objectArray6 = new Object[testCount];
+
+//        Object[] objectArray7 = new Object[testCount];
+        short[] shortArray = new short[testCount];
+        byte[]  byteArray  = new byte[testCount];
+
+        System.out.println("Fill with Empty Arrays " + sw.elapsedTime());
+        sw.zero();
+    }
+
+    public static void main(String[] argv) {
+        TestObjectSize ls = new TestObjectSize();
     }
 }

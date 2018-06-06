@@ -1,4 +1,4 @@
-/* Copyright (c) 2001-2017, The HSQL Development Group
+/* Copyright (c) 2001-2011, The HSQL Development Group
  * All rights reserved.
  *
  * Redistribution and use in source and binary forms, with or without
@@ -31,8 +31,6 @@
 
 package org.hsqldb.types;
 
-import java.util.BitSet;
-
 import org.hsqldb.OpTypes;
 import org.hsqldb.Session;
 import org.hsqldb.SessionInterface;
@@ -46,17 +44,17 @@ import org.hsqldb.map.BitMap;
 /**
  *
  * Operations allowed on BIT strings are CONCAT, SUBSTRING, POSITION,
- * BIT_LENGTH and OCTET_LENGTH.<p>
+ * BIT_LENGTH and OCTECT_LENGTH.<p>
  *
  * BIT values can be cast to BINARY and vice-versa. In casts, BIT values are
  * converted to their counterpart BINARY values by treating each set of 8 bits
- * or less as a single byte. The first bit of a BIT string is treated as the most
- * significant bit of the resulting byte value. Binary values are converted by
+ * or less as a signle byte. The first bit of a BIT string is treated as the most
+ * significan bit of the resutling byte value. Binary values are converted by
  * treating the bits in the sequence of bytes as sequence of bits in the BIT
  * string<p>
  *
  * @author Fred Toussi (fredt@users dot sourceforge.net)
- * @version 2.3.5
+ * @version 2.2.1
  * @since 1.9.0
  */
 public final class BitType extends BinaryType {
@@ -380,19 +378,6 @@ public final class BitType extends BinaryType {
             return convertToType(session, a, Type.SQL_INTEGER);
         } else if (a instanceof Long) {
             return convertToType(session, a, Type.SQL_BIGINT);
-        } else if (a instanceof BitSet) {
-            BitSet bs    = (BitSet) a;
-            byte[] bytes = new byte[bs.size() / Byte.SIZE];
-
-            for (int i = 0; i < bs.size(); i++) {
-                boolean set = bs.get(i);
-
-                if (set) {
-                    BitMap.set(bytes, i);
-                }
-            }
-
-            return new BinaryData(bytes, bs.size());
         }
 
         throw Error.error(ErrorCode.X_22501);
@@ -441,7 +426,7 @@ public final class BitType extends BinaryType {
             return -1L;
         }
 
-        long otherLength = data.bitLength(session);
+        long otherLength = ((BlobData) data).bitLength(session);
 
         if (offset + otherLength > data.bitLength(session)) {
             return -1;
@@ -518,7 +503,7 @@ public final class BitType extends BinaryType {
         }
 
         if (!hasLength) {
-            length = overlay.bitLength(session);
+            length = ((BlobData) overlay).bitLength(session);
         }
 
         switch (typeCode) {
@@ -591,22 +576,5 @@ public final class BitType extends BinaryType {
             default :
                 throw Error.runtimeError(ErrorCode.U_S0500, "BitType");
         }
-    }
-
-    public static BitSet getJavaBitSet(BinaryData data) {
-
-        int    bits  = (int) data.bitLength(null);
-        BitSet bs    = new BitSet(bits);
-        byte[] bytes = data.getBytes();
-
-        for (int i = 0; i < bits; i++) {
-            boolean set = BitMap.isSet(bytes, i);
-
-            if (set) {
-                bs.set(i);
-            }
-        }
-
-        return bs;
     }
 }

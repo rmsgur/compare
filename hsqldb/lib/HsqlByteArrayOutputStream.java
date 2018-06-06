@@ -1,4 +1,4 @@
-/* Copyright (c) 2001-2016, The HSQL Development Group
+/* Copyright (c) 2001-2011, The HSQL Development Group
  * All rights reserved.
  *
  * Redistribution and use in source and binary forms, with or without
@@ -45,10 +45,10 @@ import java.io.UnsupportedEncodingException;
  * (without synchronization) and java.io.DataOutputStream
  *
  * @author Fred Toussi (fredt@users dot sourceforge.net)
- * @version 2.3.5
+ * @version 2.0.1
  * @since 1.7.0
  */
-public class HsqlByteArrayOutputStream extends OutputStream
+public class HsqlByteArrayOutputStream extends java.io.OutputStream
 implements DataOutput {
 
     protected byte[] buffer;
@@ -133,7 +133,7 @@ implements DataOutput {
         writeInt((int) v);
     }
 
-    public void writeBytes(String s) {
+    public final void writeBytes(String s) {
 
         int len = s.length();
 
@@ -164,7 +164,7 @@ implements DataOutput {
 
         ensureRoom(1);
 
-        buffer[count++] = (byte) v;
+        buffer[count++] = (byte) (v);
     }
 
     public void writeChar(int v) {
@@ -326,7 +326,7 @@ implements DataOutput {
         return newbuf;
     }
 
-    final public int size() {
+    public int size() {
         return count;
     }
 
@@ -370,23 +370,15 @@ implements DataOutput {
 
     public void ensureRoom(int extra) {
 
-        long newcount = count + extra;
-        long newsize  = buffer.length;
-
-        if (newcount > Integer.MAX_VALUE) {
-            throw new OutOfMemoryError("2GB maximum buffer length exceeded");
-        }
+        int newcount = count + extra;
+        int newsize  = buffer.length;
 
         if (newcount > newsize) {
             while (newcount > newsize) {
                 newsize *= 2;
             }
 
-            if (newsize > Integer.MAX_VALUE) {
-                newsize = Integer.MAX_VALUE;
-            }
-
-            byte[] newbuf = new byte[(int) newsize];
+            byte[] newbuf = new byte[newsize];
 
             System.arraycopy(buffer, 0, newbuf, 0, count);
 
@@ -399,8 +391,7 @@ implements DataOutput {
         count = 0;
 
         if (newSize > buffer.length) {
-            newSize = (int) ArrayUtil.getBinaryMultipleCeiling(newSize, 4096);
-            buffer  = new byte[newSize];
+            buffer = new byte[newSize];
         }
     }
 
@@ -409,10 +400,12 @@ implements DataOutput {
         this.buffer = buffer;
     }
 
-    /**
-     * size must fit in buffer
-     */
     public void setSize(int size) {
+
+        if (size > buffer.length) {
+            reset(size);
+        }
+
         count = size;
     }
 }

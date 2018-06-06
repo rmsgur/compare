@@ -1,4 +1,4 @@
-/* Copyright (c) 2001-2017, The HSQL Development Group
+/* Copyright (c) 2001-2011, The HSQL Development Group
  * All rights reserved.
  *
  * Redistribution and use in source and binary forms, with or without
@@ -31,26 +31,31 @@
 
 package org.hsqldb.jdbc;
 
+import java.io.Serializable;
+
 import java.io.PrintWriter;
 import java.sql.Connection;
 import java.sql.SQLException;
-import java.sql.SQLFeatureNotSupportedException;
 import java.sql.Wrapper;
-import java.util.Properties;
 import java.util.concurrent.atomic.AtomicIntegerArray;
+import java.util.Properties;
+
+import javax.sql.StatementEventListener;
+import javax.sql.StatementEvent;
+
 import javax.naming.NamingException;
 import javax.naming.Reference;
 import javax.naming.Referenceable;
 import javax.naming.StringRefAddr;
-import javax.sql.ConnectionEvent;
+
 import javax.sql.ConnectionEventListener;
+import javax.sql.ConnectionEvent;
 import javax.sql.DataSource;
 import javax.sql.PooledConnection;
-import javax.sql.StatementEvent;
-import javax.sql.StatementEventListener;
 
-import org.hsqldb.jdbc.pool.JDBCPooledConnection;
 import org.hsqldb.jdbc.pool.JDBCPooledDataSource;
+import org.hsqldb.jdbc.pool.JDBCPooledConnection;
+import org.hsqldb.persist.HsqlDatabaseProperties;
 
 /**
  * <!-- start Release-specific documentation -->
@@ -69,13 +74,12 @@ import org.hsqldb.jdbc.pool.JDBCPooledDataSource;
  * </div>
  * <!-- end Release-specific documentation -->
  * @author Fred Toussi (fredt@users dot sourceforge.net)
- * @version 2.3.4
+ * @version 2.2.9
  * @since 2.2.9
  */
 @SuppressWarnings("serial")
-public class JDBCPool implements DataSource,
-                   Referenceable, ConnectionEventListener,
-                   StatementEventListener, Wrapper {
+public class JDBCPool implements DataSource, Serializable, Referenceable,
+                   ConnectionEventListener, StatementEventListener, Wrapper {
 
     /**
      * Retrieves a new connection using the properties that have already been
@@ -131,11 +135,7 @@ public class JDBCPool implements DataSource,
     /**
      * Retrieves a new connection using the given username and password,
      * and the database url that has been set. No other properties are
-     * used for the connection.
-     *
-     * This method can be used only with the same username and password used
-     * for the connection pool. The first call to this method sets the user name
-     * and password for the connection pool.
+     * used for the connection
      *
      * @param username the database user on whose behalf the connection is
      *  being made
@@ -145,21 +145,8 @@ public class JDBCPool implements DataSource,
      */
     public Connection getConnection(String username, String password)
             throws SQLException {
-
-        String user = getUser();
-
-        if (username == null || password == null) {
-            throw JDBCUtil.nullArgument();
-        }
-
-        if ( user == null) {
-            setUser(username);
-            setPassword(password);
-        } else if (!user.equals(username)) {
-            throw JDBCUtil.invalidArgument("user name does not match");
-        }
-
-        return getConnection();
+        return source.getPooledConnection(username,
+                password).getConnection();
     }
 
     // ------------------------- JDBC 4.0 -----------------------------------
@@ -395,15 +382,6 @@ public class JDBCPool implements DataSource,
     }
 
     /**
-     * Retrieves the jdbc database connection url attribute. <p>
-     *
-     * @return the jdbc database connection url attribute
-     */
-    public String getURL() {
-        return source.getUrl();
-    }
-
-    /**
      * Retrieves the user name for the connection. <p>
      *
      * @return the username for the connection
@@ -441,16 +419,6 @@ public class JDBCPool implements DataSource,
     }
 
     /**
-     * Sets the jdbc database URL. <p>
-     *
-     * @param url the new value of this object's jdbc database connection
-     *      url attribute
-     */
-    public void setURL(String url) {
-        source.setUrl(url);
-    }
-
-    /**
      * Sets the password for the user name.
      *
      * @param password the password
@@ -469,7 +437,7 @@ public class JDBCPool implements DataSource,
     }
 
     /**
-     * Sets connection properties. If user / password / loginTimeout has been
+     * Sets connection properties. If user / password / logginTimeout has been
      * set with one of the setXXX() methods it will be added to the Properties
      * object.
      *
@@ -490,7 +458,7 @@ public class JDBCPool implements DataSource,
      * In the worst case, this may be the root Logger.
      *
      * @return the parent Logger for this data source
-     * @throws SQLFeatureNotSupportedException if the data source does not use <code>java.util.logging</code>.
+     * @throws SQLFeatureNotSupportedException if the data source does not use <code>java.util.logging<code>.
      * @since JDK 1.7 M11 2010/09/10 (b123), HSQLDB 2.2.9
      */
 //#ifdef JAVA6
@@ -525,7 +493,7 @@ public class JDBCPool implements DataSource,
      * closing all existing connections in the pool.
      *
      * @param wait int number of seconds to wait before closing the connections, maximum 60 seconds
-     * @throws SQLException on any error
+     * @throws SQLException
      */
     public void close(int wait) throws SQLException {
 

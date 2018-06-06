@@ -1,4 +1,4 @@
-/* Copyright (c) 2001-2016, The HSQL Development Group
+/* Copyright (c) 2001-2011, The HSQL Development Group
  * All rights reserved.
  *
  * Redistribution and use in source and binary forms, with or without
@@ -33,7 +33,6 @@ package org.hsqldb;
 
 import org.hsqldb.error.Error;
 import org.hsqldb.error.ErrorCode;
-import org.hsqldb.lib.ArrayUtil;
 import org.hsqldb.map.ValuePool;
 import org.hsqldb.navigator.RowSetNavigator;
 import org.hsqldb.navigator.RowSetNavigatorData;
@@ -46,7 +45,7 @@ import org.hsqldb.types.Type;
  * Implementation of table conversion.
  *
  * @author Fred Toussi (fredt@users dot sourceforge.net)
- * @version 2.3.5
+ * @version 2.1.0
  * @since 2.0.0
  */
 public class ExpressionTable extends Expression {
@@ -112,7 +111,7 @@ public class ExpressionTable extends Expression {
                 nodeDataTypes =
                     ((RowType) nodes[LEFT].dataType).getTypesArray();
 
-                table.prepareTable(session);
+                table.prepareTable();
 
                 table.columnList =
                     ((FunctionSQLInvoked) nodes[LEFT]).routine.getTable()
@@ -147,7 +146,7 @@ public class ExpressionTable extends Expression {
             nodeDataTypes[nodes.length] = Type.SQL_INTEGER;
         }
 
-        table.prepareTable(session);
+        table.prepareTable();
     }
 
     public Result getResult(Session session) {
@@ -190,7 +189,7 @@ public class ExpressionTable extends Expression {
                 Object[] value = table.getValues(session);
 
                 if (value.length == 1) {
-                    return value[0];
+                    return ((Object[]) value)[0];
                 }
 
                 return value;
@@ -218,11 +217,11 @@ public class ExpressionTable extends Expression {
 
         Result          result = nodes[LEFT].getResult(session);
         RowSetNavigator nav    = result.navigator;
+        int             size   = nav.getSize();
 
-        while (nav.next()) {
-            Object[] data    = nav.getCurrent();
-            Object[] newdata = (Object[]) ArrayUtil.duplicateArray(data);
-            Row row = (Row) store.getNewCachedObject(session, newdata, false);
+        while (nav.hasNext()) {
+            Object[] data = nav.getNext();
+            Row row = (Row) store.getNewCachedObject(session, data, false);
 
             try {
                 store.indexRow(session, row);

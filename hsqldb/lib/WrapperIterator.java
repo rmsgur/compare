@@ -1,4 +1,4 @@
-/* Copyright (c) 2001-2017, The HSQL Development Group
+/* Copyright (c) 2001-2011, The HSQL Development Group
  * All rights reserved.
  *
  * Redistribution and use in source and binary forms, with or without
@@ -38,7 +38,7 @@ import java.util.NoSuchElementException;
  *  iterators etc. The collection of objects returned depends on the
  *  constructor used.<p>
  *
- *  Based on similar Enumerator code by campbell-burnet@users
+ *  Based on similar Enumerator code by boucherb@users
  *
  * @author fred@users
  * @version 1.9.0
@@ -137,7 +137,7 @@ public class WrapperIterator implements Iterator {
             }
         }
 
-        // for other iterators
+        // for other interators
         if (elements == null) {
             return false;
         }
@@ -176,7 +176,7 @@ public class WrapperIterator implements Iterator {
 
                 it2 = null;
 
-                return next();
+                next();
             } else {
                 if (it1.hasNext()) {
                     return it1.next();
@@ -184,11 +184,11 @@ public class WrapperIterator implements Iterator {
 
                 it1 = null;
 
-                return next();
+                next();
             }
         }
 
-        // for other iterators
+        // for other itertors
         if (hasNext()) {
             return elements[i++];
         }

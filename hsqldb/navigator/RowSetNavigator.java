@@ -1,4 +1,4 @@
-/* Copyright (c) 2001-2016, The HSQL Development Group
+/* Copyright (c) 2001-2011, The HSQL Development Group
  * All rights reserved.
  *
  * Redistribution and use in source and binary forms, with or without
@@ -31,6 +31,8 @@
 
 package org.hsqldb.navigator;
 
+import java.io.IOException;
+
 import org.hsqldb.Row;
 import org.hsqldb.SessionInterface;
 import org.hsqldb.error.Error;
@@ -42,10 +44,10 @@ import org.hsqldb.rowio.RowOutputInterface;
 /**
  * Encapsulates navigation functionality for lists of objects. The base class
  * provides positional navigation and checking, while the subclasses provide
- * object retrieval.
+ * object retreival.
  *
  * @author Fred Toussi (fredt@users dot sourceforge.net)
- * @version 2.3.5
+ * @version 2.2.7
  * @since 1.9.0
  */
 public abstract class RowSetNavigator implements RangeIterator {
@@ -56,10 +58,9 @@ public abstract class RowSetNavigator implements RangeIterator {
     long             id;
     int              size;
     int              mode;
+    boolean          isIterator;
     int              currentPos = -1;
     int              rangePosition;
-    boolean          hadNext;
-    boolean          isClosed;
 
     /**
      * Sets the id;
@@ -80,7 +81,7 @@ public abstract class RowSetNavigator implements RangeIterator {
      */
     public abstract Object[] getCurrent();
 
-    public Object getField(int i) {
+    public Object getCurrent(int i) {
 
         Object[] current = getCurrent();
 
@@ -92,6 +93,14 @@ public abstract class RowSetNavigator implements RangeIterator {
     }
 
     public void setCurrent(Object[] data) {}
+
+    public long getRowid() {
+        return 0;
+    }
+
+    public Object getRowidObject() {
+        return null;
+    }
 
     public abstract Row getCurrentRow();
 
@@ -127,10 +136,6 @@ public abstract class RowSetNavigator implements RangeIterator {
      */
     public abstract void release();
 
-    public boolean isClosed() {
-        return isClosed;
-    }
-
     public void setSession(SessionInterface session) {
         this.session = session;
     }
@@ -147,33 +152,38 @@ public abstract class RowSetNavigator implements RangeIterator {
         return size == 0;
     }
 
+    public Object[] getNext() {
+        return next() ? getCurrent()
+                      : null;
+    }
+
     public boolean next() {
 
         if (hasNext()) {
             currentPos++;
-
-            hadNext = true;
 
             return true;
         } else if (size != 0) {
             currentPos = size;
         }
 
-        hadNext = false;
-
         return false;
     }
 
-    final boolean hasNext() {
+    public boolean hasNext() {
         return currentPos < size - 1;
+    }
+
+    public Row getNextRow() {
+        throw Error.runtimeError(ErrorCode.U_S0500, "RowSetNavigator");
+    }
+
+    public boolean setRowColumns(boolean[] columns) {
+        throw Error.runtimeError(ErrorCode.U_S0500, "RowSetNavigator");
     }
 
     public long getRowId() {
         throw Error.runtimeError(ErrorCode.U_S0500, "RowSetNavigator");
-    }
-
-    public boolean hadNext() {
-        return hadNext;
     }
 
     public boolean beforeFirst() {
@@ -298,17 +308,21 @@ public abstract class RowSetNavigator implements RangeIterator {
         return size > 0 && currentPos == size;
     }
 
-    public void writeSimple(RowOutputInterface out, ResultMetaData meta) {
+    public void writeSimple(RowOutputInterface out,
+                            ResultMetaData meta) throws IOException {
         throw Error.runtimeError(ErrorCode.U_S0500, "RowSetNavigator");
     }
 
-    public void readSimple(RowInputInterface in, ResultMetaData meta) {
+    public void readSimple(RowInputInterface in,
+                           ResultMetaData meta) throws IOException {
         throw Error.runtimeError(ErrorCode.U_S0500, "RowSetNavigator");
     }
 
-    public abstract void write(RowOutputInterface out, ResultMetaData meta);
+    public abstract void write(RowOutputInterface out,
+                               ResultMetaData meta) throws IOException;
 
-    public abstract void read(RowInputInterface in, ResultMetaData meta);
+    public abstract void read(RowInputInterface in,
+                              ResultMetaData meta) throws IOException;
 
     public boolean isMemory() {
         return true;

@@ -1,4 +1,4 @@
-/* Copyright (c) 2001-2017, The HSQL Development Group
+/* Copyright (c) 2001-2011, The HSQL Development Group
  * All rights reserved.
  *
  * Redistribution and use in source and binary forms, with or without
@@ -43,7 +43,7 @@ import org.hsqldb.types.Type;
 
 /**
  * @author Fred Toussi (fredt@users dot sourceforge dot net)
- * @version 2.3.5
+ * @version 2.3.0
  * @since 2.2.7
  */
 public class RowDiskDataChange extends RowAVLDisk {
@@ -67,7 +67,7 @@ public class RowDiskDataChange extends RowAVLDisk {
      *  order to indicate the data needs saving.
      *
      * @param t table
-     * @param data row data
+     * @param o row data
      */
     public RowDiskDataChange(TableBase t, Object[] data,
                              PersistentStore store, Table targetTable) {
@@ -84,14 +84,14 @@ public class RowDiskDataChange extends RowAVLDisk {
      * @param in data source
      * @throws IOException
      */
-    public RowDiskDataChange(Session session, PersistentStore store,
+    public RowDiskDataChange(Session session, TableBase t,
                              RowInputInterface in) throws IOException {
 
-        super(store, in);
+        super(t, in);
 
-        targetTable = store.getTable().database.schemaManager.findTable(session,
+        targetTable = t.database.schemaManager.getTable(session,
                 (String) rowData[COL_POS_TABLE_NAME],
-                (String) rowData[COL_POS_SCHEMA_NAME], null);
+                (String) rowData[COL_POS_SCHEMA_NAME]);
 
         if ((Boolean) rowData[COL_POS_IS_UPDATE]) {
             updateData = in.readData(targetTable.colTypes);

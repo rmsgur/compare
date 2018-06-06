@@ -1,4 +1,4 @@
-/* Copyright (c) 2001-2016, The HSQL Development Group
+/* Copyright (c) 2001-2011, The HSQL Development Group
  * All rights reserved.
  *
  * Redistribution and use in source and binary forms, with or without
@@ -35,7 +35,7 @@ import org.hsqldb.lib.DoubleIntIndex;
 
 /**
  * @author Fred Toussi (fredt@users dot sourceforge.net)
- * @version 2.3.3
+ * @version 2.3.0
  * @since 2.3.0
  */
 public class DataSpaceManagerSimple implements DataSpaceManager {
@@ -48,9 +48,9 @@ public class DataSpaceManagerSimple implements DataSpaceManager {
     DoubleIntIndex    lookup;
 
     /**
-     * Used for default, readonly, Text and Session data files
+     * Used for readonly, Text and Session data files
      */
-    DataSpaceManagerSimple(DataFileCache cache, boolean isReadOnly) {
+    DataSpaceManagerSimple(DataFileCache cache) {
 
         this.cache = cache;
 
@@ -63,16 +63,12 @@ public class DataSpaceManagerSimple implements DataSpaceManager {
 
             defaultSpaceManager = new TableSpaceManagerBlocks(this,
                     DataSpaceManager.tableIdDefault, fileBlockSize, capacity,
-                    cache.getDataFileScale(), 0);
+                    cache.dataFileScale);
 
-            if (!isReadOnly) {
-                initialiseSpaces();
+            initialiseSpaces();
 
-                cache.spaceManagerPosition = 0;
-            }
+            cache.spaceManagerPosition = 0;
         }
-
-        totalFragmentSize = cache.lostSpaceSize;
     }
 
     public TableSpaceManager getDefaultTableSpace() {
@@ -92,21 +88,19 @@ public class DataSpaceManagerSimple implements DataSpaceManager {
         return spaceIdSequence++;
     }
 
-    public long getFileBlocks(int spaceId, int blockCount) {
+    public long getFileBlocks(int tableId, int blockCount) {
 
-        long filePosition = cache.enlargeFileSpace((long) blockCount
-            * fileBlockSize);
+        long filePosition = cache.enlargeFileSpace((long)blockCount * fileBlockSize);
 
         return filePosition;
     }
 
     public void freeTableSpace(int spaceId) {}
 
-    public void freeTableSpace(int spaceId, DoubleIntIndex spaceList,
-                               long offset, long limit, boolean full) {
+    public void freeTableSpace(DoubleIntIndex spaceList, long offset,
+                               long limit, boolean full) {
 
-        totalFragmentSize += spaceList.getTotalValues()
-                             * cache.getDataFileScale();
+        totalFragmentSize += spaceList.getTotalValues();
 
         if (full) {
             if (cache.fileFreePosition == limit) {
@@ -125,10 +119,9 @@ public class DataSpaceManagerSimple implements DataSpaceManager {
                 lookup = new DoubleIntIndex(spaceList.size(), true);
 
                 spaceList.copyTo(lookup);
-                spaceList.clear();
             }
         } else {
-            spaceList.compactLookupAsIntervals();
+            compactLookup(spaceList, cache.dataFileScale);
             spaceList.setValuesSearchTarget();
             spaceList.sort();
 
@@ -137,8 +130,7 @@ public class DataSpaceManagerSimple implements DataSpaceManager {
             if (extra > 0) {
                 spaceList.removeRange(0, extra);
 
-                totalFragmentSize -= spaceList.getTotalValues()
-                                     * cache.getDataFileScale();
+                totalFragmentSize -= spaceList.getTotalValues();
             }
         }
     }
@@ -148,7 +140,7 @@ public class DataSpaceManagerSimple implements DataSpaceManager {
     }
 
     public int getFileBlockSize() {
-        return 1024 * 1024 * cache.getDataFileScale() / 16;
+        return Integer.MAX_VALUE;
     }
 
     public boolean isModified() {
@@ -166,9 +158,8 @@ public class DataSpaceManagerSimple implements DataSpaceManager {
                 cache.getFileFreePos());
 
         if (lookup != null) {
-            totalFragmentSize -= lookup.getTotalValues()
-                                 * cache.getDataFileScale();
-            lookup = null;
+            totalFragmentSize -= lookup.getTotalValues();
+            lookup            = null;
         }
     }
 
@@ -180,11 +171,46 @@ public class DataSpaceManagerSimple implements DataSpaceManager {
         return false;
     }
 
-    public int getFileBlockItemCount() {
-        return 1024 * 64;
-    }
+    static boolean compactLookup(DoubleIntIndex lookup, int fileScale) {
 
-    public DirectoryBlockCachedObject[] getDirectoryList() {
-        return new DirectoryBlockCachedObject[0];
+        lookup.setKeysSearchTarget();
+        lookup.sort();
+
+        if (lookup.size() == 0) {
+            return false;
+        }
+
+        int[] keys   = lookup.getKeys();
+        int[] values = lookup.getValues();
+        int   base   = 0;
+
+        for (int i = 1; i < lookup.size(); i++) {
+            int key   = keys[base];
+            int value = values[base];
+
+            if (key + value / fileScale == keys[i]) {
+                values[base] += values[i];    // base updated
+            } else {
+                base++;
+
+                if (base != i) {
+                    keys[base]   = keys[i];
+                    values[base] = values[i];
+                }
+            }
+        }
+
+        for (int i = base + 1; i < lookup.size(); i++) {
+            keys[i]   = 0;
+            values[i] = 0;
+        }
+
+        if (lookup.size() != base + 1) {
+            lookup.setSize(base + 1);
+
+            return true;
+        }
+
+        return false;
     }
 }

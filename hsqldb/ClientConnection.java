@@ -1,4 +1,4 @@
-/* Copyright (c) 2001-2016, The HSQL Development Group
+/* Copyright (c) 2001-2011, The HSQL Development Group
  * All rights reserved.
  *
  * Redistribution and use in source and binary forms, with or without
@@ -62,14 +62,14 @@ import org.hsqldb.types.TimestampData;
 
 /**
  * Base remote session proxy implementation. Uses instances of Result to
- * transmit and receive data. This implementation utilises the updated HSQL
+ * transmit and recieve data. This implementation utilises the updated HSQL
  * protocol.
  *
  * @author Fred Toussi (fredt@users dot sourceforge.net)
- * @version 2.3.5
+ * @version 2.3.0
  * @since 1.7.2
  */
-public class ClientConnection implements SessionInterface, Cloneable {
+public class ClientConnection implements SessionInterface {
 
     /**
      * Specifies the Compatibility version required for both Servers and
@@ -85,8 +85,8 @@ public class ClientConnection implements SessionInterface, Cloneable {
      * are multiplied by 100 to power p and added up, then negated, to form the
      * integer representation of version string.
      */
-    public static final String NETWORK_COMPATIBILITY_VERSION     = "2.3.4.0";
-    public static final int    NETWORK_COMPATIBILITY_VERSION_INT = -2030400;
+    public static final String NETWORK_COMPATIBILITY_VERSION     = "2.1.0.0";
+    public static final int    NETWORK_COMPATIBILITY_VERSION_INT = -2010000;
 
     //
     static final int             BUFFER_SIZE = 0x1000;
@@ -100,7 +100,6 @@ public class ClientConnection implements SessionInterface, Cloneable {
     private Result               resultOut;
     private long                 sessionID;
     private long                 lobIDSequence = -1;
-    protected int                randomID;
 
     //
     private boolean  isReadOnlyDefault = false;
@@ -143,10 +142,12 @@ public class ClientConnection implements SessionInterface, Cloneable {
         this.zoneString   = TimeZone.getDefault().getID();
 
         initStructures();
-        initConnection(host, port, isTLS);
 
         Result login = Result.newConnectionAttemptRequest(user, password,
             database, zoneString, timeZoneSeconds);
+
+        initConnection(host, port, isTLS);
+
         Result resultIn = execute(login);
 
         if (resultIn.isError()) {
@@ -157,33 +158,10 @@ public class ClientConnection implements SessionInterface, Cloneable {
         databaseID             = resultIn.getDatabaseId();
         databaseUniqueName     = resultIn.getDatabaseName();
         clientPropertiesString = resultIn.getMainString();
-        randomID               = resultIn.getSessionRandomID();
-    }
-
-    protected ClientConnection(ClientConnection other) {
-
-        this.host         = other.host;
-        this.port         = other.port;
-        this.path         = other.path;
-        this.database     = other.database;
-        this.isTLS        = other.isTLS;
-        this.isTLSWrapper = other.isTLSWrapper;
-        this.zoneSeconds  = other.zoneSeconds;
-        this.zoneString   = other.zoneString;
-
-        //
-        this.sessionID              = other.sessionID;
-        this.databaseID             = other.databaseID;
-        this.databaseUniqueName     = other.databaseUniqueName;
-        this.clientPropertiesString = other.clientPropertiesString;
-        this.randomID               = other.randomID;
-
-        initStructures();
-        initConnection(host, port, isTLS);
     }
 
     /**
-     * resultOut is reused to transmit all remote calls for session management.
+     * resultOut is reused to trasmit all remote calls for session management.
      * Here the structure is preset for sending attributes.
      */
     private void initStructures() {
@@ -352,8 +330,6 @@ public class ClientConnection implements SessionInterface, Cloneable {
             case SessionInterface.INFO_CATALOG :
                 data[SessionInterface.INFO_VARCHAR] = value;
                 break;
-
-            default :
         }
 
         Result resultIn = execute(resultOut);
@@ -499,10 +475,6 @@ public class ClientConnection implements SessionInterface, Cloneable {
         return sessionID;
     }
 
-    public int getRandomId() {
-        return randomID;
-    }
-
     /**
      * Used by pooled connections to reset the server-side session to a new
      * one. In case of failure, the connection is closed.
@@ -549,17 +521,6 @@ public class ClientConnection implements SessionInterface, Cloneable {
      */
     public synchronized String getInternalConnectionURL() {
         return null;
-    }
-
-    public Result cancel(Result result) {
-
-        ClientConnection connection = new ClientConnection(this);
-
-        try {
-            return connection.execute(result);
-        } finally {
-            connection.closeConnection();
-        }
     }
 
     public synchronized long getLobId() {
@@ -609,10 +570,7 @@ public class ClientConnection implements SessionInterface, Cloneable {
     public Calendar getCalendarGMT() {
 
         if (calendarGMT == null) {
-            calendarGMT = new GregorianCalendar(TimeZone.getTimeZone("GMT"),
-                                                HsqlDateTime.defaultLocale);
-
-            calendarGMT.setLenient(false);
+            calendarGMT = new GregorianCalendar(TimeZone.getTimeZone("GMT"));
         }
 
         return calendarGMT;
@@ -623,10 +581,8 @@ public class ClientConnection implements SessionInterface, Cloneable {
         if (simpleDateFormatGMT == null) {
             simpleDateFormatGMT = new SimpleDateFormat("MMMM", Locale.ENGLISH);
 
-            Calendar cal = new GregorianCalendar(TimeZone.getTimeZone("GMT"),
-                                                 HsqlDateTime.defaultLocale);
+            Calendar cal = new GregorianCalendar(TimeZone.getTimeZone("GMT"));
 
-            cal.setLenient(false);
             simpleDateFormatGMT.setCalendar(cal);
         }
 
@@ -636,10 +592,9 @@ public class ClientConnection implements SessionInterface, Cloneable {
     public TimestampData getCurrentDate() {
 
         long currentMillis = System.currentTimeMillis();
+        long seconds = HsqlDateTime.getCurrentDateMillis(currentMillis) / 1000;
 
-        currentMillis = HsqlDateTime.getNormalisedDate(currentMillis);
-
-        return new TimestampData(currentMillis / 1000);
+        return new TimestampData(seconds);
     }
 
     public int getZoneSeconds() {
@@ -678,7 +633,7 @@ public class ClientConnection implements SessionInterface, Cloneable {
 
     /**
      * Converts specified encoded integer to a Network Compatibility Version
-     * String. The transmitted integer is negative to distinguish it from
+     * String. The tranmitted integer is negative to distinguish it from
      * 7 bit ASCII characters.
      */
     public static String toNetCompVersionString(int i) {

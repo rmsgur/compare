@@ -1,4 +1,4 @@
-/* Copyright (c) 2001-2016, The HSQL Development Group
+/* Copyright (c) 2001-2011, The HSQL Development Group
  * All rights reserved.
  *
  * Redistribution and use in source and binary forms, with or without
@@ -45,10 +45,10 @@ import org.hsqldb.types.Types;
  * Implementation of SQL table column metadata.<p>
  *
  * @author Fred Toussi (fredt@users dot sourceforge.net)
- * @version 2.3.4
+ * @version 2.2.9
  * @since 1.9.0
  */
-public class ColumnSchema extends ColumnBase implements SchemaObject {
+public final class ColumnSchema extends ColumnBase implements SchemaObject {
 
     public static final ColumnSchema[] emptyArray = new ColumnSchema[]{};
 
@@ -57,16 +57,10 @@ public class ColumnSchema extends ColumnBase implements SchemaObject {
     private boolean        isPrimaryKey;
     private Expression     defaultExpression;
     private Expression     generatingExpression;
-    private Expression     updateExpression;
     private NumberSequence sequence;
     private OrderedHashSet references;
     private OrderedHashSet generatedColumnReferences;
     private Expression     accessor;
-
-    ColumnSchema(HsqlName name, Type type) {
-        this.columnName = name;
-        this.dataType   = type;
-    }
 
     /**
      * Creates a column defined in DDL statement.
@@ -148,7 +142,8 @@ public class ColumnSchema extends ColumnBase implements SchemaObject {
             new RangeGroupSimple(((Table) table).getDefaultRanges(), false),
             false);
 
-        if (!dataType.canBeAssignedFrom(generatingExpression.getDataType())) {
+        if (dataType.typeComparisonGroup
+                != generatingExpression.getDataType().typeComparisonGroup) {
             throw Error.error(ErrorCode.X_42561);
         }
 
@@ -172,8 +167,6 @@ public class ColumnSchema extends ColumnBase implements SchemaObject {
             case SchemaObject.ParameterModes.PARAM_INOUT :
                 sb.append(Tokens.T_INOUT).append(' ');
                 break;
-
-            default :
         }
 
         if (columnName != null) {
@@ -242,32 +235,21 @@ public class ColumnSchema extends ColumnBase implements SchemaObject {
         return generatingExpression != null;
     }
 
-    public boolean isAutoUpdate() {
-        return updateExpression != null;
-    }
-
     public boolean hasDefault() {
         return getDefaultExpression() != null;
     }
 
-    public void setUpdateExpression(Expression updateExpression) {
-        this.updateExpression = updateExpression;
-    }
-
-    public Expression getUpdateExpression() {
-        return updateExpression;
-    }
     /**
      * Is column writeable or always generated
      *
      * @return boolean
      */
     public boolean isWriteable() {
-        return isWriteable;
+        return !isGenerated();
     }
 
     public void setWriteable(boolean value) {
-        isWriteable = value;
+        throw Error.runtimeError(ErrorCode.U_S0500, "ColumnSchema");
     }
 
     public boolean isSearchable() {
@@ -352,10 +334,7 @@ public class ColumnSchema extends ColumnBase implements SchemaObject {
     }
 
     void setGeneratingExpression(Expression expr) {
-
         generatingExpression = expr;
-
-        setWriteable(generatingExpression == null);
     }
 
     public ColumnSchema duplicate() {
@@ -394,7 +373,7 @@ public class ColumnSchema extends ColumnBase implements SchemaObject {
         }
 
         if (dataType.isDomainType() || dataType.isDistinctType()) {
-            HsqlName name = dataType.getName();
+            HsqlName name = ((SchemaObject) dataType).getName();
 
             if (references == null) {
                 references = new OrderedHashSet();

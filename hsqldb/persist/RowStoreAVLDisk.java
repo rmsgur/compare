@@ -1,4 +1,4 @@
-/* Copyright (c) 2001-2017, The HSQL Development Group
+/* Copyright (c) 2001-2011, The HSQL Development Group
  * All rights reserved.
  *
  * Redistribution and use in source and binary forms, with or without
@@ -32,7 +32,6 @@
 package org.hsqldb.persist;
 
 import java.io.IOException;
-import java.util.concurrent.locks.ReentrantReadWriteLock;
 
 import org.hsqldb.HsqlException;
 import org.hsqldb.Row;
@@ -50,6 +49,7 @@ import org.hsqldb.index.NodeAVL;
 import org.hsqldb.index.NodeAVLDisk;
 import org.hsqldb.lib.ArrayUtil;
 import org.hsqldb.lib.DoubleIntIndex;
+import org.hsqldb.lib.LongLookup;
 import org.hsqldb.navigator.RowIterator;
 import org.hsqldb.rowio.RowInputInterface;
 import org.hsqldb.rowio.RowOutputInterface;
@@ -58,7 +58,7 @@ import org.hsqldb.rowio.RowOutputInterface;
  * Implementation of PersistentStore for CACHED tables.
  *
  * @author Fred Toussi (fredt@users dot sourceforge.net)
- * @version 2.3.5
+ * @version 2.3.0
  * @since 1.9.0
  */
 public class RowStoreAVLDisk extends RowStoreAVL implements PersistentStore {
@@ -67,9 +67,10 @@ public class RowStoreAVLDisk extends RowStoreAVL implements PersistentStore {
     RowOutputInterface rowOut;
     boolean            largeData;
 
-    public RowStoreAVLDisk(DataFileCache cache, Table table) {
+    public RowStoreAVLDisk(PersistentStoreCollection manager,
+                           DataFileCache cache, Table table) {
 
-        this(table);
+        this(manager, table);
 
         this.cache = cache;
         rowOut     = cache.rowOut.duplicate();
@@ -78,22 +79,27 @@ public class RowStoreAVLDisk extends RowStoreAVL implements PersistentStore {
 
         largeData  = database.logger.propLargeData;
         tableSpace = cache.spaceManager.getTableSpace(table.getSpaceID());
-        lock       = new ReentrantReadWriteLock();
-        readLock   = lock.readLock();
-        writeLock  = lock.writeLock();
     }
 
-    protected RowStoreAVLDisk(Table table) {
+    protected RowStoreAVLDisk(PersistentStoreCollection manager, Table table) {
 
         this.database     = table.database;
+        this.manager      = manager;
         this.table        = table;
         this.indexList    = table.getIndexList();
         this.accessorList = new CachedObject[indexList.length];
-        largeData         = database.logger.getDataFileFactor() > 1;
+
+        manager.setStore(table, this);
+
+        largeData = database.logger.getDataFileFactor() > 1;
     }
 
     public boolean isMemory() {
         return false;
+    }
+
+    public int getAccessCount() {
+        return cache.getAccessCount();
     }
 
     public void set(CachedObject object) {
@@ -135,11 +141,17 @@ public class RowStoreAVLDisk extends RowStoreAVL implements PersistentStore {
         object.setPos(pos);
 
         if (tx) {
-            RowAction.addInsertAction(session, table, (Row) object);
+            Row row = (Row) object;
+            RowAction action = new RowAction(session, table,
+                                             RowAction.ACTION_INSERT, row,
+                                             null);
+
+            row.rowAction = action;
+
             database.txManager.addTransactionInfo(object);
         }
 
-        cache.add(object, false);
+        cache.add(object);
 
         storageSize += size;
     }
@@ -148,9 +160,9 @@ public class RowStoreAVLDisk extends RowStoreAVL implements PersistentStore {
 
         try {
             if (largeData) {
-                return new RowAVLDiskLarge(this, in);
+                return new RowAVLDiskLarge(table, in);
             } else {
-                return new RowAVLDisk(this, in);
+                return new RowAVLDisk(table, in);
             }
         } catch (IOException e) {
             throw Error.error(ErrorCode.DATA_FILE_ERROR, e);
@@ -173,73 +185,38 @@ public class RowStoreAVLDisk extends RowStoreAVL implements PersistentStore {
         return row;
     }
 
-    public void delete(Session session, Row row) {
-
-        writeLock();
-
-        try {
-            super.delete(session, row);
-        } finally {
-            writeUnlock();
-        }
-    }
-
     public void indexRow(Session session, Row row) {
-
-        writeLock();
 
         try {
             row = (Row) get(row, true);
 
             super.indexRow(session, row);
+            row.keepInMemory(false);
         } catch (HsqlException e) {
             database.txManager.removeTransactionInfo(row);
 
             throw e;
-        } finally {
-            row.keepInMemory(false);
-            writeUnlock();
         }
     }
 
     public void removeAll() {
 
         elementCount.set(0);
-        cache.spaceManager.freeTableSpace(tableSpace.getSpaceID());
+
         ArrayUtil.fillArray(accessorList, null);
+        cache.spaceManager.freeTableSpace(tableSpace.getSpaceID());
     }
 
     public void remove(CachedObject object) {
 
         cache.remove(object);
+
         tableSpace.release(object.getPos(), object.getStorageSize());
 
         storageSize -= object.getStorageSize();
     }
 
     public void commitPersistence(CachedObject row) {}
-
-    public void postCommitAction(Session session, RowAction action) {
-
-        if (action.getType() == RowAction.ACTION_NONE) {
-            database.txManager.removeTransactionInfo(action.getPos());
-        } else if (action.getType() == RowAction.ACTION_DELETE_FINAL
-                   && !action.isDeleteComplete()) {
-            action.setDeleteComplete();
-
-            Row row = action.getRow();
-
-            if (row == null) {
-                row = (Row) get(action.getPos(), false);
-            }
-
-            delete(session, row);
-
-            // remove info after delete but before removing persistence
-            database.txManager.removeTransactionInfo(row);
-            remove(row);
-        }
-    }
 
     public void commitRow(Session session, Row row, int changeAction,
                           int txModel) {
@@ -271,7 +248,12 @@ public class RowStoreAVLDisk extends RowStoreAVL implements PersistentStore {
                 break;
 
             case RowAction.ACTION_DELETE_FINAL :
-                throw Error.runtimeError(ErrorCode.U_S0500, "RowStore");
+                delete(session, row);
+
+                // remove info after delete but before removing persistence
+                database.txManager.removeTransactionInfo(row);
+                remove(row);
+                break;
         }
     }
 
@@ -299,21 +281,25 @@ public class RowStoreAVLDisk extends RowStoreAVL implements PersistentStore {
                 break;
 
             case RowAction.ACTION_INSERT_DELETE :
-                if (txModel == TransactionManager.LOCKS) {
-                    remove(row);
-                } else {
+                if (txModel != TransactionManager.LOCKS) {
 
                     // INSERT + DELETE
                     delete(session, row);
 
                     // remove info after delete but before removing persistence
                     database.txManager.removeTransactionInfo(row);
-                    remove(row);
                 }
+
+                remove(row);
                 break;
         }
     }
 
+    public void postCommitAction(Session session, RowAction action) {
+        database.txManager.removeTransactionInfo(action.getPos());
+    }
+
+    //
     public DataFileCache getCache() {
         return cache;
     }
@@ -327,23 +313,16 @@ public class RowStoreAVLDisk extends RowStoreAVL implements PersistentStore {
 
     public void release() {
 
+        ArrayUtil.fillArray(accessorList, null);
         cache.adjustStoreCount(-1);
 
-        cache = null;
-
+        cache        = null;
         elementCount.set(0);
-        ArrayUtil.fillArray(accessorList, null);
     }
 
     public CachedObject getAccessor(Index key) {
 
-        int position = key.getPosition();
-
-        if (position >= accessorList.length) {
-            throw Error.runtimeError(ErrorCode.U_S0500, "RowStoreAVL");
-        }
-
-        NodeAVL node = (NodeAVL) accessorList[position];
+        NodeAVL node = (NodeAVL) accessorList[key.getPosition()];
 
         if (node == null) {
             return null;
@@ -384,7 +363,7 @@ public class RowStoreAVLDisk extends RowStoreAVL implements PersistentStore {
 
     public void setReadOnly(boolean readOnly) {}
 
-    public void moveDataToSpace(Session session) {
+    public void moveDataToSpace() {
 
         Table table    = (Table) this.table;
         long  rowCount = elementCount();
@@ -400,13 +379,13 @@ public class RowStoreAVLDisk extends RowStoreAVL implements PersistentStore {
         }
 
         DoubleIntIndex pointerLookup = new DoubleIntIndex((int) rowCount,
-            false);
+            true);
 
         pointerLookup.setKeysSearchTarget();
-        writeLock();
+        cache.writeLock.lock();
 
         try {
-            moveDataToSpace(cache, pointerLookup);
+            moveDataToSpace(this, cache, tableSpace, pointerLookup);
 
             CachedObject[] newAccessorList =
                 new CachedObject[accessorList.length];
@@ -414,14 +393,18 @@ public class RowStoreAVLDisk extends RowStoreAVL implements PersistentStore {
             for (int i = 0; i < accessorList.length; i++) {
                 long pos = pointerLookup.lookup(accessorList[i].getPos());
 
+                if (pos == -1) {
+                    throw Error.error(ErrorCode.DATA_FILE_ERROR);
+                }
+
                 newAccessorList[i] = cache.get(pos, this, false);
             }
 
             RowIterator it = rowIterator();
 
             // todo - check this - must remove from old space, not new one
-            while (it.next()) {
-                Row row = it.getCurrentRow();
+            while (it.hasNext()) {
+                Row row = it.getNextRow();
 
                 cache.remove(row);
                 tableSpace.release(row.getPos(), row.getStorageSize());
@@ -429,49 +412,39 @@ public class RowStoreAVLDisk extends RowStoreAVL implements PersistentStore {
 
             accessorList = newAccessorList;
         } finally {
-            writeUnlock();
+            cache.writeLock.unlock();
         }
 
         database.logger.logDetailEvent("table written "
                                        + table.getName().name);
     }
 
-    public void moveDataToSpace(DataFileCache targetCache,
-                                DoubleIntIndex pointerLookup) {
+    public static void moveDataToSpace(PersistentStore store,
+                                       DataFileCache cache,
+                                       TableSpaceManager tableSpace,
+                                       LongLookup pointerLookup) {
 
-        int spaceId = table.getSpaceID();
-        TableSpaceManager targetSpace =
-            targetCache.spaceManager.getTableSpace(spaceId);
+        RowIterator it = store.rowIterator();
 
-        pointerLookup.setKeysSearchTarget();
+        while (it.hasNext()) {
+            CachedObject row = it.getNextRow();
+            long newPos = tableSpace.getFilePosition(row.getStorageSize(),
+                false);
 
-        RowIterator it = indexList[0].firstRow(this);
-
-        while (it.next()) {
-            CachedObject row = it.getCurrentRow();
-
-            pointerLookup.addUnsorted(row.getPos(), row.getStorageSize());
+            pointerLookup.addUnsorted(row.getPos(), newPos);
         }
 
-        pointerLookup.sort();
+        it = store.rowIterator();
 
-        for (int i = 0; i < pointerLookup.size(); i++) {
-            long newPos =
-                targetSpace.getFilePosition(pointerLookup.getValue(i), false);
+        while (it.hasNext()) {
+            CachedObject row = it.getNextRow();
 
-            pointerLookup.setValue(i, (int) newPos);
-        }
+            cache.rowOut.reset();
+            row.write(cache.rowOut, pointerLookup);
 
-        it = indexList[0].firstRow(this);
+            long pos = pointerLookup.lookup(row.getPos());
 
-        while (it.next()) {
-            CachedObject row    = it.getCurrentRow();
-            long         newPos = pointerLookup.lookup(row.getPos());
-
-            // write
-            targetCache.rowOut.reset();
-            row.write(targetCache.rowOut, pointerLookup);
-            targetCache.saveRowOutput(newPos);
+            cache.saveRowOutput(pos);
         }
     }
 
@@ -487,19 +460,12 @@ public class RowStoreAVLDisk extends RowStoreAVL implements PersistentStore {
         return row.getStorageSize() * elementCount.get();
     }
 
-    public void readLock() {
-        readLock.lock();
-    }
-
-    public void readUnlock() {
-        readLock.unlock();
-    }
 
     public void writeLock() {
-        writeLock.lock();
+        cache.writeLock.lock();
     }
 
     public void writeUnlock() {
-        writeLock.unlock();
+        cache.writeLock.unlock();
     }
 }

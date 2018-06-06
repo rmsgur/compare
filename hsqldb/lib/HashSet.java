@@ -1,4 +1,4 @@
-/* Copyright (c) 2001-2016, The HSQL Development Group
+/* Copyright (c) 2001-2011, The HSQL Development Group
  * All rights reserved.
  *
  * Redistribution and use in source and binary forms, with or without
@@ -37,7 +37,7 @@ import org.hsqldb.map.BaseHashMap;
  * This class does not store null keys.
  *
  * @author Fred Toussi (fredt@users dot sourceforge.net)
- * @version 2.3.4
+ * @version 2.2.9
  * @since 1.7.2
  */
 public class HashSet extends BaseHashMap implements Set {
@@ -88,11 +88,11 @@ public class HashSet extends BaseHashMap implements Set {
     /** returns true if added */
     public boolean add(Object key) {
 
-        int count = size();
+        int oldSize = size();
 
         super.addOrRemove(0, 0, key, null, false);
 
-        return count != size();
+        return oldSize != size();
     }
 
     /** returns true if any added */

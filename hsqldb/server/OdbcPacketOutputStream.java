@@ -1,4 +1,4 @@
-/* Copyright (c) 2001-2015, The HSQL Development Group
+/* Copyright (c) 2001-2011, The HSQL Development Group
  * All rights reserved.
  *
  * Redistribution and use in source and binary forms, with or without
@@ -31,9 +31,10 @@
 
 package org.hsqldb.server;
 
-import java.io.ByteArrayOutputStream;
-import java.io.DataOutputStream;
 import java.io.IOException;
+
+import org.hsqldb.lib.DataOutputStream;
+import org.hsqldb.lib.HsqlByteArrayOutputStream;
 
 /**
  * Atomic transmission packet from HyperSQL server to ODBC client.
@@ -51,14 +52,15 @@ import java.io.IOException;
  */
 class OdbcPacketOutputStream extends DataOutputStream {
 
-    private ByteArrayOutputStream byteArrayOutputStream;
-    private ByteArrayOutputStream stringWriterOS = new ByteArrayOutputStream();
+    private HsqlByteArrayOutputStream byteArrayOutputStream;
+    private HsqlByteArrayOutputStream stringWriterOS =
+        new HsqlByteArrayOutputStream();
     private DataOutputStream stringWriterDos =
         new DataOutputStream(stringWriterOS);
     private int packetStart = 0;    // Stream's "written" at start of packet.
 
     public int getSize() {
-        return written - packetStart;
+        return super.count - packetStart;
     }
 
     /**
@@ -94,18 +96,19 @@ class OdbcPacketOutputStream extends DataOutputStream {
 
         byteArrayOutputStream.reset();
 
-        packetStart = written;
+        packetStart = count;
 
         writeInt(-1);    // length placeholder
     }
 
     static OdbcPacketOutputStream newOdbcPacketOutputStream()
     throws IOException {
-        return new OdbcPacketOutputStream(new ByteArrayOutputStream());
+        return new OdbcPacketOutputStream(new HsqlByteArrayOutputStream());
     }
 
     protected OdbcPacketOutputStream(
-            ByteArrayOutputStream byteArrayOutputStream) throws IOException {
+            HsqlByteArrayOutputStream byteArrayOutputStream)
+            throws IOException {
 
         super(byteArrayOutputStream);
 
@@ -118,7 +121,7 @@ class OdbcPacketOutputStream extends DataOutputStream {
      * @return packet size (which does not count the type byte).
      */
     synchronized int xmit(char packetType,
-                          org.hsqldb.lib.DataOutputStream destinationStream)
+                          DataOutputStream destinationStream)
                           throws IOException {
 
         byte[] ba = byteArrayOutputStream.toByteArray();

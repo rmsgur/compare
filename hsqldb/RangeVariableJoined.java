@@ -1,4 +1,4 @@
-/* Copyright (c) 2001-2016, The HSQL Development Group
+/* Copyright (c) 2001-2011, The HSQL Development Group
  * All rights reserved.
  *
  * Redistribution and use in source and binary forms, with or without
@@ -35,7 +35,6 @@ import org.hsqldb.HsqlNameManager.SimpleName;
 import org.hsqldb.ParserDQL.CompileContext;
 import org.hsqldb.RangeVariable.RangeIteratorMain;
 import org.hsqldb.index.Index;
-import org.hsqldb.lib.HashMap;
 import org.hsqldb.lib.HashSet;
 import org.hsqldb.lib.HsqlArrayList;
 import org.hsqldb.lib.OrderedHashSet;
@@ -45,7 +44,7 @@ import org.hsqldb.map.ValuePool;
  * Metadata for range joined variables
  *
  * @author Fred Toussi (fredt@users dot sourceforge.net)
- * @version 2.3.3
+ * @version 2.2.9
  * @since 1.9.0
  */
 public class RangeVariableJoined extends RangeVariable {
@@ -63,8 +62,6 @@ public class RangeVariableJoined extends RangeVariable {
     }
 
     private void setParameters() {
-
-        namedJoinColumnExpressions = new HashMap();
 
         QuerySpecification qs =
             (QuerySpecification) this.rangeTable.getQueryExpression();
@@ -84,10 +81,7 @@ public class RangeVariableJoined extends RangeVariable {
                 hasLateral = true;
             }
 
-            if (rangeArray[i].namedJoinColumnExpressions != null) {
-                namedJoinColumnExpressions.putAll(
-                    rangeArray[i].namedJoinColumnExpressions);
-            }
+            break;
         }
     }
 
@@ -115,9 +109,8 @@ public class RangeVariableJoined extends RangeVariable {
         super.addAllColumns();
     }
 
-    public void addNamedJoinColumnExpression(String name, Expression e,
-            int position) {
-        super.addNamedJoinColumnExpression(name, e, position);
+    public void addNamedJoinColumnExpression(String name, Expression e) {
+        super.addNamedJoinColumnExpression(name, e);
     }
 
     public ExpressionColumn getColumnExpression(String name) {
@@ -176,50 +169,49 @@ public class RangeVariableJoined extends RangeVariable {
             return super.findColumn(schemaName, tableName, columnName);
         }
 
-        int count    = 0;
-        int colIndex = -1;
+        boolean hasNamed = rangeArray[0].namedJoinColumnExpressions != null;
+        int     count    = 0;
 
-        // this covers named column reference without tableName
-        if (tableName == null
-                && namedJoinColumnExpressions.containsKey(columnName)) {
-            return super.findColumn(null, null, columnName);
+        if (hasNamed) {
+            count = rangeArray[0].namedJoinColumnExpressions.size();
+
+            if (rangeArray[0].namedJoinColumnExpressions.containsKey(
+                    columnName)) {
+                if (tableName != null) {
+                    return -1;
+                }
+
+                return super.findColumn(schemaName, tableName, columnName);
+            }
         }
 
         for (int i = 0; i < rangeArray.length; i++) {
             RangeVariable currentRange = rangeArray[i];
+            int colIndex = currentRange.findColumn(schemaName, tableName,
+                                                   columnName);
 
-            colIndex = currentRange.findColumn(schemaName, tableName,
-                                               columnName);
-
-            if (currentRange.namedJoinColumnCheck == null) {
-                if (colIndex > -1) {
-                    count += colIndex;
-                } else {
-                    count += currentRange.rangeTable.getColumnCount();
+            if (colIndex > -1) {
+                if (!hasNamed) {
+                    return count + colIndex;
                 }
-            } else {
-                int limit = colIndex > -1 ? colIndex
-                                          : currentRange.namedJoinColumnCheck
-                                              .length;
 
-                for (int j = 0; j < limit; j++) {
-                    if (!currentRange.namedJoinColumnCheck[j]) {
+                for (int j = 0; j < colIndex; j++) {
+                    ColumnSchema col = currentRange.rangeTable.getColumn(j);
+
+                    if (!currentRange.namedJoinColumnExpressions.containsKey(
+                            col.getNameString())) {
                         count++;
                     }
                 }
+
+                return count;
             }
 
-            if (colIndex > -1) {
-                break;
-            }
-        }
+            count += currentRange.rangeTable.getColumnCount();
 
-        if (colIndex > -1) {
-            if (namedJoinColumnExpressions != null) {
-                count += namedJoinColumnExpressions.size();
+            if (hasNamed) {
+                count -= currentRange.namedJoinColumnExpressions.size();
             }
-
-            return count;
         }
 
         return -1;
@@ -336,7 +328,7 @@ public class RangeVariableJoined extends RangeVariable {
     }
 
     /**
-     * Retrieves a String representation of this object. <p>
+     * Retreives a String representation of this obejct. <p>
      *
      * The returned String describes this object's table, alias
      * access mode, index, join mode, Start, End and And conditions.

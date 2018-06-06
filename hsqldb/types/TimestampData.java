@@ -1,4 +1,4 @@
-/* Copyright (c) 2001-2016, The HSQL Development Group
+/* Copyright (c) 2001-2011, The HSQL Development Group
  * All rights reserved.
  *
  * Redistribution and use in source and binary forms, with or without
@@ -41,7 +41,7 @@ package org.hsqldb.types;
 public class TimestampData {
 
     final long seconds;
-    final int  nanos;
+    int        nanos;
     final int  zone;
 
     public TimestampData(long seconds) {
@@ -77,8 +77,8 @@ public class TimestampData {
         return zone;
     }
 
-    public long getMillis() {
-        return seconds * 1000;
+    public void clearNanos() {
+        nanos = 0;
     }
 
     public boolean equals(Object other) {

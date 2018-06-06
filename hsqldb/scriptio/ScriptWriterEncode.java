@@ -1,4 +1,4 @@
-/* Copyright (c) 2001-2016, The HSQL Development Group
+/* Copyright (c) 2001-2011, The HSQL Development Group
  * All rights reserved.
  *
  * Redistribution and use in source and binary forms, with or without
@@ -55,7 +55,6 @@ public class ScriptWriterEncode extends ScriptWriterText {
     Crypto                    crypto;
     HsqlByteArrayOutputStream byteOut;
     OutputStream              cryptOut;
-
     public ScriptWriterEncode(Database db, OutputStream outputStream,
                               FileAccess.FileSync descriptor,
                               boolean includeCached, Crypto crypto) {
@@ -63,7 +62,7 @@ public class ScriptWriterEncode extends ScriptWriterText {
         super(db, outputStream, descriptor, includeCached);
 
         try {
-            cryptOut      = crypto.getOutputStream(fileStreamOut);
+            cryptOut = crypto.getOutputStream(fileStreamOut);
             fileStreamOut = new GZIPOutputStream(cryptOut);
             isCrypt       = true;
         } catch (IOException e) {
@@ -80,7 +79,7 @@ public class ScriptWriterEncode extends ScriptWriterText {
         super(db, file, includeCached, true, false);
 
         try {
-            cryptOut      = crypto.getOutputStream(fileStreamOut);
+            cryptOut = crypto.getOutputStream(fileStreamOut);
             fileStreamOut = new GZIPOutputStream(cryptOut);
             isCrypt       = true;
         } catch (IOException e) {
@@ -103,8 +102,8 @@ public class ScriptWriterEncode extends ScriptWriterText {
     protected void openFile() {
 
         try {
-            FileAccess   fa  = isUserScript ? FileUtil.getFileUtil()
-                                            : database.logger.getFileAccess();
+            FileAccess   fa  = isDump ? FileUtil.getFileUtil()
+                                      : database.logger.getFileAccess();
             OutputStream fos = fa.openOutputStreamElement(outFile);
 
             outDescriptor = fa.getFileSync(fos);

@@ -1,4 +1,4 @@
-/* Copyright (c) 2001-2017, The HSQL Development Group
+/* Copyright (c) 2001-2011, The HSQL Development Group
  * All rights reserved.
  *
  * Redistribution and use in source and binary forms, with or without
@@ -51,7 +51,6 @@ import org.hsqldb.lib.FileUtil;
 import org.hsqldb.lib.HashSet;
 import org.hsqldb.lib.IntKeyHashMap;
 import org.hsqldb.lib.Iterator;
-import org.hsqldb.lib.Notified;
 import org.hsqldb.lib.StopWatch;
 import org.hsqldb.lib.StringUtil;
 import org.hsqldb.lib.java.JavaSystem;
@@ -66,8 +65,8 @@ import org.hsqldb.result.ResultConstants;
 // fredt@users 20020424 - patch 1.7.0 - shutdown without exit
 // see the comments in ServerConnection.java
 // unsaved@users 20021113 - patch 1.7.2 - SSL support
-// campbell-burnet@users 20030510-14 - 1.7.2 - SSL support moved to factory interface
-// campbell-burnet@users 20030510-14 - 1.7.2 - service control, JavaBean API
+// boucherb@users 20030510-14 - 1.7.2 - SSL support moved to factory interface
+// boucherb@users 20030510-14 - 1.7.2 - service control, JavaBean API
 // fredt@users 20030916 - 1.7.2 - review, simplification and multiple DB's
 // fredt@users 20040320 - 1.7.2 - review and correction
 // fredt@users 20050225 - 1.8.0 - minor corrections
@@ -81,9 +80,9 @@ import org.hsqldb.result.ResultConstants;
  * A Server object acts as a network database server and is one way of using
  * the client-server mode of HSQLDB Database Engine. Instances of this
  * class handle native HSQL protocol connections exclusively, allowing database
- * queries to be performed efficiently across the network.  Server's direct
- * descendant, WebServer, handles HTTP protocol connections exclusively,
- * allowing HSQL protocol to be tunnelled over HTTP to avoid sandbox and
+ * queries to be performed efficienly across the network.  Server's direct
+ * descendent, WebServer, handles HTTP protocol connections exclusively,
+ * allowing HSQL protocol to be tunneled over HTTP to avoid sandbox and
  * firewall issues, albeit less efficiently. <p>
  *
  * There are a number of ways to configure and start a Server instance. <p>
@@ -94,18 +93,18 @@ import org.hsqldb.result.ResultConstants;
  *
  * <ol>
  *   <li>Upon construction, a Server object is assigned a set of default
- *       properties.
+ *       properties. <p>
  *
  *   <li>If it exists, properties are loaded from a file named
- *       'server.properties' in the present working directory.
+ *       'server.properties' in the present working directory. <p>
  *
  *   <li>The command line arguments (alternatively, the String[] passed to
  *       main()) are parsed and used to further configure the Server's
- *       properties.
+ *       properties. <p>
  *
  * </ol> <p>
  *
- * From the command line, the options are as follows:
+ * From the command line, the options are as follows: <p>
  * <pre>
  * +-----------------+-------------+----------+------------------------------+
  * |    OPTION       |    TYPE     | DEFAULT  |         DESCRIPTION          |
@@ -115,7 +114,7 @@ import org.hsqldb.result.ResultConstants;
  * | --port          | number      | 9001/544 | port at which server listens |
  * | --database.i    | [type]spec  | 0=test   | path of database i           |
  * | --dbname.i      | alias       |          | url alias for database i     |
- * | --silent        | true|false  | true     | false =&gt; display all queries |
+ * | --silent        | true|false  | true     | false => display all queries |
  * | --trace         | true|false  | false    | display JDBC trace messages  |
  * | --tls           | true|false  | false    | TLS/SSL (secure) sockets     |
  * | --no_system_exit| true|false  | false    | do not issue System.exit()   |
@@ -131,7 +130,7 @@ import org.hsqldb.result.ResultConstants;
  *   <li>Multiple databases can be served by each instance of the Server.
  *       The value of <em>i</em> is currently limited to the range 0..9,
  *       allowing up to 10 different databases. Any number is this range
- *       can be used.
+ *       can be used.<p>
  *
  *   <li>The value assigned to <em>database.i</em> is interpreted using the
  *       format <b>'[type]spec'</b>, where the optional <em>type</em> component
@@ -144,13 +143,13 @@ import org.hsqldb.result.ResultConstants;
  *
  *        A full description of how
  *       <b>'[type]spec'</b> values are interpreted appears in the overview for
- *       {@link org.hsqldb.jdbc.JDBCConnection JDBCConnection}.
+ *       {@link org.hsqldb.jdbc.JDBCConnection JDBCConnection}. <p>
  *
  *   <li>The value assigned to <em>dbname.i</em> is taken to be the key used to
  *       look up the desired database instance and thus corresponds to the
  *       <b>&lt;alias&gt;</b> component of the HSQLDB HSQL protocol database
  *       connection url:
- *       'jdbc:hsqldb:hsql[s]://host[port][/<b>&lt;alias&gt;</b>]'.
+ *       'jdbc:hsqldb:hsql[s]://host[port][/<b>&lt;alias&gt;</b>]'. <p>
  *
  *   <li>The value of <em>database.0</em> is special. If  <em>dbname.0</em>
  *       is not specified, then this defaults to an empty string and
@@ -162,7 +161,7 @@ import org.hsqldb.result.ResultConstants;
  *
  *       This behaviour allows the previous
  *       database connection url format to work with essentially unchanged
- *       semantics.
+ *       semantics.<p>
  *
  *   <li>When the  <em>remote_open</em> property is true, a connection attempt
  *       to an unopened database results in the database being opened. The URL
@@ -171,14 +170,14 @@ import org.hsqldb.result.ResultConstants;
  *       the given alias and filepath value will be associated together. The
  *       database user and password to start this connection must be valid.
  *       If this form of connection is used again, after the database has been
- *       opened, the filepath property is ignored.
+ *       opened, the filepath property is ignored.<p>
  *
  *   <li>Once an alias such as "mydb" has been associated with a path, it cannot
- *       be  reassigned to a different path.
+ *       be  reassigned to a different path.<p>
  *
  *   <li>If a database is closed with the SHUTDOWN command, its
  *       alias is removed. It is then possible to connect to this database again
- *       with a different (or the same) alias.
+ *       with a different (or the same) alias.<p>
  *
  *   <li>If the same database is connected to via two different
  *       aliases, and then one of the is closed with the SHUTDOWN command, the
@@ -215,11 +214,11 @@ import org.hsqldb.result.ResultConstants;
  * is typically necessary to avoid calling System.exit() when the Server
  * instance shuts down. <p>
  *
- * By default, 'no_system_exit' is set:
+ * By default, 'no_system_exit' is set: <p>
  *
  * <ol>
  *    <li><b>true</b> when a Server is started directly from the start()
- *        method.
+ *        method. <p>
  *
  *    <li><b>false</b> when a Server is started from the main(String[])
  *         method.
@@ -228,14 +227,20 @@ import org.hsqldb.result.ResultConstants;
  * These values are natural to their context because the first case allows
  * the JVM to exit by default on Server shutdown when a Server instance is
  * started from a command line environment, whereas the second case prevents
- * a typically unwanted JVM exit on Server shutdown when a Server instance
+ * a typically unwanted JVM exit on Server shutdown when a Server intance
  * is started as part of a larger framework. <p>
  *
  * @author Fred Toussi (fredt@users dot sourceforge.net)
- * @version 2.3.2
+ * @version 2.2.9
  * @since 1.7.2
+ *
+ * @jmx.mbean
+ *    description="HSQLDB Server"
+ *    extends="org.hsqldb.mx.mbean.RegistrationSupportBaseMBean"
+ *
+ * @jboss.xmbean
  */
-public class Server implements HsqlSocketRequestHandler, Notified {
+public class Server implements HsqlSocketRequestHandler {
 
 //
     protected static final int serverBundleHandle =
@@ -265,11 +270,11 @@ public class Server implements HsqlSocketRequestHandler, Notified {
     volatile long actionSequence;
 
 //
-    protected String                serverId;
-    protected int                   serverProtocol;
-    protected ThreadGroup           serverConnectionThreadGroup;
-    protected HsqlSocketFactory     socketFactory;
-    protected volatile ServerSocket socket;
+    protected String            serverId;
+    protected int               serverProtocol;
+    protected ThreadGroup       serverConnectionThreadGroup;
+    protected HsqlSocketFactory socketFactory;
+    protected ServerSocket      socket;
 
 //
     private Thread             serverThread;
@@ -315,7 +320,6 @@ public class Server implements HsqlSocketRequestHandler, Notified {
 
     /**
      * Returns thread object for "HSQLDB Server" thread
-     * @return thread
      */
     public Thread getServerThread() {
         return serverThread;
@@ -334,7 +338,7 @@ public class Server implements HsqlSocketRequestHandler, Notified {
      *
      * For example, the no-args WebServer constructor invokes this constructor
      * with ServerConstants.SC_PROTOCOL_HTTP, while the Server() no args
-     * constructor invokes this constructor with
+     * contructor invokes this constructor with
      * ServerConstants.SC_PROTOCOL_HSQL. <p>
      *
      * @param protocol the ServerConstants code indicating which
@@ -376,19 +380,11 @@ public class Server implements HsqlSocketRequestHandler, Notified {
     }
 
     /**
-     * Returns true if this server is not running
-     *
-     * @return boolean
-     */
-    public boolean isNotRunning() {
-
-        int state = getState();
-
-        return state == ServerConstants.SERVER_STATE_SHUTDOWN;
-    }
-
-    /**
      * Closes all connections to this Server.
+     *
+     * @jmx.managed-operation
+     *  impact="ACTION"
+     *  description="Closes all open connections"
      */
     public synchronized void signalCloseAllServerConnections() {
 
@@ -428,6 +424,10 @@ public class Server implements HsqlSocketRequestHandler, Notified {
      * Retrieves, in string form, this server's host address.
      *
      * @return this server's host address
+     *
+     * @jmx.managed-attribute
+     *  access="read-write"
+     *  description="Host InetAddress"
      */
     public String getAddress() {
 
@@ -445,6 +445,22 @@ public class Server implements HsqlSocketRequestHandler, Notified {
      *      the live value
      * @return the url alias component of the i'th database
      *      that this Server hosts, or null if no such name exists.
+     *
+     * @jmx.managed-operation
+     *  impact="INFO"
+     *  description="url alias component of the i'th hosted Database"
+     *
+     * @jmx.managed-operation-parameter
+     *      name="index"
+     *      type="int"
+     *      position="0"
+     *      description="This Server's index for the hosted Database"
+     *
+     * @jmx.managed-operation-parameter
+     *      name="asconfigured"
+     *      type="boolean"
+     *      position="1"
+     *      description="if true, the configured value, else the live value"
      */
     public String getDatabaseName(int index, boolean asconfigured) {
 
@@ -470,6 +486,22 @@ public class Server implements HsqlSocketRequestHandler, Notified {
      * @return the HSQLDB database path descriptor of the i'th database
      *      that this Server hosts, or null if no such path descriptor
      *      exists
+     *
+     * @jmx.managed-operation
+     *  impact="INFO"
+     *  description="For i'th hosted database"
+     *
+     * @jmx.managed-operation-parameter
+     *      name="index"
+     *      type="int"
+     *      position="0"
+     *      description="This Server's index for the hosted Database"
+     *
+     * @jmx.managed-operation-parameter
+     *      name="asconfigured"
+     *      type="boolean"
+     *      position="1"
+     *      description="if true, the configured value, else the live value"
      */
     public String getDatabasePath(int index, boolean asconfigured) {
 
@@ -495,6 +527,10 @@ public class Server implements HsqlSocketRequestHandler, Notified {
      * This attribute is relevant only when server protocol is HTTP(S).
      *
      * @return the name of the web page served when no page is specified
+     *
+     * @jmx.managed-attribute
+     *  access="read-write"
+     *  description="Used when server protocol is HTTP(S)"
      */
     public String getDefaultWebPage() {
         return "[IGNORED]";
@@ -533,6 +569,10 @@ public class Server implements HsqlSocketRequestHandler, Notified {
      * Retrieves this server's host port.
      *
      * @return this server's host port
+     *
+     * @jmx.managed-attribute
+     *  access="read-write"
+     *  description="At which ServerSocket listens for connections"
      */
     public int getPort() {
 
@@ -547,6 +587,10 @@ public class Server implements HsqlSocketRequestHandler, Notified {
      * Typically, this will be something like: "HSQLDB xxx server".
      *
      * @return the product name of this server
+     *
+     * @jmx.managed-attribute
+     *  access="read-only"
+     *  description="Of Server"
      */
     public String getProductName() {
         return "HSQLDB server";
@@ -558,16 +602,24 @@ public class Server implements HsqlSocketRequestHandler, Notified {
      * Typically, this will be something like: "1.x.x" or "2.x.x" and so on.
      *
      * @return the product version of the server
+     *
+     * @jmx.managed-attribute
+     *  access="read-only"
+     *  description="Of Server"
      */
     public String getProductVersion() {
         return HsqlDatabaseProperties.THIS_VERSION;
     }
 
     /**
-     * Retrieves a string resresentaion of the network protocol
+     * Retrieves a string respresentaion of the network protocol
      * this server offers, typically one of 'HTTP', HTTPS', 'HSQL' or 'HSQLS'.
      *
-     * @return string representation of this server's protocol
+     * @return string respresentation of this server's protocol
+     *
+     * @jmx.managed-attribute
+     *  access="read-only"
+     *  description="Used to handle connections"
      */
     public String getProtocol() {
         return isTls() ? "HSQLS"
@@ -578,6 +630,10 @@ public class Server implements HsqlSocketRequestHandler, Notified {
      * Retrieves a Throwable indicating the last server error, if any. <p>
      *
      * @return a Throwable indicating the last server error
+     *
+     * @jmx.managed-attribute
+     *  access="read-only"
+     *  description="Indicating last exception state"
      */
     public Throwable getServerError() {
         return serverError;
@@ -587,6 +643,10 @@ public class Server implements HsqlSocketRequestHandler, Notified {
      * Retrieves a String identifying this Server object.
      *
      * @return a String identifying this Server object
+     *
+     * @jmx.managed-attribute
+     *  access="read-only"
+     *  description="Identifying Server"
      */
     public String getServerId() {
         return serverId;
@@ -595,7 +655,7 @@ public class Server implements HsqlSocketRequestHandler, Notified {
     /**
      * Retrieves current state of this server in numerically coded form. <p>
      *
-     * Typically, this will be one of:
+     * Typically, this will be one of: <p>
      *
      * <ol>
      * <li>ServerProperties.SERVER_STATE_ONLINE (1)
@@ -605,6 +665,10 @@ public class Server implements HsqlSocketRequestHandler, Notified {
      * </ol>
      *
      * @return this server's state code.
+     *
+     * @jmx.managed-attribute
+     *  access="read-only"
+     *  description="1:ONLINE 4:OPENING 8:CLOSING, 16:SHUTDOWN"
      */
     public int getState() {
         return serverState;
@@ -616,10 +680,15 @@ public class Server implements HsqlSocketRequestHandler, Notified {
      * is still in context.
      *
      * @return this server's state represented as a character sequence.
+     *
+     * @jmx.managed-attribute
+     *  access="read-only"
+     *  description="State as string"
      */
     public String getStateDescriptor() {
 
-        String state;
+        String    state;
+        Throwable t = getServerError();
 
         switch (serverState) {
 
@@ -655,13 +724,17 @@ public class Server implements HsqlSocketRequestHandler, Notified {
      * be served from the contents of a jar or from the JVM class path.
      *
      * @return the root context (directory) from which web content is served
+     *
+     * @jmx.managed-attribute
+     *  access="read-write"
+     *  description="Context (directory)"
      */
     public String getWebRoot() {
         return "[IGNORED]";
     }
 
     /**
-     * Assigns the specified socket to a new connection handler and
+     * Assigns the specified socket to a new conection handler and
      * starts the handler in a new Thread.
      *
      * @param s the socket to connect
@@ -709,6 +782,10 @@ public class Server implements HsqlSocketRequestHandler, Notified {
      * Retrieves whether this server calls System.exit() when shutdown.
      *
      * @return true if this server does not call System.exit()
+     *
+     * @jmx.managed-attribute
+     *  access="read-write"
+     *  description="When Shutdown"
      */
     public boolean isNoSystemExit() {
         return serverProperties.isPropertyTrue(
@@ -719,6 +796,10 @@ public class Server implements HsqlSocketRequestHandler, Notified {
      * Retrieves whether this server restarts on shutdown.
      *
      * @return true this server restarts on shutdown
+     *
+     * @jmx.managed-attribute
+     *  access="read-write"
+     *  description="Automatically?"
      */
     public boolean isRestartOnShutdown() {
         return serverProperties.isPropertyTrue(
@@ -731,6 +812,10 @@ public class Server implements HsqlSocketRequestHandler, Notified {
      *
      * @return if true, silent mode was requested, else trace messages
      *      are to be printed
+     *
+     * @jmx.managed-attribute
+     *  access="read-write"
+     *  description="No trace messages?"
      */
     public boolean isSilent() {
         return isSilent;
@@ -741,6 +826,10 @@ public class Server implements HsqlSocketRequestHandler, Notified {
      * server properties.
      *
      * @return if true, secure sockets are requested, else not
+     *
+     * @jmx.managed-attribute
+     *  access="read-write"
+     *  description="Use TLS/SSL sockets?"
      */
     public boolean isTls() {
         return serverProperties.isPropertyTrue(ServerProperties.sc_key_tls);
@@ -751,6 +840,10 @@ public class Server implements HsqlSocketRequestHandler, Notified {
      * DriverManger PrintStream/PrintWriter, if any.
      *
      * @return true if tracing is on (JDBC trace messages to system out)
+     *
+     * @jmx.managed-attribute
+     *  access="read-write"
+     *  description="JDBC trace messages to System.out?"
      */
     public boolean isTrace() {
         return serverProperties.isPropertyTrue(ServerProperties.sc_key_trace);
@@ -765,7 +858,17 @@ public class Server implements HsqlSocketRequestHandler, Notified {
      * @param path the path of the desired properties file, without the
      *      '.properties' file extension
      * @throws HsqlException if this server is running
-     * @return true if the indicated file was read successfully, else false
+     * @return true if the indicated file was read sucessfully, else false
+     *
+     * @jmx.managed-operation
+     *  impact="ACTION"
+     *  description="Reads in properties"
+     *
+     * @jmx.managed-operation-parameter
+     *   name="path"
+     *   type="java.lang.String"
+     *   position="0"
+     *   description="(optional) returns false if path is empty"
      */
     public boolean putPropertiesFromFile(String path) {
         return putPropertiesFromFile(path, ".properties");
@@ -775,9 +878,9 @@ public class Server implements HsqlSocketRequestHandler, Notified {
      * Attempts to put properties from the file with given extension.
      *
      * @param path the path of the desired properties file.
-     * @param extension extension to add to path
+     * @param extension extension to add to parth
      * @throws HsqlException if this server is running
-     * @return true if the indicated file was read successfully, else false
+     * @return true if the indicated file was read sucessfully, else false
      *
      */
     public boolean putPropertiesFromFile(String path, String extension) {
@@ -816,6 +919,16 @@ public class Server implements HsqlSocketRequestHandler, Notified {
      * @param s semicolon-delimited key=value pair string,
      *      e.g. silent=false;port=8080;...
      * @throws HsqlException if this server is running
+     *
+     * @jmx.managed-operation
+     *   impact="ACTION"
+     *   description="'server.' key prefix automatically supplied"
+     *
+     * @jmx.managed-operation-parameter
+     *   name="s"
+     *   type="java.lang.String"
+     *   position="0"
+     *   description="semicolon-delimited key=value pairs"
      */
     public void putPropertiesFromString(String s) {
 
@@ -852,6 +965,8 @@ public class Server implements HsqlSocketRequestHandler, Notified {
      *    or "0.0.0.0" to signify that the server socket should be constructed
      *    using the signature that does not specify the InetAddress.
      * @throws HsqlException if this server is running
+     *
+     * @jmx.managed-attribute
      */
     public void setAddress(String address) {
 
@@ -868,9 +983,25 @@ public class Server implements HsqlSocketRequestHandler, Notified {
     /**
      * Sets the external name (url alias) of the i'th hosted database.
      *
-     * @param index int
      * @param name external name (url alias) of the i'th HSQLDB database
-     *   instance this server is to host.
+     *      instance this server is to host.
+     * @throws HsqlException if this server is running
+     *
+     * @jmx.managed-operation
+     *      impact="ACTION"
+     *      description="Sets the url alias by which is known the i'th hosted Database"
+     *
+     * @jmx.managed-operation-parameter
+     *      name="index"
+     *      type="int"
+     *      position="0"
+     *      description="This Server's index for the hosted Database"
+     *
+     * @jmx.managed-operation-parameter
+     *      name="name"
+     *      type="java.lang.String"
+     *      position="1"
+     *      description="url alias component for the hosted Database"
      */
     public void setDatabaseName(int index, String name) {
 
@@ -885,9 +1016,24 @@ public class Server implements HsqlSocketRequestHandler, Notified {
      * catalog type. Examples of the path include: "file:mydir/mydb",
      * "mem:mymemdb", "res:org/mydomain/mydbs/settingsdb".
      *
-     * @param index int
-     * @param path The path of the i'th HSQLDB database instance this server is
-     *   to host.
+     * @param path The path of the i'th HSQLDB database instance this server
+     *      is to host.
+     *
+     * @jmx.managed-operation
+     *      impact="ACTION"
+     *      description="Sets the database uri path for the i'th hosted Database"
+     *
+     * @jmx.managed-operation-parameter
+     *      name="index"
+     *      type="int"
+     *      position="0"
+     *      description="This Server's index for the hosted Database"
+     *
+     * @jmx.managed-operation-parameter
+     *      name="path"
+     *      type="java.lang.String"
+     *      position="1"
+     *      description="database uri path of the hosted Database"
      */
     public void setDatabasePath(int index, String path) {
 
@@ -901,6 +1047,8 @@ public class Server implements HsqlSocketRequestHandler, Notified {
      * Sets the name of the web page served when no page is specified.
      *
      * @param file the name of the web page served when no page is specified
+     *
+     * @jmx.managed-attribute
      */
     public void setDefaultWebPage(String file) {
 
@@ -919,6 +1067,8 @@ public class Server implements HsqlSocketRequestHandler, Notified {
      * Sets the server listen port.
      *
      * @param port the port at which this server listens
+     *
+     * @jmx.managed-attribute
      */
     public void setPort(int port) {
 
@@ -953,6 +1103,8 @@ public class Server implements HsqlSocketRequestHandler, Notified {
      * Sets whether this server calls System.exit() when shutdown.
      *
      * @param noExit if true, System.exit() will not be called.
+     *
+     * @jmx.managed-attribute
      */
     public void setNoSystemExit(boolean noExit) {
 
@@ -965,6 +1117,8 @@ public class Server implements HsqlSocketRequestHandler, Notified {
      * Sets whether this server restarts on shutdown.
      *
      * @param restart if true, this server restarts on shutdown
+     *
+     * @jmx.managed-attribute
      */
     public void setRestartOnShutdown(boolean restart) {
 
@@ -978,14 +1132,15 @@ public class Server implements HsqlSocketRequestHandler, Notified {
      *
      * @param silent if true, then silent mode, else trace messages
      *  are to be printed
+     *
+     * @jmx.managed-attribute
      */
     public void setSilent(boolean silent) {
 
+        printWithThread("setSilent(" + silent + ")");
         serverProperties.setProperty(ServerProperties.sc_key_silent, silent);
 
         isSilent = silent;
-
-        printWithThread("setSilent(" + silent + ")");
     }
 
     /**
@@ -993,6 +1148,8 @@ public class Server implements HsqlSocketRequestHandler, Notified {
      *
      * @param tls true for secure sockets, else false
      * @throws HsqlException if this server is running
+     *
+     * @jmx.managed-attribute
      */
     public void setTls(boolean tls) {
 
@@ -1006,6 +1163,8 @@ public class Server implements HsqlSocketRequestHandler, Notified {
      * DriverManger PrintStream/PrintWriter, if any.
      *
      * @param trace if true, route JDBC trace messages to System.out
+     *
+     * @jmx.managed-attribute
      */
     public void setTrace(boolean trace) {
 
@@ -1019,6 +1178,8 @@ public class Server implements HsqlSocketRequestHandler, Notified {
      * The default is false.
      *
      * @param daemon if true, start the thread as a daemon thread
+     *
+     * @jmx.managed-attribute
      */
     public void setDaemon(boolean daemon) {
 
@@ -1032,6 +1193,8 @@ public class Server implements HsqlSocketRequestHandler, Notified {
      *
      * @param root the root (context) directory from which web content
      *      is served
+     *
+     * @jmx.managed-attribute
      */
     public void setWebRoot(String root) {
 
@@ -1060,9 +1223,7 @@ public class Server implements HsqlSocketRequestHandler, Notified {
     public void setProperties(HsqlProperties props)
     throws IOException, ServerAcl.AclFormatException {
 
-        if (!isNotRunning()) {
-            checkRunning(false);
-        }
+        checkRunning(false);
 
         if (props != null) {
             props.validate();
@@ -1092,7 +1253,7 @@ public class Server implements HsqlSocketRequestHandler, Notified {
             serverProperties.getProperty(ServerProperties.sc_key_acl);
 
         if (aclFilepath != null) {
-            acl = new ServerAcl(new File(aclFilepath));
+            acl = new ServerAcl(new File(aclFilepath));;
 
             if (logWriter != null && !isSilent) {
                 acl.setPrintWriter(logWriter);
@@ -1110,6 +1271,10 @@ public class Server implements HsqlSocketRequestHandler, Notified {
      * change notification.
      *
      * @return the server state noted at entry to this method
+     *
+     * @jmx.managed-operation
+     *  impact="ACTION_INFO"
+     *  description="Invokes asynchronous startup sequence; returns previous state"
      */
     public int start() {
 
@@ -1154,6 +1319,10 @@ public class Server implements HsqlSocketRequestHandler, Notified {
      * setState method to provide state change notification.
      *
      * @return the server state noted at entry to this method
+     *
+     * @jmx.managed-operation
+     *  impact="ACTION_INFO"
+     *  description="Invokes asynchronous shutdown sequence; returns previous state"
      */
     public int stop() {
 
@@ -1174,11 +1343,10 @@ public class Server implements HsqlSocketRequestHandler, Notified {
     }
 
     /**
-     * Retrieves whether the specified socket should be allowed to make a
-     * connection.
+     * Retrieves whether the specified socket should be allowed
+     * to make a connection.
      *
      * @param socket the socket to test.
-     * @return boolean
      */
     protected boolean allowConnection(Socket socket) {
 
@@ -1224,11 +1392,16 @@ public class Server implements HsqlSocketRequestHandler, Notified {
      * This is called from org.hsqldb.DatabaseManager when a database is
      * shutdown. This shuts the server down if it is the last database
      *
-     * @param id database id
+     * @param action a code indicating what has happend
      */
-    public final void notify(int id) {
+    public final void notify(int action, int id) {
 
-        printWithThread("notify( database shutdown," + id + ") entered");
+        printWithThread("notifiy(" + action + "," + id + ") entered");
+
+        if (action != ServerConstants.SC_DATABASE_SHUTDOWN) {
+            return;
+        }
+
         releaseDatabase(id);
 
         boolean shutdown = true;
@@ -1245,13 +1418,13 @@ public class Server implements HsqlSocketRequestHandler, Notified {
     }
 
     /**
-     * This releases the resources used for a database. Is called with id 0
-     * multiple times for non-existent databases
-     *
-     * @param id int
+     * This releases the resources used for a database.
+     * Is called with id 0 multiple times for non-existent databases
      */
     final synchronized void releaseDatabase(int id) {
 
+        Iterator           it;
+        boolean            found = false;
         ServerConnection[] array;
 
         printWithThread("releaseDatabase(" + id + ") entered");
@@ -1438,6 +1611,16 @@ public class Server implements HsqlSocketRequestHandler, Notified {
             case ResultConstants.EXECUTE : {
                 sb.append("SQLCLI:SQLEXECUTE:");
                 sb.append(r.getStatementID());
+
+/**
+ * @todo 1.9.0 - fredt - fix this without appendStringValueOf - use type to convert to string
+ */
+/*
+                if (r.getSize() == 1) {
+                    sb.append('\n');
+                    StringUtil.appendStringValueOf(r.getParameterData(), sb, true);
+                }
+*/
                 break;
             }
             case ResultConstants.BATCHEXECUTE :
@@ -1554,9 +1737,6 @@ public class Server implements HsqlSocketRequestHandler, Notified {
 
     /**
      * return database ID
-     *
-     * @param aliasPath String
-     * @return int
      */
     synchronized final int getDBIndex(String aliasPath) {
 
@@ -1590,10 +1770,6 @@ public class Server implements HsqlSocketRequestHandler, Notified {
 
     /**
      * Open and return database index
-     *
-     * @param alias String
-     * @param datapath String
-     * @return int
      */
     final int openDatabase(String alias, String datapath) {
 
@@ -1672,12 +1848,11 @@ public class Server implements HsqlSocketRequestHandler, Notified {
     }
 
     /**
-     * Opens this server's database instances. This method returns true If at
-     * least one database goes online, otherwise it returns false. If opening
-     * any of the databases is attempted and an exception is thrown, the server
-     * error is set to this exception.
+     * Opens this server's database instances. This method returns true If
+     * at least one database goes online, otherwise it returns false.
      *
-     * @return boolean
+     * If openning any of the databases is attempted and an exception is
+     * thrown, the server error is set to this exception.
      */
     final boolean openDatabases() {
 
@@ -1721,7 +1896,7 @@ public class Server implements HsqlSocketRequestHandler, Notified {
 
             String msg = "Database [index=" + i + ", id=" + id + ", db="
                          + dbType[i] + dbPath[i] + ", alias=" + dbAlias[i]
-                         + "] opened successfully";
+                         + "] opened sucessfully";
 
             print(sw.elapsedTimeToMessage(msg));
         }
@@ -1800,8 +1975,6 @@ public class Server implements HsqlSocketRequestHandler, Notified {
     /**
      * Returns a map of n values from server.dbname.n values to database names
      * from the properties object.
-     *
-     * @return IntKeyHashMap
      */
     private IntKeyHashMap getDBNameArray() {
 
@@ -1822,7 +1995,7 @@ public class Server implements HsqlSocketRequestHandler, Notified {
             try {
                 dbNumber = Integer.parseInt(key.substring(prefixLen));
             } catch (NumberFormatException e1) {
-                printWithThread("malformed database enumerator: " + key);
+                printWithThread("maformed database enumerator: " + key);
 
                 continue;
             }
@@ -1928,6 +2101,7 @@ public class Server implements HsqlSocketRequestHandler, Notified {
 
         String s = getProductName() + " " + getProductVersion()
                    + " is online on port " + this.getPort();
+        ;
 
         printWithTimestamp(s);
         printResource("online.help");
@@ -2222,8 +2396,6 @@ public class Server implements HsqlSocketRequestHandler, Notified {
 
     /**
      * Used by Connection object
-     *
-     * @param dbIndex int
      */
     synchronized void setActionSequence(int dbIndex) {
         dbActionSequence[dbIndex] = actionSequence++;
@@ -2231,8 +2403,6 @@ public class Server implements HsqlSocketRequestHandler, Notified {
 
     /**
      * Feature is turned off by, pending a property to allow it.
-     *
-     * @return int
      */
     protected int closeOldestDatabase() {
 
@@ -2294,7 +2464,7 @@ public class Server implements HsqlSocketRequestHandler, Notified {
      */
     public static void main(String[] args) {
 
-        HsqlProperties argProps;
+        HsqlProperties argProps = null;
 
         argProps = HsqlProperties.argArrayToProps(args,
                 ServerProperties.sc_key_prefix);

@@ -1,4 +1,4 @@
-/* Copyright (c) 2001-2017, The HSQL Development Group
+/* Copyright (c) 2001-2011, The HSQL Development Group
  * All rights reserved.
  *
  * Redistribution and use in source and binary forms, with or without
@@ -33,7 +33,6 @@ package org.hsqldb.lib;
 
 import java.io.File;
 import java.io.FileInputStream;
-import java.io.InputStream;
 import java.io.IOException;
 import java.lang.reflect.Method;
 import java.util.Enumeration;
@@ -46,48 +45,45 @@ import java.util.logging.ConsoleHandler;
 import java.util.logging.Level;
 import java.util.logging.LogManager;
 import java.util.logging.Logger;
-import java.lang.reflect.InvocationTargetException;
 
 /**
  * A logging framework wrapper that supports java.util.logging and log4j.
- * <P>
+ * <P/>
  * Logger hierarchies are stored at the Class level.
  * Log4j will be used if the Log4j system (not necessarily config files) are
  * found in the runtime classpath.
  * Otherwise, java.util.logging will be used.
- * <P>
+ * <P/>
  * This is pretty safe because for use cases where multiple hierarchies
  * are desired, classloader hierarchies will effectively isolate multiple
  * class-level Logger hierarchies.
- * <P>
+ * <P/>
  * Sad as it is, the java.util.logging facility lacks the most basic
  * developer-side and configuration-side capabilities.
  * Besides having a non-scalable discovery system, the designers didn't
  * comprehend the need for a level between WARNING and SEVERE!
  * Since we don't want to require log4j in Classpath, we have to live
  * with these constraints.
- * <P>
+ * <P/>
  * As with all the popular logging frameworks, if you want to capture a
  * stack trace, you must use the two-parameters logging methods.
  * I.e., you must also pass a String, or only toString() from your
  * throwable will be captured.
- * <P>
- * Usage example:
- *
- * <pre><CODE>
+ * <P/>
+ * Usage example:<CODE><PRE>
  * private static FrameworkLogger logger =
  *        FrameworkLogger.getLog(SqlTool.class);
  * ...
  *   logger.finer("Doing something log-worthy");
- * </CODE></pre>
+ * </PRE> </CODE>
  *
- * <p>
+ * <p/>
  * The system level property <code>hsqldb.reconfig_logging=false</code> is
  * required to avoid configuration of java.util.logging. Otherwise
- * configuration takes place.
+ * configuration takes place.<p/>
  *
  * @author Blaine Simpson (blaine dot simpson at admc dot com)
- * @version 2.3.3
+ * @version 2.2.8
  * @since 1.9.0
  */
 public class FrameworkLogger {
@@ -105,13 +101,12 @@ public class FrameworkLogger {
      */
 
     /**
-     * Utility method for integrators. Returns a string representation of the
-     * active Logger instance keys.
-     *
-     * <p> Not named similar to 'toString' to avoid ambiguity with instance
-     * method toString. </p>
-     *
-     * @return String
+     * Utility method for integrators.
+     * Returns a string representation of the active Logger instance keys.
+     * <p>
+     * Not named similar to 'toString' to avoid ambiguity with instance method
+     * toString.
+     * </p>
      */
     public static synchronized String report() {
 
@@ -120,11 +115,10 @@ public class FrameworkLogger {
             loggerInstances.keySet()).toString();
     }
 
-    static private Map     loggerInstances  = new HashMap();
-    static private Map     jdkToLog4jLevels = new HashMap();
-    static private Method  log4jGetLogger;
-    static private Method  log4jLogMethod;
-    static private boolean callerFqcnAvailable = false;
+    static private Map    loggerInstances  = new HashMap();
+    static private Map    jdkToLog4jLevels = new HashMap();
+    static private Method log4jGetLogger;
+    static private Method log4jLogMethod;
     private Object        log4jLogger;
     private Logger        jdkLogger;
 
@@ -134,20 +128,20 @@ public class FrameworkLogger {
     static {
         try {
             reconfigure();
-        } catch (SecurityException e) {}
+        } catch (java.lang.SecurityException e) {}
     }
 
     /**
      * Frees Logger(s), if any, with the specified category, or that begins with
      * the specified prefix + dot.
-     *
-     * <p> Note that as of today, this depends on the underlying logging
-     * framework implementation to release the underlying Logger instances. JUL
-     * in Sun's JVM uses weak references, so that should be fine. Log4j as of
-     * today seems to use strong references (and no API hooks to free anything),
-     * so this method will probably have little benefit for Log4j.
-     *
-     * @param prefixToZap String
+     * <p>
+     * Note that as of today, this depends on the underlying logging framework
+     * implementation to release the underlying Logger instances.
+     * JUL in Sun's JVM uses weak references, so that should be fine.
+     * Log4j as of today seems to use strong references (and no API hooks to
+     * free anything), so this method will probably have little benefit for
+     * Log4j.
+     * </p>
      */
     public static synchronized void clearLoggers(String prefixToZap) {
 
@@ -167,148 +161,81 @@ public class FrameworkLogger {
         loggerInstances.keySet().removeAll(targetKeys);
     }
 
-    private static synchronized void
-            populateJdkToLog4jLevels(String classString)
-            throws ClassNotFoundException, IllegalAccessException,
-            NoSuchMethodException, InvocationTargetException {
-        Method log4jToLevel = Class.forName(classString).getMethod(
-            "toLevel", new Class[]{ String.class });
-
-        jdkToLog4jLevels.put(Level.ALL,
-                             log4jToLevel.invoke(null,
-                                 new Object[]{ "ALL" }));
-        jdkToLog4jLevels.put(Level.FINER,
-                             log4jToLevel.invoke(null,
-                                 new Object[]{ "DEBUG" }));
-        jdkToLog4jLevels.put(Level.WARNING,
-                             log4jToLevel.invoke(null,
-                                 new Object[]{ "ERROR" }));
-        jdkToLog4jLevels.put(Level.SEVERE,
-                             log4jToLevel.invoke(null,
-                                 new Object[]{ "FATAL" }));
-        jdkToLog4jLevels.put(Level.INFO,
-                             log4jToLevel.invoke(null,
-                                 new Object[]{ "INFO" }));
-        jdkToLog4jLevels.put(Level.OFF,
-                             log4jToLevel.invoke(null,
-                                 new Object[]{ "OFF" }));
-        jdkToLog4jLevels.put(Level.FINEST,
-                             log4jToLevel.invoke(null,
-                                 new Object[]{ "TRACE" }));
-        jdkToLog4jLevels.put(Level.WARNING,
-                             log4jToLevel.invoke(null,
-                                 new Object[]{ "WARN" }));
-    }
-
     static void reconfigure() {
 
         noopMode = false;
 
         Class log4jLoggerClass = null;
-        Class log4jManagerClass = null;
 
         loggerInstances.clear();
-        jdkToLog4jLevels.clear();
 
-        log4jGetLogger   = null;
-        log4jLogMethod   = null;
-        callerFqcnAvailable = false;
-
-        // Precedence:
-        //   1) Use log4j v2 if available and class initialization succeeds
-        //   2) Use log4j v1 if available and class initialization succeeds
-        //   3) JUL
-
-        try {
-            // log4j v2 available?
-            log4jLoggerClass = Class.forName(
-                    "org.apache.logging.log4j.Logger");
-            log4jManagerClass = Class.forName(
-                    "org.apache.logging.log4j.LogManager");
-        } catch (Exception e) {
-
-            // The class will only load successfully if Log4j v2 thinks it is
-            // in usable state.
-            // Intentionally empty.
-        }
-
-        // Attempt to configure log4j v2
-        if (log4jLoggerClass != null) {
-            try {
-                populateJdkToLog4jLevels("org.apache.logging.log4j.Level");
-
-                log4jLogMethod = log4jLoggerClass.getMethod("log",
-                        new Class[] {
-                    Class.forName("org.apache.logging.log4j.Level"),
-                    Object.class, Throwable.class
-                });
-                log4jGetLogger = log4jManagerClass.getMethod("getLogger",
-                        new Class[]{ String.class });
-                // This last object is what we toggle on to generate either
-                // Log4j or Jdk Logger objects (to wrap).
-
-                return;    // Success for Log4j v2
-            } catch (Exception e) {
-                // This is an unexpected  problem, because our Log4j try block will
-                // only be attempted if Log4j itself initialized (even if it
-                // successfully initialized with warnings due to bad config).
-                try {
-                    System.err.println(
-                        "<clinit> failure "
-                        + "instantiating configured Log4j v2 system: " + e);
-
-                    // It's possible we don't have write access to System.err.
-                } catch (Throwable t) {
-
-                    // Intentionally empty.  We tried our best to report problem,
-                    // but don't want to throw and prevent JUL from working.
-                }
-            }
-        }
-
-        // Reset
         log4jLoggerClass = null;
-        log4jManagerClass = null;
-        log4jLogMethod   = null;
         log4jGetLogger   = null;
-        jdkToLog4jLevels.clear();
+        log4jLogMethod   = null;
 
         try {
-            // log4j v1 available?
             log4jLoggerClass = Class.forName("org.apache.log4j.Logger");
-            log4jManagerClass = log4jLoggerClass;
         } catch (Exception e) {
 
-            // The class will only load successfully if Log4j v1 thinks it is
+            // The class will only load successfully if Log4j thinks it is
             // in usable state.
             // Intentionally empty.
         }
 
-        // Attempt to configure log4j v1
+        // Try log4j first so we can fall back to JUL if anything goes wrong.
         if (log4jLoggerClass != null) {
             try {
-                populateJdkToLog4jLevels("org.apache.log4j.Level");
+                if (jdkToLog4jLevels.size() < 1) {
+                    Method log4jToLevel = Class.forName(
+                        "org.apache.log4j.Level").getMethod(
+                        "toLevel", new Class[]{ String.class });
+
+                    jdkToLog4jLevels.put(Level.ALL,
+                                         log4jToLevel.invoke(null,
+                                             new Object[]{ "ALL" }));
+                    jdkToLog4jLevels.put(Level.FINER,
+                                         log4jToLevel.invoke(null,
+                                             new Object[]{ "DEBUG" }));
+                    jdkToLog4jLevels.put(Level.WARNING,
+                                         log4jToLevel.invoke(null,
+                                             new Object[]{ "ERROR" }));
+                    jdkToLog4jLevels.put(Level.SEVERE,
+                                         log4jToLevel.invoke(null,
+                                             new Object[]{ "FATAL" }));
+                    jdkToLog4jLevels.put(Level.INFO,
+                                         log4jToLevel.invoke(null,
+                                             new Object[]{ "INFO" }));
+                    jdkToLog4jLevels.put(Level.OFF,
+                                         log4jToLevel.invoke(null,
+                                             new Object[]{ "OFF" }));
+                    jdkToLog4jLevels.put(Level.FINEST,
+                                         log4jToLevel.invoke(null,
+                                             new Object[]{ "TRACE" }));
+                    jdkToLog4jLevels.put(Level.WARNING,
+                                         log4jToLevel.invoke(null,
+                                             new Object[]{ "WARN" }));
+                }
 
                 log4jLogMethod = log4jLoggerClass.getMethod("log",
                         new Class[] {
                     String.class, Class.forName("org.apache.log4j.Priority"),
                     Object.class, Throwable.class
                 });
-                log4jGetLogger = log4jManagerClass.getMethod("getLogger",
+                log4jGetLogger = log4jLoggerClass.getMethod("getLogger",
                         new Class[]{ String.class });
+
                 // This last object is what we toggle on to generate either
                 // Log4j or Jdk Logger objects (to wrap).
-                callerFqcnAvailable = true;
-
-                return;    // Success for Log4j v1
+                return;    // Success for Log4j
             } catch (Exception e) {
+
                 // This is an unexpected  problem, because our Log4j try block will
                 // only be attempted if Log4j itself initialized (even if it
                 // successfully initialized with warnings due to bad config).
                 try {
                     System.err.println(
                         "<clinit> failure "
-                        + "instantiating configured Log4j v1 system: " + e);
+                        + "instantiating configured Log4j system: " + e);
 
                     // It's possible we don't have write access to System.err.
                 } catch (Throwable t) {
@@ -319,21 +246,15 @@ public class FrameworkLogger {
             }
         }
 
-        // Reset
         log4jLoggerClass = null;
-        log4jManagerClass = null;
         log4jLogMethod   = null;
         log4jGetLogger   = null;
-        callerFqcnAvailable = false;
-        jdkToLog4jLevels.clear();
 
         String propVal = System.getProperty("hsqldb.reconfig_logging");
 
         if (propVal != null && propVal.equalsIgnoreCase("false")) {
             return;
         }
-
-        InputStream istream = null;
 
         try {
             LogManager lm = LogManager.getLogManager();
@@ -348,10 +269,8 @@ public class FrameworkLogger {
                 consoleHandler.setFormatter(
                     new BasicTextJdkLogFormatter(false));
                 consoleHandler.setLevel(Level.INFO);
-
-                istream = FrameworkLogger.class.getResourceAsStream(path);
-
-                lm.readConfiguration(istream);
+                lm.readConfiguration(
+                    FrameworkLogger.class.getResourceAsStream(path));
 
                 Logger cmdlineLogger = Logger.getLogger("org.hsqldb.cmdline");
 
@@ -377,22 +296,11 @@ public class FrameworkLogger {
                 "<clinit> failure initializing JDK logging system.  "
                 + "Continuing without Application logging.");
             e.printStackTrace();
-        } finally {
-            if (istream != null) {
-                try {
-                    istream.close();
-                } catch (IOException ioe) {
-                    System.err.println("Failed to close logging input stream: "
-                                       + ioe);
-                }
-            }
         }
     }
 
     /**
      * User may not use the constructor.
-     *
-     * @param s String
      */
     private FrameworkLogger(String s) {
 
@@ -416,27 +324,23 @@ public class FrameworkLogger {
     }
 
     /**
-     * User's entry-point into this logging system. <P> You normally want to
-     * work with static (class-level) pointers to logger instances, for
-     * performance efficiency. See the class-level JavaDoc for a usage example.
+     * User's entry-point into this logging system.
+     * <P/>
+     * You normally want to work with static (class-level) pointers to
+     * logger instances, for performance efficiency.
+     * See the class-level JavaDoc for a usage example.
      *
      * @see FrameworkLogger
-     * @param c Class
-     * @return FrameworkLogger
      */
     public static FrameworkLogger getLog(Class c) {
         return getLog(c.getName());
     }
 
     /**
-     * This method just defers to the getLog(Class) method unless default (no
-     * local configuration) JDK logging is being used; In that case, this method
-     * assures that the returned logger has an associated FileHander using the
-     * supplied String identifier.
-     *
-     * @param c Class
-     * @param contextId String
-     * @return FrameworkLogger
+     * This method just defers to the getLog(Class) method unless default
+     * (no local configuration) JDK logging is being used;
+     * In that case, this method assures that the returned logger has an
+     * associated FileHander using the supplied String identifier.
      */
     public static FrameworkLogger getLog(Class c, String contextId) {
         return (contextId == null) ? getLog(c)
@@ -444,14 +348,10 @@ public class FrameworkLogger {
     }
 
     /**
-     * This method just defers to the getLog(String) method unless default (no
-     * local configuration) JDK logging is being used; In that case, this method
-     * assures that the returned logger has an associated FileHander using the
-     * supplied String identifier.
-     *
-     * @param baseId String
-     * @param contextId String
-     * @return FrameworkLogger
+     * This method just defers to the getLog(String) method unless default
+     * (no local configuration) JDK logging is being used;
+     * In that case, this method assures that the returned logger has an
+     * associated FileHander using the supplied String identifier.
      */
     public static FrameworkLogger getLog(String baseId, String contextId) {
         return (contextId == null) ? getLog(baseId)
@@ -459,13 +359,11 @@ public class FrameworkLogger {
     }
 
     /**
-     * Alternative entry-point into this logging system, for cases where you
-     * want to share a single logger instance among multiple classes, or you
-     * want to use multiple logger instances from a single class.
+     * Alternative entry-point into this logging system, for cases where
+     * you want to share a single logger instance among multiple classes,
+     * or you want to use multiple logger instances from a single class.
      *
      * @see #getLog(Class)
-     * @param s String
-     * @return FrameworkLogger
      */
     public static synchronized FrameworkLogger getLog(String s) {
 
@@ -492,15 +390,11 @@ public class FrameworkLogger {
     }
 
     /**
-     * The "priv" prefix is historical. This is for special usage when you need
-     * to modify the reported call stack. If you don't know that you want to do
-     * this, then you should not use this method.
-     *
-     * @param level Level
-     * @param message String
-     * @param t Throwable
-     * @param revertMethods int
-     * @param skipClass Class
+     * The "priv" prefix is historical.
+     * This is for special usage when you need to modify the reported call
+     * stack.
+     * If you don't know that you want to do this, then you should not use
+     * this method.
      */
     public void privlog(Level level, String message, Throwable t,
                         int revertMethods, Class skipClass) {
@@ -510,14 +404,9 @@ public class FrameworkLogger {
         }
 
         if (log4jLogger == null) {
-            StackTraceElement[] elements = new Throwable().getStackTrace();
-            String            c          = "";
-            String            m          = "";
-
-            if (elements.length > revertMethods) {
-                c = elements[revertMethods].getClassName();
-                m = elements[revertMethods].getMethodName();
-            }
+            StackTraceElement elements[] = new Throwable().getStackTrace();
+            String            c = elements[revertMethods].getClassName();
+            String            m = elements[revertMethods].getMethodName();
 
             if (t == null) {
                 jdkLogger.logp(level, c, m, message);
@@ -526,13 +415,10 @@ public class FrameworkLogger {
             }
         } else {
             try {
-                log4jLogMethod.invoke(log4jLogger, callerFqcnAvailable
-                         ? new Object[] {
-                            skipClass.getName(), jdkToLog4jLevels.get(level),
-                            message, t}
-                         : new Object[] {
-                            jdkToLog4jLevels.get(level), message, t}
-                );
+                log4jLogMethod.invoke(log4jLogger, new Object[] {
+                    skipClass.getName(), jdkToLog4jLevels.get(level), message,
+                    t
+                });
             } catch (Exception e) {
                 throw new RuntimeException(
                     "Logging failed when attempting to log: " + message, e);
@@ -557,13 +443,10 @@ public class FrameworkLogger {
             jdkLogger.logp(level, c, m, message);
         } else {
             try {
-                log4jLogMethod.invoke(log4jLogger, callerFqcnAvailable
-                        ? new Object[] {
-                           FrameworkLogger.class.getName(),
-                           jdkToLog4jLevels.get(level), message, null}
-                        : new Object[] {
-                           jdkToLog4jLevels.get(level), message, null}
-                );
+                log4jLogMethod.invoke(log4jLogger, new Object[] {
+                    FrameworkLogger.class.getName(),
+                    jdkToLog4jLevels.get(level), message, null
+                });
 
                 // Test where SqlFile correct here.
             } catch (Exception e) {
@@ -639,7 +522,6 @@ public class FrameworkLogger {
     /**
      * Just like FrameworkLogger.finer(String), but also logs a stack trace.
      *
-     * @param message String
      * @param t Throwable whose stack trace will be logged.
      * @see #finer(String)
      */
@@ -650,7 +532,6 @@ public class FrameworkLogger {
     /**
      * Just like FrameworkLogger.warning(String), but also logs a stack trace.
      *
-     * @param message String
      * @param t Throwable whose stack trace will be logged.
      * @see #warning(String)
      */
@@ -661,7 +542,6 @@ public class FrameworkLogger {
     /**
      * Just like FrameworkLogger.severe(String), but also logs a stack trace.
      *
-     * @param message String
      * @param t Throwable whose stack trace will be logged.
      * @see #severe(String)
      */
@@ -672,7 +552,6 @@ public class FrameworkLogger {
     /**
      * Just like FrameworkLogger.info(String), but also logs a stack trace.
      *
-     * @param message String
      * @param t Throwable whose stack trace will be logged.
      * @see #info(String)
      */
@@ -683,7 +562,6 @@ public class FrameworkLogger {
     /**
      * Just like FrameworkLogger.finest(String), but also logs a stack trace.
      *
-     * @param message String
      * @param t Throwable whose stack trace will be logged.
      * @see #finest(String)
      */
@@ -694,7 +572,6 @@ public class FrameworkLogger {
     /**
      * Just like FrameworkLogger.error(String), but also logs a stack trace.
      *
-     * @param message String
      * @param t Throwable whose stack trace will be logged.
      * @see #error(String)
      */
@@ -703,11 +580,10 @@ public class FrameworkLogger {
     }
 
     /**
-     * Whether this JVM is configured with java.util.logging defaults. If the
-     * JRE-provided config file is not in the expected place, then we return
-     * false.
+     * Whether this JVM is configured with java.util.logging defaults.
      *
-     * @return boolean
+     * If the JRE-provided config file is not in the expected place, then
+     * we return false.
      */
     public static boolean isDefaultJdkConfig() {
 

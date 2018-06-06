@@ -1,4 +1,4 @@
-/* Copyright (c) 2001-2017, The HSQL Development Group
+/* Copyright (c) 2001-2011, The HSQL Development Group
  * All rights reserved.
  *
  * Redistribution and use in source and binary forms, with or without
@@ -36,8 +36,6 @@ import java.io.IOException;
 import java.math.BigDecimal;
 import java.math.BigInteger;
 
-import org.hsqldb.error.Error;
-import org.hsqldb.error.ErrorCode;
 import org.hsqldb.lib.StringConverter;
 import org.hsqldb.map.ValuePool;
 import org.hsqldb.types.BinaryData;
@@ -61,21 +59,13 @@ import org.hsqldb.types.Types;
  *
  * @author Bob Preston (sqlbob@users dot sourceforge.net)
  * @author Fred Toussi (fredt@users dot sourceforge.net)
- * @version 2.3.5
+ * @version 2.2.9
  * @since 1.7.0
  */
 public class RowInputBinary extends RowInputBase implements RowInputInterface {
 
     public boolean          ignoreDataErrors;
     private RowOutputBinary out;
-
-    public RowInputBinary() {
-        this(64);
-    }
-
-    public RowInputBinary(int size) {
-        super(size);
-    }
 
     public RowInputBinary(byte[] buf) {
         super(buf);
@@ -92,130 +82,50 @@ public class RowInputBinary extends RowInputBase implements RowInputInterface {
         this.out = out;
     }
 
-    public void readFully(byte[] b) {
-
-        try {
-            super.readFully(b);
-        } catch (IOException e) {
-            throw Error.error(e, ErrorCode.GENERAL_IO_ERROR,
-                              "RowInputBinary" + ' ' + getFilePosition());
-        }
-    }
-
-    public long readLong() {
-
-        try {
-            return super.readLong();
-        } catch (IOException e) {
-            throw Error.error(e, ErrorCode.GENERAL_IO_ERROR,
-                              "RowInputBinary" + ' ' + getFilePosition());
-        }
-    }
-
-    public int readInt() {
-
-        try {
-            return super.readInt();
-        } catch (IOException e) {
-            throw Error.error(e, ErrorCode.GENERAL_IO_ERROR,
-                              "RowInputBinary" + ' ' + getFilePosition());
-        }
-    }
-
-    public short readShort() {
-
-        try {
-            return super.readShort();
-        } catch (IOException e) {
-            throw Error.error(e, ErrorCode.GENERAL_IO_ERROR,
-                              "RowInputBinary" + ' ' + getFilePosition());
-        }
-    }
-
-    public char readChar() {
-
-        try {
-            return super.readChar();
-        } catch (IOException e) {
-            throw Error.error(e, ErrorCode.GENERAL_IO_ERROR,
-                              "RowInputBinary" + ' ' + getFilePosition());
-        }
-    }
-
-    public byte readByte() {
-
-        try {
-            return super.readByte();
-        } catch (IOException e) {
-            throw Error.error(e, ErrorCode.GENERAL_IO_ERROR,
-                              "RowInputBinary" + ' ' + getFilePosition());
-        }
-    }
-
-    public boolean readBoolean() {
-
-        try {
-            return super.readBoolean();
-        } catch (IOException e) {
-            throw Error.error(e, ErrorCode.GENERAL_IO_ERROR,
-                              "RowInputBinary" + ' ' + getFilePosition());
-        }
-    }
-
-    public int readType() {
+    public int readType() throws IOException {
         return readShort();
     }
 
-    public String readString() {
+    public String readString() throws IOException {
 
-        try {
-            int length = readInt();
+        int    length = readInt();
+        String s      = StringConverter.readUTF(buffer, pos, length);
 
-            if (length < 0) {
-                throw Error.error(ErrorCode.GENERAL_IO_ERROR,
-                                  "RowInputBinary - negative length");
-            }
+        s   = ValuePool.getString(s);
+        pos += length;
 
-            String s = StringConverter.readUTF(buffer, pos, length);
-
-            s   = ValuePool.getString(s);
-            pos += length;
-
-            return s;
-        } catch (IOException e) {
-            throw Error.error(e, ErrorCode.GENERAL_IO_ERROR,
-                              "RowInputBinary" + ' ' + getFilePosition());
-        }
+        return s;
     }
 
-    public boolean readNull() {
+    public boolean readNull() throws IOException {
 
         int b = readByte();
 
-        return b == 0;
+        return b == 0 ? true
+                      : false;
     }
 
-    protected String readChar(Type type) {
+    protected String readChar(Type type) throws IOException {
         return readString();
     }
 
-    protected Integer readSmallint() {
+    protected Integer readSmallint() throws IOException {
         return ValuePool.getInt(readShort());
     }
 
-    protected Integer readInteger() {
+    protected Integer readInteger() throws IOException {
         return ValuePool.getInt(readInt());
     }
 
-    protected Long readBigint() {
+    protected Long readBigint() throws IOException {
         return ValuePool.getLong(readLong());
     }
 
-    protected Double readReal() {
+    protected Double readReal() throws IOException {
         return ValuePool.getDouble(readLong());
     }
 
-    protected BigDecimal readDecimal(Type type) {
+    protected BigDecimal readDecimal(Type type) throws IOException {
 
         byte[]     bytes  = readByteArray();
         int        scale  = readInt();
@@ -224,12 +134,12 @@ public class RowInputBinary extends RowInputBase implements RowInputInterface {
         return ValuePool.getBigDecimal(new BigDecimal(bigint, scale));
     }
 
-    protected Boolean readBoole() {
+    protected Boolean readBoole() throws IOException {
         return readBoolean() ? Boolean.TRUE
                              : Boolean.FALSE;
     }
 
-    protected TimeData readTime(Type type) {
+    protected TimeData readTime(Type type) throws IOException {
 
         if (type.typeCode == Types.SQL_TIME) {
             return new TimeData(readInt(), readInt(), 0);
@@ -238,14 +148,14 @@ public class RowInputBinary extends RowInputBase implements RowInputInterface {
         }
     }
 
-    protected TimestampData readDate(Type type) {
+    protected TimestampData readDate(Type type) throws IOException {
 
         long date = readLong();
 
         return new TimestampData(date);
     }
 
-    protected TimestampData readTimestamp(Type type) {
+    protected TimestampData readTimestamp(Type type) throws IOException {
 
         if (type.typeCode == Types.SQL_TIMESTAMP) {
             return new TimestampData(readLong(), readInt());
@@ -254,14 +164,16 @@ public class RowInputBinary extends RowInputBase implements RowInputInterface {
         }
     }
 
-    protected IntervalMonthData readYearMonthInterval(Type type) {
+    protected IntervalMonthData readYearMonthInterval(Type type)
+    throws IOException {
 
         long months = readLong();
 
         return new IntervalMonthData(months, (IntervalType) type);
     }
 
-    protected IntervalSecondData readDaySecondInterval(Type type) {
+    protected IntervalSecondData readDaySecondInterval(Type type)
+    throws IOException {
 
         long seconds = readLong();
         int  nanos   = readInt();
@@ -269,11 +181,11 @@ public class RowInputBinary extends RowInputBase implements RowInputInterface {
         return new IntervalSecondData(seconds, nanos, (IntervalType) type);
     }
 
-    protected Object readOther() {
+    protected Object readOther() throws IOException {
         return new JavaObjectData(readByteArray());
     }
 
-    protected BinaryData readBit() {
+    protected BinaryData readBit() throws IOException {
 
         int    length = readInt();
         byte[] b      = new byte[(length + 7) / 8];
@@ -283,29 +195,25 @@ public class RowInputBinary extends RowInputBase implements RowInputInterface {
         return BinaryData.getBitData(b, length);
     }
 
-    protected BinaryData readUUID() {
+    protected BinaryData readBinary() throws IOException {
         return new BinaryData(readByteArray(), false);
     }
 
-    protected BinaryData readBinary() {
-        return new BinaryData(readByteArray(), false);
-    }
+    protected ClobData readClob() throws IOException {
 
-    protected ClobData readClob() {
-
-        long id = readLong();
+        long id = super.readLong();
 
         return new ClobDataID(id);
     }
 
-    protected BlobData readBlob() {
+    protected BlobData readBlob() throws IOException {
 
-        long id = readLong();
+        long id = super.readLong();
 
         return new BlobDataID(id);
     }
 
-    protected Object[] readArray(Type type) {
+    protected Object[] readArray(Type type) throws IOException {
 
         type = type.collectionBaseType();
 
@@ -336,7 +244,7 @@ public class RowInputBinary extends RowInputBase implements RowInputInterface {
         return data;
     }
 
-    public Object[] readData(Type[] colTypes) {
+    public Object[] readData(Type[] colTypes) throws IOException {
 
         if (ignoreDataErrors) {
             return new Object[colTypes.length];
@@ -346,19 +254,9 @@ public class RowInputBinary extends RowInputBase implements RowInputInterface {
     }
 
     // helper methods
-    public byte[] readByteArray() {
+    public byte[] readByteArray() throws IOException {
 
-        int    length = readInt();
-        byte[] b      = new byte[length];
-
-        readFully(b);
-
-        return b;
-    }
-
-    public byte[] readByteArray16() {
-
-        byte[] b      = new byte[16];
+        byte[] b = new byte[readInt()];
 
         readFully(b);
 
@@ -367,8 +265,7 @@ public class RowInputBinary extends RowInputBase implements RowInputInterface {
 
     public char[] readCharArray() throws IOException {
 
-        int    length = readInt();
-        char[] c      = new char[length];
+        char[] c = new char[readInt()];
 
         if (count - pos < c.length) {
             pos = count;

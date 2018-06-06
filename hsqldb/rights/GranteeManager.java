@@ -1,4 +1,4 @@
-/* Copyright (c) 2001-2017, The HSQL Development Group
+/* Copyright (c) 2001-2011, The HSQL Development Group
  * All rights reserved.
  *
  * Redistribution and use in source and binary forms, with or without
@@ -31,17 +31,12 @@
 
 package org.hsqldb.rights;
 
-import java.io.UnsupportedEncodingException;
-import java.security.MessageDigest;
-import java.security.NoSuchAlgorithmException;
-
 import org.hsqldb.Database;
 import org.hsqldb.HsqlNameManager;
 import org.hsqldb.HsqlNameManager.HsqlName;
 import org.hsqldb.Routine;
 import org.hsqldb.RoutineSchema;
 import org.hsqldb.SchemaObject;
-import org.hsqldb.Session;
 import org.hsqldb.SqlInvariants;
 import org.hsqldb.Tokens;
 import org.hsqldb.error.Error;
@@ -53,7 +48,6 @@ import org.hsqldb.lib.IntValueHashMap;
 import org.hsqldb.lib.Iterator;
 import org.hsqldb.lib.OrderedHashSet;
 import org.hsqldb.lib.Set;
-import org.hsqldb.lib.StringConverter;
 
 /**
  * Contains a set of Grantee objects, and supports operations for creating,
@@ -61,7 +55,7 @@ import org.hsqldb.lib.StringConverter;
  * Administrative privileges.
  *
  *
- * @author Campbell Burnet (campbell-burnet@users dot sourceforge.net)
+ * @author Campbell Boucher-Burnet (boucherb@users dot sourceforge.net)
  * @author Fred Toussi (fredt@users dot sourceforge.net)
  * @author Blaine Simpson (blaine dot simpson at admc dot com)
  *
@@ -110,16 +104,6 @@ public class GranteeManager {
      * schema authorizations.
      */
     Database database;
-
-    /**
-     * MessageDigest instance for database
-     */
-    private MessageDigest digester;
-
-    /**
-     * MessageDigest algorithm
-     */
-    private String digestAlgo;
 
     /**
      * The PUBLIC role.
@@ -222,16 +206,14 @@ public class GranteeManager {
      *  {@link HsqlName#equals equals} methods based on pure object
      *  identity, rather than on attribute values. <p>
      */
-    public void grant(Session session, OrderedHashSet granteeList,
-                      SchemaObject dbObject, Right right, Grantee grantor,
-                      boolean withGrantOption) {
+    public void grant(OrderedHashSet granteeList, SchemaObject dbObject,
+                      Right right, Grantee grantor, boolean withGrantOption) {
 
         if (dbObject instanceof RoutineSchema) {
             SchemaObject[] routines =
                 ((RoutineSchema) dbObject).getSpecificRoutines();
 
-            grant(session, granteeList, routines, right, grantor,
-                  withGrantOption);
+            grant(granteeList, routines, right, grantor, withGrantOption);
 
             return;
         }
@@ -242,16 +224,9 @@ public class GranteeManager {
             name = ((Routine) dbObject).getSpecificName();
         }
 
-        if (!grantor.isAccessible(dbObject)) {
+        if (!grantor.isGrantable(dbObject, right)) {
             throw Error.error(ErrorCode.X_0L000,
                               grantor.getName().getNameString());
-        }
-
-        if (!grantor.isGrantable(dbObject, right)) {
-            session.addWarning(Error.error(ErrorCode.W_01007,
-                                           grantor.getName().getNameString()));
-
-            return;
         }
 
         if (grantor.isAdmin()) {
@@ -271,9 +246,8 @@ public class GranteeManager {
         }
     }
 
-    public void grant(Session session, OrderedHashSet granteeList,
-                      SchemaObject[] routines, Right right, Grantee grantor,
-                      boolean withGrantOption) {
+    public void grant(OrderedHashSet granteeList, SchemaObject[] routines,
+                      Right right, Grantee grantor, boolean withGrantOption) {
 
         boolean granted = false;
 
@@ -282,8 +256,7 @@ public class GranteeManager {
                 continue;
             }
 
-            grant(session, granteeList, routines[i], right, grantor,
-                  withGrantOption);
+            grant(granteeList, routines[i], right, grantor, withGrantOption);
 
             granted = true;
         }
@@ -339,12 +312,12 @@ public class GranteeManager {
             throw Error.error(ErrorCode.X_0P501, granteeName);
         }
 
-        // campbell-burnet@users 20050515
+        // boucherb@users 20050515
         // SQL 2003 Foundation, 4.34.3
         // No cycles of role grants are allowed.
         if (role.hasRole(grantee)) {
 
-            // campbell-burnet@users
+            // boucherb@users
 
             /** @todo: Correct reporting of actual grant path */
             throw Error.error(ErrorCode.X_0P501, roleName);
@@ -384,13 +357,13 @@ public class GranteeManager {
             if (grant) {
                 if (grantee.getDirectRoles().contains(role)) {
 
-                    /** @todo  shouldn't throw */
+                    /** @todo  shouldnt throw */
                     throw Error.error(ErrorCode.X_0P000, granteeName);
                 }
             } else {
                 if (!grantee.getDirectRoles().contains(role)) {
 
-                    /** @todo  shouldn't throw */
+                    /** @todo  shouldnt throw */
                     throw Error.error(ErrorCode.X_0P000, roleName);
                 }
             }
@@ -499,54 +472,6 @@ public class GranteeManager {
         for (int i = 0; i < routines.length; i++) {
             revoke(granteeList, routines[i], rights, grantor, grantOption,
                    cascade);
-        }
-    }
-
-    /**
-     * Updates all the talbe level rights on a table after the addition of a
-     * column.<p>
-     */
-    public void updateAddColumn(HsqlName table, HsqlName column) {
-
-        // roles
-        Iterator it = getRoles().iterator();
-
-        while (it.hasNext()) {
-            Grantee grantee = (Grantee) it.next();
-
-            grantee.updateRightsForNewColumn(table, column);
-        }
-
-        // users
-        it = getGrantees().iterator();
-
-        for (; it.hasNext(); ) {
-            Grantee grantee = (Grantee) it.next();
-
-            grantee.updateRightsForNewColumn(table, column);
-        }
-
-        updateAddColumn(table);
-    }
-
-    private void updateAddColumn(HsqlName table) {
-
-        // roles
-        Iterator it = getRoles().iterator();
-
-        while (it.hasNext()) {
-            Grantee grantee = (Grantee) it.next();
-
-            grantee.updateRightsForNewColumn(table);
-        }
-
-        // users
-        it = getGrantees().iterator();
-
-        for (; it.hasNext(); ) {
-            Grantee grantee = (Grantee) it.next();
-
-            grantee.updateRightsForNewColumn(table);
         }
     }
 
@@ -853,7 +778,7 @@ public class GranteeManager {
         return array;
     }
 
-    public String[] getRightsSQL() {
+    public String[] getRightstSQL() {
 
         HsqlArrayList list     = new HsqlArrayList();
         Iterator      grantees = getGrantees().iterator();
@@ -881,41 +806,5 @@ public class GranteeManager {
         list.toArray(array);
 
         return array;
-    }
-
-    public void setDigestAlgo(String algo) {
-        digestAlgo = algo;
-    }
-
-    public String getDigestAlgo() {
-        return digestAlgo;
-    }
-
-    synchronized MessageDigest getDigester() {
-
-        if (digester == null) {
-            try {
-                digester = MessageDigest.getInstance(digestAlgo);
-            } catch (NoSuchAlgorithmException e) {
-                throw Error.error(ErrorCode.GENERAL_ERROR, e);
-            }
-        }
-
-        return digester;
-    }
-
-    String digest(String string) throws RuntimeException {
-
-        byte[] data;
-
-        try {
-            data = string.getBytes("ISO-8859-1");
-        } catch (UnsupportedEncodingException e) {
-            throw Error.error(ErrorCode.GENERAL_ERROR, e);
-        }
-
-        data = getDigester().digest(data);
-
-        return StringConverter.byteArrayToHexString(data);
     }
 }

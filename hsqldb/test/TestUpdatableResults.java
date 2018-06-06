@@ -1,4 +1,4 @@
-/* Copyright (c) 2001-2014, The HSQL Development Group
+/* Copyright (c) 2001-2011, The HSQL Development Group
  * All rights reserved.
  *
  * Redistribution and use in source and binary forms, with or without
@@ -35,7 +35,6 @@ import java.sql.Connection;
 import java.sql.PreparedStatement;
 import java.sql.ResultSet;
 import java.sql.Statement;
-import java.sql.SQLException;
 
 public class TestUpdatableResults extends TestBase {
 
@@ -50,7 +49,7 @@ public class TestUpdatableResults extends TestBase {
             Statement st = c.createStatement(ResultSet.TYPE_SCROLL_INSENSITIVE,
                                              ResultSet.CONCUR_UPDATABLE);
             String s =
-                "CREATE TABLE T (I INTEGER, C CHARACTER(10) DEFAULT 'def', B BIT(4) DEFAULT B'1010')";
+                "CREATE TABLE T (I INTEGER, C CHARACTER(10), B BIT(4) DEFAULT B'')";
 
             st.execute(s);
 
@@ -80,44 +79,8 @@ public class TestUpdatableResults extends TestBase {
             rs.updateString(2, "INSERT1011");
             rs.updateString(3, "0101");
             rs.insertRow();
-            try {
-                rs.moveToInsertRow();
-                rs.updateInt(1, 1012);
-                rs.updateString(2, "INSERT1011");
-                rs.insertRow();
-                rs.moveToInsertRow();
-                rs.updateInt(1, 1012);
-                rs.insertRow();
-                rs.close();
-            } catch (SQLException e) {
+            rs.close();
 
-            }
-            rs = st.executeQuery(s);
-
-            while (rs.next()) {
-                System.out.println("" + rs.getInt(1) + "      "
-                                   + rs.getString(2) + "      "
-                                   + rs.getString(3));
-            }
-
-            s = "SELECT I FROM T";
-
-            rs = st.executeQuery(s);
-
-            rs.moveToInsertRow();
-            rs.updateInt(1, 1012);
-            rs.insertRow();
-
-            s = "SELECT I, B FROM T";
-
-            rs = st.executeQuery(s);
-
-            rs.moveToInsertRow();
-            rs.updateInt(1, 1013);
-            rs.updateString(2, "1111");
-            rs.insertRow();
-
-            s = "SELECT * FROM T WHERE I > 1011";
             rs = st.executeQuery(s);
 
             while (rs.next()) {

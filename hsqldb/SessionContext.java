@@ -1,4 +1,4 @@
-/* Copyright (c) 2001-2016, The HSQL Development Group
+/* Copyright (c) 2001-2011, The HSQL Development Group
  * All rights reserved.
  *
  * Redistribution and use in source and binary forms, with or without
@@ -44,13 +44,12 @@ import org.hsqldb.map.ValuePool;
 import org.hsqldb.navigator.RangeIterator;
 import org.hsqldb.navigator.RowSetNavigatorDataChange;
 import org.hsqldb.navigator.RowSetNavigatorDataChangeMemory;
-import org.hsqldb.result.Result;
 
 /*
  * Session execution context and temporary data structures
  *
  * @author Fred Toussi (fredt@users dot sourceforge.net)
- * @version 2.3.5
+ * @version 2.3.0
  * @since 1.9.0
  */
 public class SessionContext {
@@ -73,11 +72,9 @@ public class SessionContext {
     Object[]              diagnosticsVariables = ValuePool.emptyObjectArray;
     Object[]              routineArguments     = ValuePool.emptyObjectArray;
     Object[]              routineVariables     = ValuePool.emptyObjectArray;
-    Result[]              routineCursors       = Result.emptyArray;
     Object[]              dynamicArguments     = ValuePool.emptyObjectArray;
     Object[][]            triggerArguments     = null;
     public int            depth;
-    Boolean               isInRoutine;
 
     //
     Number         lastIdentity = ValuePool.INTEGER_0;
@@ -128,14 +125,6 @@ public class SessionContext {
         isAutoCommit = Boolean.FALSE;
         isReadOnly   = Boolean.FALSE;
         noSQL        = Boolean.FALSE;
-        isInRoutine  = Boolean.FALSE;
-    }
-
-    void resetStack() {
-
-        while (depth > 0) {
-            pop(isInRoutine.booleanValue());
-        }
     }
 
     public void push() {
@@ -159,7 +148,6 @@ public class SessionContext {
         stack.add(routineArguments);
         stack.add(triggerArguments);
         stack.add(routineVariables);
-        stack.add(routineCursors);
         stack.add(rangeIterators);
         stack.add(savepoints);
         stack.add(savepointTimestamps);
@@ -167,7 +155,6 @@ public class SessionContext {
         stack.add(isAutoCommit);
         stack.add(isReadOnly);
         stack.add(noSQL);
-        stack.add(isInRoutine);
         stack.add(ValuePool.getInt(currentMaxRows));
         stack.add(ValuePool.getInt(rownum));
 
@@ -178,7 +165,6 @@ public class SessionContext {
         savepointTimestamps = new LongDeque();
         isAutoCommit        = Boolean.FALSE;
         currentMaxRows      = 0;
-        isInRoutine         = Boolean.valueOf(isRoutine);
 
         depth++;
     }
@@ -193,7 +179,6 @@ public class SessionContext {
 
         rownum = ((Integer) stack.remove(stack.size() - 1)).intValue();
         currentMaxRows = ((Integer) stack.remove(stack.size() - 1)).intValue();
-        isInRoutine          = (Boolean) stack.remove(stack.size() - 1);
         noSQL                = (Boolean) stack.remove(stack.size() - 1);
         isReadOnly           = (Boolean) stack.remove(stack.size() - 1);
         isAutoCommit         = (Boolean) stack.remove(stack.size() - 1);
@@ -201,7 +186,6 @@ public class SessionContext {
         savepointTimestamps  = (LongDeque) stack.remove(stack.size() - 1);
         savepoints           = (HashMappedList) stack.remove(stack.size() - 1);
         rangeIterators = (RangeIterator[]) stack.remove(stack.size() - 1);
-        routineCursors       = (Result[]) stack.remove(stack.size() - 1);
         routineVariables     = (Object[]) stack.remove(stack.size() - 1);
         triggerArguments     = ((Object[][]) stack.remove(stack.size() - 1));
         routineArguments     = (Object[]) stack.remove(stack.size() - 1);
@@ -264,23 +248,16 @@ public class SessionContext {
         }
     }
 
-    RangeIterator checkIterator = new RangeVariable.RangeIteratorCheck();
+    public RangeIteratorBase getCheckIterator(RangeVariable rangeVariable) {
 
-    public RangeIterator getCheckIterator(RangeVariable rangeVariable) {
+        RangeIterator it = rangeIterators[0];
 
-        int position = rangeVariable.rangePosition;
-
-        if (position >= rangeIterators.length) {
-            int size = (int) ArrayUtil.getBinaryNormalisedCeiling(position
-                + 1);
-
-            rangeIterators =
-                (RangeIterator[]) ArrayUtil.resizeArray(rangeIterators, size);
+        if (it == null) {
+            it                = rangeVariable.getIterator(session);
+            rangeIterators[0] = it;
         }
 
-        rangeIterators[position] = checkIterator;
-
-        return checkIterator;
+        return (RangeIteratorBase) it;
     }
 
     public void setRangeIterator(RangeIterator iterator) {
@@ -288,33 +265,12 @@ public class SessionContext {
         int position = iterator.getRangePosition();
 
         if (position >= rangeIterators.length) {
-            int size = (int) ArrayUtil.getBinaryNormalisedCeiling(position
-                + 1);
-
             rangeIterators =
-                (RangeIterator[]) ArrayUtil.resizeArray(rangeIterators, size);
+                (RangeIterator[]) ArrayUtil.resizeArray(rangeIterators,
+                    position + 4);
         }
 
         rangeIterators[position] = iterator;
-    }
-
-    public RangeIterator getRangeIterator(int position) {
-
-        RangeIterator[] ranges = rangeIterators;
-
-        if (stack != null) {
-            for (int i = 0; i < stack.size(); i++) {
-                Object o = stack.get(i);
-
-                if (o instanceof RangeIterator[]) {
-                    ranges = (RangeIterator[]) o;
-
-                    break;
-                }
-            }
-        }
-
-        return ranges[position];
     }
 
     public void unsetRangeIterator(RangeIterator iterator) {
@@ -354,15 +310,12 @@ public class SessionContext {
         routineVariables[index] = variable.getDefaultValue(session);
     }
 
-    public void pushRoutineTables() {
+    public void pushRoutineTables(HashMappedList map) {
         popSessionTables = sessionTables;
-        sessionTables    = new HashMappedList();
+        sessionTables    = map;
     }
 
     public void popRoutineTables() {
-
-        sessionTables.clear();
-
         sessionTables = popSessionTables;
     }
 

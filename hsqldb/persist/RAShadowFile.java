@@ -1,4 +1,4 @@
-/* Copyright (c) 2001-2016, The HSQL Development Group
+/* Copyright (c) 2001-2011, The HSQL Development Group
  * All rights reserved.
  *
  * Redistribution and use in source and binary forms, with or without
@@ -50,7 +50,6 @@ import org.hsqldb.map.BitMap;
  */
 public class RAShadowFile {
 
-    private static final int    headerSize = 12;
     final Database              database;
     final String                pathName;
     final RandomAccessInterface source;
@@ -80,25 +79,22 @@ public class RAShadowFile {
         }
 
         bitMap                = new BitMap(bitSize, false);
-        buffer                = new byte[pageSize + headerSize];
+        buffer                = new byte[pageSize + 12];
         byteArrayOutputStream = new HsqlByteArrayOutputStream(buffer);
     }
 
-    int copy(long fileOffset, int size) throws IOException {
+    void copy(long fileOffset, int size) throws IOException {
 
         // always copy the first page
-        int pageCount = 0;
-
         if (!zeroPageSet) {
-            pageCount += copy(0);
-
+            copy(0);
             bitMap.set(0);
 
             zeroPageSet = true;
         }
 
         if (fileOffset >= maxSize) {
-            return pageCount;
+            return;
         }
 
         long endOffset = fileOffset + size;
@@ -115,21 +111,18 @@ public class RAShadowFile {
         }
 
         for (; startPageOffset <= endPageOffset; startPageOffset++) {
-            pageCount += copy(startPageOffset);
+            copy(startPageOffset);
         }
-
-        return pageCount;
     }
 
-    private int copy(int pageOffset) throws IOException {
+    private void copy(int pageOffset) throws IOException {
 
         if (bitMap.set(pageOffset) == 1) {
-            return 0;
+            return;
         }
 
-        long position  = (long) pageOffset * pageSize;
-        int  readSize  = pageSize;
-        int  writeSize = buffer.length;
+        long position = (long) pageOffset * pageSize;
+        int  readSize = pageSize;
 
         if (maxSize - position < pageSize) {
             readSize = (int) (maxSize - position);
@@ -152,13 +145,11 @@ public class RAShadowFile {
             byteArrayOutputStream.writeInt(pageSize);
             byteArrayOutputStream.writeLong(position);
             source.seek(position);
-            source.read(buffer, headerSize, readSize);
+            source.read(buffer, 12, readSize);
             dest.seek(writePos);
-            dest.write(buffer, 0, writeSize);
+            dest.write(buffer, 0, buffer.length);
 
-            savedLength = writePos + writeSize;
-
-            return 1;
+            savedLength = writePos + buffer.length;
         } catch (Throwable t) {
             bitMap.unset(pageOffset);
             dest.seek(0);
@@ -177,7 +168,7 @@ public class RAShadowFile {
             dest = RAFile.newScaledRAFile(database, pathName, false,
                                           RAFile.DATA_FILE_STORED);
         } else {
-            dest = new RAFileSimple(database.logger, pathName, "rw");
+            dest = new RAFileSimple(database, pathName, "rws");
         }
     }
 
@@ -198,9 +189,9 @@ public class RAShadowFile {
     public void synch() {
 
         if (dest != null) {
-            dest.synch();
-
             synchLength = savedLength;
+
+            dest.synch();
         }
     }
 
@@ -220,7 +211,7 @@ public class RAShadowFile {
                                           openMode.equals("r"),
                                           RAFile.DATA_FILE_STORED);
         } else {
-            return new RAFileSimple(database.logger, pathName, openMode);
+            return new RAFileSimple(database, pathName, openMode);
         }
     }
 
@@ -277,11 +268,11 @@ public class RAShadowFile {
             return byteread;
         }
 
-        public int read(byte[] bytes) throws IOException {
+        public int read(byte bytes[]) throws IOException {
             return read(bytes, 0, bytes.length);
         }
 
-        public int read(byte[] bytes, int offset,
+        public int read(byte bytes[], int offset,
                         int length) throws IOException {
 
             if (!initialised) {

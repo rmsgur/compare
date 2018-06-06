@@ -1,7 +1,7 @@
 /*
  * For work developed by the HSQL Development Group:
  *
- * Copyright (c) 2001-2016, The HSQL Development Group
+ * Copyright (c) 2001-2011, The HSQL Development Group
  * All rights reserved.
  *
  * Redistribution and use in source and binary forms, with or without
@@ -84,15 +84,14 @@ import org.hsqldb.types.Type;
 /**
  * Reusable object for processing LIKE queries.
  *
- * Rewritten in HSQLDB based on original Hypersonic code.<p>
+ * Enhanced in successive versions of HSQLDB.
  *
- * @author Fred Toussi (fredt@users dot sourceforge dot net)
  * @author Thomas Mueller (Hypersonic SQL Group)
- * @version 2.3.1
- * @since 1.6.2
+ * @version 2.0.1
+ * @since Hypersonic SQL
  */
 
-// campbell-burnet@users 20030930 - patch 1.7.2 - optimize into joins if possible
+// boucherb@users 20030930 - patch 1.7.2 - optimize into joins if possible
 // fredt@users 20031006 - patch 1.7.2 - reuse Like objects for all rows
 // fredt@users 1.9.0 - LIKE for binary strings
 // fredt@users 1.9.0 - CompareAt() changes for performance suggested by Gary Frost
@@ -168,11 +167,11 @@ class Like implements Cloneable {
             return null;
         }
 
+        int length = getLength(session, o);
+
         if (isIgnoreCase) {
             o = ((CharacterType) dataType).upper(session, o);
         }
-
-        int length = getLength(session, o);
 
         if (o instanceof ClobData) {
             o = ((ClobData) o).getChars(session, 0,
@@ -217,7 +216,7 @@ class Like implements Cloneable {
     }
 
     private boolean compareAt(Session session, Object o, int i, int j,
-                              int iLen, int jLen, char[] cLike,
+                              int iLen, int jLen, char cLike[],
                               int[] wildCardType) {
 
         for (; i < iLen; i++) {

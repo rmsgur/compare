@@ -1,4 +1,4 @@
-/* Copyright (c) 2001-2016, The HSQL Development Group
+/* Copyright (c) 2001-2011, The HSQL Development Group
  * All rights reserved.
  *
  * Redistribution and use in source and binary forms, with or without
@@ -32,7 +32,6 @@
 package org.hsqldb.persist;
 
 import org.hsqldb.Database;
-import org.hsqldb.Session;
 import org.hsqldb.Table;
 import org.hsqldb.TableBase;
 import org.hsqldb.error.Error;
@@ -53,7 +52,7 @@ import org.hsqldb.lib.StringUtil;
  *  image after translating the old pointers to the new.
  *
  * @author Fred Toussi (fredt@users dot sourceforge.net)
- * @version    2.3.4
+ * @version    2.3.0
  * @since      1.7.2
  */
 final class DataFileDefrag {
@@ -67,15 +66,15 @@ final class DataFileDefrag {
     int            scale;
     DoubleIntIndex pointerLookup;
 
-    DataFileDefrag(Database db, DataFileCache cache) {
+    DataFileDefrag(Database db, DataFileCache cache, String dataFileName) {
 
         this.database     = db;
         this.dataCache    = cache;
         this.scale        = cache.getDataFileScale();
-        this.dataFileName = cache.getFileName();
+        this.dataFileName = dataFileName;
     }
 
-    void process(Session session) {
+    void process() {
 
         Throwable error = null;
 
@@ -106,10 +105,8 @@ final class DataFileDefrag {
         }
 
         try {
-            String baseFileName = database.getCanonicalPath();
-
             pointerLookup = new DoubleIntIndex((int) maxSize, false);
-            dataFileOut   = new DataFileCache(database, baseFileName, true);
+            dataFileOut   = new DataFileCache(database, dataFileName, true);
 
             pointerLookup.setKeysSearchTarget();
 
@@ -127,6 +124,8 @@ final class DataFileDefrag {
                 database.logger.logDetailEvent("table complete "
                                                + t.getName().name);
             }
+
+            dataFileOut.fileModified = true;
 
             dataFileOut.close();
 
@@ -175,15 +174,17 @@ final class DataFileDefrag {
 
     long[] writeTableToDataFile(Table table) {
 
-        RowStoreAVLDisk store =
-            (RowStoreAVLDisk) table.database.persistentStoreCollection
-                .getStore(table);
+        PersistentStore store =
+            table.database.persistentStoreCollection.getStore(table);
+        TableSpaceManager space =
+            dataFileOut.spaceManager.getTableSpace(table.getSpaceID());
         long[] rootsArray = table.getIndexRootsArray();
 
         pointerLookup.clear();
         database.logger.logDetailEvent("lookup begins " + table.getName().name
                                        + " " + stopw.elapsedTime());
-        store.moveDataToSpace(dataFileOut, pointerLookup);
+        RowStoreAVLDisk.moveDataToSpace(store, dataFileOut, space,
+                                        pointerLookup);
 
         for (int i = 0; i < table.getIndexCount(); i++) {
             if (rootsArray[i] == -1) {
@@ -200,7 +201,7 @@ final class DataFileDefrag {
         }
 
         // log any discrepency in row count
-        long count = store.elementCount();
+        long count = rootsArray[table.getIndexCount() * 2];
 
         if (count != pointerLookup.size()) {
             database.logger.logSevereEvent("discrepency in row count "
@@ -208,6 +209,9 @@ final class DataFileDefrag {
                                            + count + " "
                                            + pointerLookup.size(), null);
         }
+
+        rootsArray[table.getIndexCount()]     = 0;
+        rootsArray[table.getIndexCount() * 2] = pointerLookup.size();
 
         database.logger.logDetailEvent("table written "
                                        + table.getName().name);

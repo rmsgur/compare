@@ -1,4 +1,4 @@
-/* Copyright (c) 2001-2016, The HSQL Development Group
+/* Copyright (c) 2001-2011, The HSQL Development Group
  * All rights reserved.
  *
  * Redistribution and use in source and binary forms, with or without
@@ -54,34 +54,35 @@ import org.hsqldb.types.Types;
  *  Class for writing the data for a database row in text table format.
  *
  * @author Bob Preston (sqlbob@users dot sourceforge.net)
- * @version 2.3.4
+ * @version 2.0.1
  * @since 1.7.0
  */
 public class RowOutputText extends RowOutputBase {
 
-    protected String           fieldSep;
-    protected String           varSep;
-    protected String           longvarSep;
-    private boolean            fieldSepEnd;
-    private boolean            varSepEnd;
-    private boolean            longvarSepEnd;
-    private String             nextSep = "";
-    private boolean            nextSepEnd;
-    protected TextFileSettings textFileSettings;
+    protected String  fieldSep;
+    protected String  varSep;
+    protected String  longvarSep;
+    private boolean   fieldSepEnd;
+    private boolean   varSepEnd;
+    private boolean   longvarSepEnd;
+    private String    nextSep = "";
+    private boolean   nextSepEnd;
+    protected boolean allQuoted;
+    private String    encoding;
 
-    public RowOutputText(TextFileSettings textFileSettings) {
+    public RowOutputText(String fieldSep, String varSep, String longvarSep,
+                         boolean allQuoted, String encoding) {
 
         super();
 
-        initTextDatabaseRowOutput(textFileSettings);
+        initTextDatabaseRowOutput(fieldSep, varSep, longvarSep, allQuoted,
+                                  encoding);
     }
 
-    private void initTextDatabaseRowOutput(TextFileSettings textFileSettings) {
-
-        this.textFileSettings = textFileSettings;
-        this.fieldSep         = textFileSettings.fs;
-        this.varSep           = textFileSettings.vs;
-        this.longvarSep       = textFileSettings.lvs;
+    private void initTextDatabaseRowOutput(String fieldSep, String varSep,
+                                           String longvarSep,
+                                           boolean allQuoted,
+                                           String encoding) {
 
         //-- Newline indicates that field should match to end of line.
         if (fieldSep.endsWith("\n")) {
@@ -98,12 +99,12 @@ public class RowOutputText extends RowOutputBase {
             longvarSepEnd = true;
             longvarSep    = longvarSep.substring(0, longvarSep.length() - 1);
         }
-    }
 
-    public void setStorageSize(int size) {}
-
-    public long scalePosition(long pos) {
-        return pos;
+        this.fieldSep   = fieldSep;
+        this.varSep     = varSep;
+        this.longvarSep = longvarSep;
+        this.allQuoted  = allQuoted;
+        this.encoding   = encoding;
     }
 
     public void writeEnd() {
@@ -137,6 +138,7 @@ public class RowOutputText extends RowOutputBase {
             return;
         }
 
+        // writeBytes(s);
         byte[] bytes = getBytes(s);
 
         write(bytes, 0, bytes.length);
@@ -153,6 +155,7 @@ public class RowOutputText extends RowOutputBase {
             return;
         }
 
+        // writeBytes(s);
         byte[] bytes = getBytes(s);
 
         write(bytes, 0, bytes.length);
@@ -169,6 +172,7 @@ public class RowOutputText extends RowOutputBase {
             return;
         }
 
+        // writeBytes(s);
         byte[] bytes = getBytes(s);
 
         write(bytes, 0, bytes.length);
@@ -194,9 +198,9 @@ public class RowOutputText extends RowOutputBase {
         byte[] bytes = null;
 
         try {
-            bytes = s.getBytes(textFileSettings.charEncoding);
+            bytes = s.getBytes(encoding);
         } catch (UnsupportedEncodingException e) {
-            throw Error.error(ErrorCode.TEXT_FILE_IO, e);
+            bytes = s.getBytes();
         }
 
         return bytes;
@@ -204,20 +208,10 @@ public class RowOutputText extends RowOutputBase {
 
     protected void writeByteArray(byte[] b) {
 
-        if (textFileSettings.isUTF16) {
-            byte[] buffer = new byte[b.length * 2];
+        ensureRoom(b.length * 2);
+        StringConverter.writeHexBytes(this.getBuffer(), count, b);
 
-            StringConverter.writeHexBytes(buffer, 0, b);
-
-            String s = new String(buffer);
-
-            writeBytes(s);
-        } else {
-            ensureRoom(b.length * 2);
-            StringConverter.writeHexBytes(this.getBuffer(), count, b);
-
-            count += b.length * 2;
-        }
+        count += b.length * 2;
     }
 
     public void writeShort(int i) {
@@ -232,25 +226,12 @@ public class RowOutputText extends RowOutputBase {
         nextSepEnd = fieldSepEnd;
     }
 
-    public void writeLong(long i) {
+    public void writeIntData(int i, int position) {
         throw Error.runtimeError(ErrorCode.U_S0500, "RowOutputText");
     }
 
-    public void writeBytes(String s) {
-
-        if (textFileSettings.isUTF16) {
-            try {
-                if (s.length() > 0) {
-                    byte[] bytes = s.getBytes(textFileSettings.charEncoding);
-
-                    super.write(bytes);
-                }
-            } catch (UnsupportedEncodingException e) {
-                throw Error.error(ErrorCode.TEXT_FILE_IO, e);
-            }
-        } else {
-            super.writeBytes(s);
-        }
+    public void writeLong(long i) {
+        throw Error.runtimeError(ErrorCode.U_S0500, "RowOutputText");
     }
 
 // fredt@users - comment - methods used for writing each SQL type
@@ -352,13 +333,6 @@ public class RowOutputText extends RowOutputBase {
 
         String s = StringConverter.byteArrayToBitString(o.getBytes(),
             (int) o.bitLength(null));
-
-        writeString(s);
-    }
-
-    protected void writeUUID(BinaryData o) {
-
-        String s = StringConverter.toStringUUID(o.getBytes());
 
         writeString(s);
     }

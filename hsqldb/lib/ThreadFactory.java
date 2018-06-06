@@ -1,4 +1,4 @@
-/* Copyright (c) 2001-2017, The HSQL Development Group
+/* Copyright (c) 2001-2011, The HSQL Development Group
  * All rights reserved.
  *
  * Redistribution and use in source and binary forms, with or without
@@ -33,7 +33,7 @@ package org.hsqldb.lib;
 
 /**
  *
- * @author  campbell-burnet@users
+ * @author  boucherb@users
  * @version 1.7.2
  * @since 1.7.2
  */

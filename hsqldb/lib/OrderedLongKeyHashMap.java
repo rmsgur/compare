@@ -1,4 +1,4 @@
-/* Copyright (c) 2001-2014, The HSQL Development Group
+/* Copyright (c) 2001-2011, The HSQL Development Group
  * All rights reserved.
  *
  * Redistribution and use in source and binary forms, with or without
@@ -179,23 +179,23 @@ public class OrderedLongKeyHashMap extends BaseHashMap {
         }
 
         public boolean contains(Object o) {
-            throw new UnsupportedOperationException();
+            throw new RuntimeException();
         }
 
         public Object get(Object key) {
-            throw new UnsupportedOperationException();
+            throw new RuntimeException();
         }
 
         public boolean add(Object value) {
-            throw new UnsupportedOperationException();
+            throw new RuntimeException();
         }
 
         public boolean addAll(Collection c) {
-            throw new UnsupportedOperationException();
+            throw new RuntimeException();
         }
 
         public boolean remove(Object o) {
-            throw new UnsupportedOperationException();
+            throw new RuntimeException();
         }
 
         public boolean isEmpty() {
@@ -218,19 +218,19 @@ public class OrderedLongKeyHashMap extends BaseHashMap {
         }
 
         public boolean contains(Object o) {
-            throw new UnsupportedOperationException();
+            throw new RuntimeException();
         }
 
         public boolean add(Object value) {
-            throw new UnsupportedOperationException();
+            throw new RuntimeException();
         }
 
         public boolean addAll(Collection c) {
-            throw new UnsupportedOperationException();
+            throw new RuntimeException();
         }
 
         public boolean remove(Object o) {
-            throw new UnsupportedOperationException();
+            throw new RuntimeException();
         }
 
         public boolean isEmpty() {

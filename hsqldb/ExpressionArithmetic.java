@@ -1,4 +1,4 @@
-/* Copyright (c) 2001-2017, The HSQL Development Group
+/* Copyright (c) 2001-2011, The HSQL Development Group
  * All rights reserved.
  *
  * Redistribution and use in source and binary forms, with or without
@@ -35,15 +35,16 @@ import org.hsqldb.error.Error;
 import org.hsqldb.error.ErrorCode;
 import org.hsqldb.lib.HsqlList;
 import org.hsqldb.types.CharacterType;
+import org.hsqldb.types.NumberType;
 import org.hsqldb.types.Type;
 import org.hsqldb.types.Types;
 
 /**
  * Implementation of arithmetic and concatenation operations
  *
- * @author Campbell Burnet (campbell-burnet@users dot sourceforge.net)
+ * @author Campbell Boucher-Burnet (boucherb@users dot sourceforge.net)
  * @author Fred Toussi (fredt@users dot sourceforge.net)
- * @version 2.3.5
+ * @version 2.0.1
  * @since 1.9.0
  */
 public class ExpressionArithmetic extends Expression {
@@ -211,8 +212,6 @@ public class ExpressionArithmetic extends Expression {
                 sb.append(dataType.getTypeDefinition());
                 sb.append(' ');
                 break;
-
-            default :
         }
 
         if (getLeftNode() != null) {
@@ -315,23 +314,6 @@ public class ExpressionArithmetic extends Expression {
 
         if (nodes[LEFT].isUnresolvedParam()
                 && nodes[RIGHT].isUnresolvedParam()) {
-            if (parent instanceof ExpressionLogical) {
-                Expression e = parent.nodes[LEFT];
-
-                if (e == this) {
-                    e = parent.nodes[RIGHT];
-                }
-
-                if (e.dataType != null) {
-                    if (e.dataType.isDateOrTimestampType()) {
-                        nodes[LEFT].dataType = e.dataType;
-                    }
-                }
-            }
-        }
-
-        if (nodes[LEFT].isUnresolvedParam()
-                && nodes[RIGHT].isUnresolvedParam()) {
             nodes[LEFT].dataType  = Type.SQL_INTEGER;
             nodes[RIGHT].dataType = Type.SQL_INTEGER;
         }
@@ -401,8 +383,6 @@ public class ExpressionArithmetic extends Expression {
                                 Type.SQL_TIMESTAMP_WITH_TIME_ZONE;
                         }
                         break;
-
-                    default :
                 }
             }
 
@@ -451,53 +431,34 @@ public class ExpressionArithmetic extends Expression {
             throw Error.error(ErrorCode.X_42567);
         }
 
-        if (opType == OpTypes.SUBTRACT) {
+        // datetime subtract - type predetermined
+        if (dataType != null && dataType.isIntervalType()) {
             if (nodes[LEFT].dataType.isDateTimeType()
                     && nodes[RIGHT].dataType.isDateTimeType()) {
-                if (nodes[LEFT].dataType.isDateTimeTypeWithZone()
-                        ^ nodes[RIGHT].dataType.isDateTimeTypeWithZone()) {
-                    if (nodes[LEFT].dataType.isDateTimeTypeWithZone()) {
-                        nodes[LEFT] = new ExpressionOp(nodes[LEFT]);
-                    }
-
-                    if (nodes[RIGHT].dataType.isDateTimeTypeWithZone()) {
-                        nodes[RIGHT] = new ExpressionOp(nodes[RIGHT]);
-                    }
+                if (nodes[LEFT].dataType.typeComparisonGroup
+                        != nodes[RIGHT].dataType.typeComparisonGroup) {
+                    throw Error.error(ErrorCode.X_42562);
                 }
-            }
-        }
+            } else {
+                Type type = nodes[LEFT].dataType.getCombinedType(session,
+                    nodes[RIGHT].dataType, opType);
 
-        // datetime subtract - type predetermined
-        if (dataType != null) {
-            if (dataType.isIntervalType()) {
-                if (nodes[LEFT].dataType.isDateTimeType()
-                        && nodes[RIGHT].dataType.isDateTimeType()) {
-                    if (nodes[LEFT].dataType.typeComparisonGroup
-                            != nodes[RIGHT].dataType.typeComparisonGroup) {
+                if (type == null) {
+                    throw Error.error(ErrorCode.X_42562);
+                }
+
+                if (type.isIntervalType()) {
+                    if (type.typeCode != dataType.typeCode) {
                         throw Error.error(ErrorCode.X_42562);
                     }
+                } else if (type.isNumberType()) {
+                    nodes[LEFT]  = new ExpressionOp(nodes[LEFT], dataType);
+                    nodes[RIGHT] = new ExpressionOp(nodes[RIGHT], dataType);
+
+                    nodes[LEFT].resolveTypes(session, this);
+                    nodes[RIGHT].resolveTypes(session, this);
                 } else {
-                    Type type = nodes[LEFT].dataType.getCombinedType(session,
-                        nodes[RIGHT].dataType, opType);
-
-                    if (type == null) {
-                        throw Error.error(ErrorCode.X_42562);
-                    }
-
-                    if (type.isIntervalType()) {
-                        if (type.typeCode != dataType.typeCode) {
-                            throw Error.error(ErrorCode.X_42562);
-                        }
-                    } else if (type.isNumberType()) {
-                        nodes[LEFT] = new ExpressionOp(nodes[LEFT], dataType);
-                        nodes[RIGHT] = new ExpressionOp(nodes[RIGHT],
-                                                        dataType);
-
-                        nodes[LEFT].resolveTypes(session, this);
-                        nodes[RIGHT].resolveTypes(session, this);
-                    } else {
-                        throw Error.error(ErrorCode.X_42562);
-                    }
+                    throw Error.error(ErrorCode.X_42562);
                 }
             }
         } else {
@@ -652,9 +613,16 @@ public class ExpressionArithmetic extends Expression {
             case OpTypes.VALUE :
                 return valueData;
 
+            case OpTypes.SIMPLE_COLUMN : {
+                Object value =
+                    session.sessionContext.rangeIterators[rangePosition]
+                        .getCurrent(columnIndex);
+
+                return value;
+            }
             case OpTypes.NEGATE :
-                return dataType.negate(nodes[LEFT].getValue(session,
-                        nodes[LEFT].dataType));
+                return ((NumberType) dataType).negate(
+                    nodes[LEFT].getValue(session, nodes[LEFT].dataType));
         }
 
         Object a = nodes[LEFT].getValue(session);

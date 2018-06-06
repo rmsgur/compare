@@ -1,4 +1,4 @@
-/* Copyright (c) 2001-2017, The HSQL Development Group
+/* Copyright (c) 2001-2011, The HSQL Development Group
  * All rights reserved.
  *
  * Redistribution and use in source and binary forms, with or without
@@ -31,6 +31,7 @@
 
 package org.hsqldb;
 
+import java.io.Serializable;
 import java.math.BigDecimal;
 import java.math.BigInteger;
 
@@ -55,23 +56,23 @@ import org.hsqldb.types.Types;
  * This reduces temporary Object creation by SUM and AVG functions for
  * INTEGER and narrower types.
  *
- * @author Campbell Burnet (campbell-burnet@users dot sourceforge.net)
+ * @author Campbell Boucher-Burnet (boucherb@users dot sourceforge.net)
  * @author Fred Toussi (fredt@users dot sourceforge.net)
- * @version 2.3.5
+ * @version 2.2.9
  * @since 1.7.2
  *
  */
-public class SetFunction {
+public class SetFunction implements Serializable {
 
-    private HashSet       distinctValues;
-    private final boolean isDistinct;
+    private HashSet distinctValues;
+    private boolean isDistinct;
 
     //
-    private final int       setType;
-    private final int       typeCode;
-    private final Type      type;
-    private final ArrayType arrayType;
-    private final Type      returnType;
+    private int       setType;
+    private int       typeCode;
+    private Type      type;
+    private ArrayType arrayType;
+    private Type      returnType;
 
     //
     private long count;
@@ -91,11 +92,11 @@ public class SetFunction {
         this.setType    = setType;
         this.type       = type;
         this.returnType = returnType;
-        this.isDistinct = isDistinct;
-        this.arrayType  = arrayType;
 
         if (isDistinct) {
-            distinctValues = new HashSet();
+            this.isDistinct = true;
+            this.arrayType  = arrayType;
+            distinctValues  = new HashSet();
 
             if (type.isRowType() || type.isArrayType()) {
                 TypedComparator comparator = Type.newComparator(session);
@@ -114,15 +115,11 @@ public class SetFunction {
             this.sample = true;
         }
 
-        if (type == null) {
-            typeCode = 0;
-        } else {
-            if (type.isIntervalYearMonthType()) {
-                typeCode = Types.SQL_INTERVAL_MONTH;
-            } else if (type.isIntervalDaySecondType()) {
-                typeCode = Types.SQL_INTERVAL_SECOND;
-            } else {
-                typeCode = type.typeCode;
+        if (type != null) {
+            typeCode = type.typeCode;
+
+            if (type.isIntervalType()) {
+                typeCode = Types.SQL_INTERVAL;
             }
         }
     }
@@ -157,7 +154,7 @@ public class SetFunction {
 
                         return;
 
-                    case Types.SQL_INTERVAL_SECOND : {
+                    case Types.SQL_INTERVAL : {
                         if (item instanceof IntervalSecondData) {
                             addLong(((IntervalSecondData) item).getSeconds());
 
@@ -171,12 +168,7 @@ public class SetFunction {
 
                                 currentLong %= DTIType.nanoScaleFactors[0];
                             }
-                        }
-
-                        return;
-                    }
-                    case Types.SQL_INTERVAL_MONTH : {
-                        if (item instanceof IntervalMonthData) {
+                        } else if (item instanceof IntervalMonthData) {
                             addLong(((IntervalMonthData) item).units);
                         }
 
@@ -327,9 +319,8 @@ public class SetFunction {
                     case Types.SQL_SMALLINT :
                     case Types.SQL_INTEGER :
                         if (returnType.scale != 0) {
-                            return returnType.divide(session,
-                                                     Long.valueOf(currentLong),
-                                                     Long.valueOf(count));
+                            return returnType.divide(session, currentLong,
+                                                     count);
                         }
 
                         return Long.valueOf(currentLong / count);
@@ -352,30 +343,24 @@ public class SetFunction {
                                 new BigDecimal(count), BigDecimal.ROUND_DOWN);
                         } else {
                             return returnType.divide(session,
-                                                     currentBigDecimal,
-                                                     Long.valueOf(count));
+                                                     currentBigDecimal, count);
                         }
-                    case Types.SQL_INTERVAL_SECOND :
-                    case Types.SQL_INTERVAL_MONTH : {
-                        BigInteger[] bi = getLongSum().divideAndRemainder(
-                            BigInteger.valueOf(count));
+                    case Types.SQL_INTERVAL : {
+                        BigInteger bi =
+                            getLongSum().divide(BigInteger.valueOf(count));
 
-                        if (NumberType.compareToLongLimits(bi[0]) != 0) {
+                        if (!NumberType.isInLongLimits(bi)) {
                             throw Error.error(ErrorCode.X_22015);
                         }
 
-                        if (((IntervalType) type).isIntervalDaySecondType()) {
-                            long nanos =
-                                (bi[1].longValue() * DTIType
-                                    .limitNanoseconds + currentLong) / count;
-
-                            return new IntervalSecondData(bi[0].longValue(),
-                                                          nanos,
+                        if (((IntervalType) type).isDaySecondIntervalType()) {
+                            return new IntervalSecondData(bi.longValue(),
+                                                          currentLong,
                                                           (IntervalType) type,
                                                           true);
                         } else {
                             return IntervalMonthData.newIntervalMonth(
-                                bi[0].longValue(), (IntervalType) type);
+                                bi.longValue(), (IntervalType) type);
                         }
                     }
                     case Types.SQL_DATE :
@@ -384,7 +369,7 @@ public class SetFunction {
                         BigInteger bi =
                             getLongSum().divide(BigInteger.valueOf(count));
 
-                        if (NumberType.compareToLongLimits(bi) != 0) {
+                        if (!NumberType.isInLongLimits(bi)) {
                             throw Error.error(ErrorCode.X_22015);
                         }
 
@@ -417,15 +402,14 @@ public class SetFunction {
                     case Types.SQL_DECIMAL :
                         return currentBigDecimal;
 
-                    case Types.SQL_INTERVAL_SECOND :
-                    case Types.SQL_INTERVAL_MONTH : {
+                    case Types.SQL_INTERVAL : {
                         BigInteger bi = getLongSum();
 
-                        if (NumberType.compareToLongLimits(bi) != 0) {
+                        if (!NumberType.isInLongLimits(bi)) {
                             throw Error.error(ErrorCode.X_22015);
                         }
 
-                        if (((IntervalType) type).isIntervalDaySecondType()) {
+                        if (((IntervalType) type).isDaySecondIntervalType()) {
                             return new IntervalSecondData(bi.longValue(),
                                                           currentLong,
                                                           (IntervalType) type,
@@ -480,13 +464,8 @@ public class SetFunction {
             return Type.SQL_BIGINT;
         }
 
-        int typeCode = type.typeCode;
-
-        if (type.isIntervalYearMonthType()) {
-            typeCode = Types.SQL_INTERVAL_MONTH;
-        } else if (type.isIntervalDaySecondType()) {
-            typeCode = Types.SQL_INTERVAL_SECOND;
-        }
+        int typeCode = type.isIntervalType() ? Types.SQL_INTERVAL
+                                             : type.typeCode;
 
         switch (setType) {
 
@@ -514,8 +493,7 @@ public class SetFunction {
                     case Types.SQL_REAL :
                     case Types.SQL_FLOAT :
                     case Types.SQL_DOUBLE :
-                    case Types.SQL_INTERVAL_MONTH :
-                    case Types.SQL_INTERVAL_SECOND :
+                    case Types.SQL_INTERVAL :
                     case Types.SQL_DATE :
                     case Types.SQL_TIMESTAMP :
                     case Types.SQL_TIMESTAMP_WITH_TIME_ZONE :
@@ -546,8 +524,7 @@ public class SetFunction {
                         return Type.getType(type.typeCode, null, null,
                                             type.precision * 2, type.scale);
 
-                    case Types.SQL_INTERVAL_MONTH :
-                    case Types.SQL_INTERVAL_SECOND :
+                    case Types.SQL_INTERVAL :
                         return IntervalType.newIntervalType(
                             type.typeCode, DTIType.maxIntervalPrecision,
                             type.scale);
@@ -639,7 +616,7 @@ public class SetFunction {
 
     // end long sum
     // statistics support - written by Campbell
-    // this section was originally an independent class
+    // this section was orginally an independent class
     private double  sk;
     private double  vk;
     private long    n;
@@ -675,7 +652,7 @@ public class SetFunction {
         sk  += xi;
     }
 
-    private Double getVariance() {
+    private Number getVariance() {
 
         if (!initialized) {
             return null;
@@ -686,7 +663,7 @@ public class SetFunction {
                       : new Double(vk / (double) (n));
     }
 
-    private Double getStdDev() {
+    private Number getStdDev() {
 
         if (!initialized) {
             return null;

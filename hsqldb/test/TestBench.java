@@ -485,7 +485,7 @@ class TestBench {
 
             Query =
                 "CREATE PROCEDURE UPDATE_PROC(IN paid INT, IN ptid INT, IN pbid INT, IN pdelta INT, OUT pbalance INT) "
-                + "MODIFIES SQL DATA DYNAMIC RESULT SETS 1 BEGIN ATOMIC "
+                + "MODIFIES SQL DATA BEGIN ATOMIC "
                 + "DECLARE account CURSOR WITH RETURN FOR SELECT Abalance FROM accounts WHERE  Aid = paid;"
                 + "UPDATE accounts SET Abalance = abalance + pdelta WHERE  aid = paid;"
                 + "OPEN account;"
@@ -635,24 +635,27 @@ class TestBench {
         return ret;
     }
 
-    /**
-     * changed to generate correct own branch for each account id
-     */
     public static int getRandomID(int type) {
 
-        int min     = 0,
-            max     = naccounts * tps - 1;
-        int account = getRandomInt(min, max);
+        int min = 0,
+            max = 0;
 
         switch (type) {
 
             case TELLER :
                 max = ntellers * tps - 1;
+                break;
 
-                return getRandomInt(min, max);
+            case BRANCH :
+                max = nbranches * tps - 1;
+                break;
+
+            case ACCOUNT :
+                max = naccounts * tps - 1;
+                break;
         }
 
-        return account;
+        return (getRandomInt(min, max));
     }
 
     public static Connection connect(String DBUrl, String DBUser,
@@ -814,7 +817,7 @@ class TestBench {
 
             while (count-- > 0) {
                 int account = TestBench.getRandomID(ACCOUNT);
-                int branch  = account / naccounts;
+                int branch  = TestBench.getRandomID(BRANCH);
                 int teller  = TestBench.getRandomID(TELLER);
                 int delta   = TestBench.getRandomInt(-1000, 1000);
 
@@ -895,7 +898,6 @@ class TestBench {
                     aBalance = RS.getInt(1);
                 }
 
-                RS.close();
                 pstmt3.setInt(1, delta);
                 pstmt3.setInt(2, tid);
                 pstmt3.executeUpdate();
@@ -974,7 +976,7 @@ class TestBench {
 
             while (count-- > 0) {
                 int account = TestBench.getRandomID(ACCOUNT);
-                int branch  = account / naccounts;
+                int branch  = TestBench.getRandomID(BRANCH);
                 int teller  = TestBench.getRandomID(TELLER);
                 int delta   = TestBench.getRandomInt(-1000, 1000);
 
@@ -1015,18 +1017,14 @@ class TestBench {
                 pstmt1.setInt(3, bid);
                 pstmt1.setInt(4, delta);
                 pstmt1.execute();
-                pstmt1.getUpdateCount();
 
-                if (pstmt1.getMoreResults()) {
-                    ResultSet rs = pstmt1.getResultSet();
+                ResultSet rs = pstmt1.getResultSet();
 
-                    while (rs.next()) {
-                        aBalance = rs.getInt(1);
-                    }
-
-                    rs.close();
+                while (rs.next()) {
+                    aBalance = rs.getInt(1);
                 }
 
+                rs.close();
                 pstmt1.clearWarnings();
                 Conn.commit();
 

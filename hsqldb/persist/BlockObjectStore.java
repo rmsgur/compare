@@ -1,4 +1,4 @@
-/* Copyright (c) 2001-2017, The HSQL Development Group
+/* Copyright (c) 2001-2011, The HSQL Development Group
  * All rights reserved.
  *
  * Redistribution and use in source and binary forms, with or without
@@ -33,6 +33,7 @@ package org.hsqldb.persist;
 
 import java.lang.reflect.Constructor;
 
+import org.hsqldb.HsqlException;
 import org.hsqldb.Session;
 import org.hsqldb.error.Error;
 import org.hsqldb.error.ErrorCode;
@@ -40,15 +41,15 @@ import org.hsqldb.rowio.RowInputInterface;
 
 /**
  * @author Fred Toussi (fredt@users dot sourceforge.net)
- * @version 2.3.5
+ * @version 2.3.0
  * @since 2.3.0
  */
 public class BlockObjectStore extends SimpleStore {
 
-    final Class       objectClass;
-    final Constructor constructor;
-    final int         storageSize;
-    final int         blockSize;
+    Class             objectClass;
+    Constructor       constructor;
+    int               storageSize;
+    int               blockSize;
 
     public BlockObjectStore(DataFileCache cache,
                             TableSpaceManager tableSpaceManager,
@@ -69,64 +70,67 @@ public class BlockObjectStore extends SimpleStore {
     }
 
     public CachedObject get(long i) {
-        return cache.get(i, storageSize, this, false);
+
+        try {
+            return cache.get(i, storageSize, this, false);
+        } catch (HsqlException e) {
+            return null;
+        }
     }
 
     public CachedObject get(CachedObject object, boolean keep) {
-        return cache.get(object, this, keep);
+
+        try {
+            return cache.get(object, this, keep);
+        } catch (HsqlException e) {
+            return null;
+        }
     }
 
     public CachedObject get(long i, boolean keep) {
-        return cache.get(i, storageSize, this, keep);
+
+        try {
+            return cache.get(i, storageSize, this, keep);
+        } catch (HsqlException e) {
+            return null;
+        }
     }
 
     public void add(Session session, CachedObject object, boolean tx) {
-        throw Error.runtimeError(ErrorCode.U_S0500, "BlockObjectStore");
-    }
-
-    public void add(CachedObject object, boolean keep) {
 
         int size = object.getRealSize(cache.rowOut);
 
-        if (size > storageSize) {
-            throw Error.runtimeError(ErrorCode.U_S0500, "BlockObjectStore");
-        }
+        size = cache.rowOut.getStorageSize(size);
 
-        object.setStorageSize(storageSize);
+        object.setStorageSize(size);
 
-        long pos = spaceManager.getFilePosition(storageSize, true);
+        long pos = spaceManager.getFilePosition(size, true);
 
         object.setPos(pos);
-        cache.add(object, keep);
+        cache.add(object);
     }
 
     public CachedObject get(RowInputInterface in) {
 
-        CachedObject object = getNewInstance();
+        CachedObject object = getNewInstance(blockSize);
 
         object.read(in);
 
         int size = object.getRealSize(cache.rowOut);
 
-        if (size > storageSize) {
-            throw Error.runtimeError(ErrorCode.U_S0500, "BlockObjectStore");
-        }
+        size = cache.rowOut.getStorageSize(size);
 
-        object.setStorageSize(storageSize);
+        object.setStorageSize(size);
 
         return object;
     }
 
     public CachedObject getNewInstance(int size) {
-        throw Error.runtimeError(ErrorCode.U_S0500, "BlockObjectStore");
-    }
-
-    private CachedObject getNewInstance() {
 
         try {
             CachedObject object =
                 (CachedObject) constructor.newInstance(new Object[]{
-                    Integer.valueOf(blockSize) });
+                    Integer.valueOf(size) });
 
             return object;
         } catch (Exception e) {

@@ -1,4 +1,4 @@
-/* Copyright (c) 2001-2016, The HSQL Development Group
+/* Copyright (c) 2001-2011, The HSQL Development Group
  * All rights reserved.
  *
  * Redistribution and use in source and binary forms, with or without
@@ -47,7 +47,7 @@ import org.hsqldb.types.Type;
  * Table with data derived from a query expression.
  *
  * @author Fred Toussi (fredt@users dot sourceforge.net)
- * @version 2.3.5
+ * @version 2.3.0
  * @since 1.9.0
  */
 public class TableDerived extends Table {
@@ -137,12 +137,6 @@ public class TableDerived extends Table {
 
                 uniquePredicate = true;
                 break;
-
-            case OpTypes.MATCH_SIMPLE :
-                queryExpression.setFullOrder();
-                break;
-
-            default :
         }
 
         if (dataExpression != null) {
@@ -158,15 +152,12 @@ public class TableDerived extends Table {
             ParserDQL p = new ParserDQL(session, new Scanner(),
                                         session.parser.compileContext);
 
-            p.reset(session, sql);
+            p.reset(sql);
             p.read();
-            p.compileContext.setCurrentSubquery(tableName.name);
 
             td = p.XreadSubqueryTableBody(tableName, OpTypes.TABLE_SUBQUERY);
 
-            td.queryExpression.resolve(session,
-                                       p.compileContext.getOuterRanges(),
-                                       null);
+            td.queryExpression.resolve(session);
 
             td.columnList   = columnList;
             td.columnCount  = columnList.size();
@@ -268,7 +259,7 @@ public class TableDerived extends Table {
         return dataExpression;
     }
 
-    public void prepareTable(Session session) {
+    public void prepareTable() {
 
         if (columnCount > 0) {
             return;
@@ -277,7 +268,7 @@ public class TableDerived extends Table {
         if (dataExpression != null) {
             if (columnCount == 0) {
                 TableUtil.addAutoColumns(this, dataExpression.nodeDataTypes);
-                setTableIndexesForSubquery(session);
+                setTableIndexesForSubquery();
             }
         }
 
@@ -285,13 +276,13 @@ public class TableDerived extends Table {
             columnList  = queryExpression.getColumns();
             columnCount = queryExpression.getColumnCount();
 
-            setTableIndexesForSubquery(session);
+            setTableIndexesForSubquery();
         }
     }
 
-    public void prepareTable(Session session, HsqlName[] columns) {
+    public void prepareTable(HsqlName[] columns) {
 
-        prepareTable(session);
+        prepareTable();
 
         if (columns != null) {
             if (columns.length != columnList.size()) {
@@ -308,32 +299,27 @@ public class TableDerived extends Table {
         }
     }
 
-    private void setTableIndexesForSubquery(Session session) {
+    private void setTableIndexesForSubquery() {
 
-        int[]   cols         = null;
-        boolean hasFullIndex = false;
+        int[] cols = null;
 
-        if (queryExpression != null) {
-            if (queryExpression.fullIndex != null) {
-                hasFullIndex = true;
-            }
-        }
-
-        if (hasFullIndex || uniqueRows || uniquePredicate) {
+        if (uniqueRows || uniquePredicate) {
             cols = new int[getColumnCount()];
 
             ArrayUtil.fillSequence(cols);
         }
 
-        int[] pkcols = uniqueRows ? cols
+        int pkcols[] = uniqueRows ? cols
                                   : null;
 
-        createPrimaryKey(null, pkcols, false);
+        if (primaryKeyCols == null) {
+            createPrimaryKey(null, pkcols, false);
+        }
 
         if (uniqueRows) {
             fullIndex = getPrimaryIndex();
-        } else if (uniquePredicate || hasFullIndex) {
-            fullIndex = createIndexForColumns(session, cols);
+        } else if (uniquePredicate) {
+            fullIndex = createIndexForColumns(null, cols);
         }
     }
 
@@ -435,10 +421,10 @@ public class TableDerived extends Table {
 
         RowIterator it = rowIterator(session);
 
-        if (it.next()) {
-            Row row = it.getCurrentRow();
+        if (it.hasNext()) {
+            Row row = it.getNextRow();
 
-            if (it.next()) {
+            if (it.hasNext()) {
                 throw Error.error(ErrorCode.X_21000);
             }
 

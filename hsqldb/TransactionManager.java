@@ -1,4 +1,4 @@
-/* Copyright (c) 2001-2016, The HSQL Development Group
+/* Copyright (c) 2001-2011, The HSQL Development Group
  * All rights reserved.
  *
  * Redistribution and use in source and binary forms, with or without
@@ -44,93 +44,82 @@ import org.hsqldb.persist.PersistentStore;
 public interface TransactionManager {
 
     //
-    int LOCKS   = 0;
-    int MVLOCKS = 1;
-    int MVCC    = 2;
+    public int LOCKS   = 0;
+    public int MVLOCKS = 1;
+    public int MVCC    = 2;
 
     //
-    int ACTION_READ = 0;
-    int ACTION_DUP  = 1;
-    int ACTION_REF  = 2;
+    public int ACTION_READ = 0;
+    public int ACTION_DUP  = 1;
+    public int ACTION_REF  = 2;
 
-    //
-    int resetSessionResults  = 1;
-    int resetSessionTables   = 2;
-    int resetSessionResetAll = 3;
-    int resetSessionRollback = 4;
-    int resetSessionAbort    = 5;
-    int resetSessionClose    = 6;
+    public long getGlobalChangeTimestamp();
 
-    long getGlobalChangeTimestamp();
+    public long getNextGlobalChangeTimestamp();
 
-    long getNextGlobalChangeTimestamp();
+    public RowAction addDeleteAction(Session session, Table table,
+                                     PersistentStore store, Row row,
+                                     int[] colMap);
 
-    void setGlobalChangeTimestamp(long ts);
-
-    RowAction addDeleteAction(Session session, Table table,
-                              PersistentStore store, Row row, int[] colMap);
-
-    void addInsertAction(Session session, Table table, PersistentStore store,
-                         Row row, int[] changedColumns);
+    public void addInsertAction(Session session, Table table,
+                                PersistentStore store, Row row,
+                                int[] changedColumns);
 
     /**
      * add session to the end of queue when a transaction starts
      * (depending on isolation mode)
      */
-    void beginAction(Session session, Statement cs);
+    public void beginAction(Session session, Statement cs);
 
-    void beginActionResume(Session session);
+    public void beginActionResume(Session session);
 
-    void beginTransaction(Session session);
+    public void beginTransaction(Session session);
 
     // functional unit - accessibility of rows
-    boolean canRead(Session session, PersistentStore store, Row row, int mode,
-                    int[] colMap);
+    public boolean canRead(Session session, PersistentStore store, Row row,
+                           int mode, int[] colMap);
 
-    boolean canRead(Session session, PersistentStore store, long id, int mode);
+    public boolean canRead(Session session, PersistentStore store, long id,
+                           int mode);
 
-    boolean commitTransaction(Session session);
+    public boolean commitTransaction(Session session);
 
-    void completeActions(Session session);
+    public void completeActions(Session session);
 
-    int getTransactionControl();
+    public int getTransactionControl();
 
-    boolean isMVRows();
+    public boolean isMVRows();
 
-    boolean isMVCC();
+    public boolean isMVCC();
 
-    boolean is2PL();
+    public boolean prepareCommitActions(Session session);
 
-    boolean prepareCommitActions(Session session);
+    public void rollback(Session session);
 
-    void rollback(Session session);
+    public void rollbackAction(Session session);
 
-    void rollbackAction(Session session);
+    public void rollbackSavepoint(Session session, int index);
 
-    void rollbackSavepoint(Session session, int index);
+    public void rollbackPartial(Session session, int start, long timestamp);
 
-    void rollbackPartial(Session session, int start, long timestamp);
-
-    void setTransactionControl(Session session, int mode);
+    public void setTransactionControl(Session session, int mode);
 
     /**
      * store transaction info for a new row. called only
      * for CACHED tables
      */
-    void addTransactionInfo(CachedObject object);
+    public void addTransactionInfo(CachedObject object);
 
     /**
      * add transaction info to a row just loaded from the cache. called only
      * for CACHED tables
      */
-    void setTransactionInfo(PersistentStore store, CachedObject object);
+    public void setTransactionInfo(PersistentStore store, CachedObject object);
 
     /**
      * remove the transaction info
      */
-    void removeTransactionInfo(CachedObject object);
+    public void removeTransactionInfo(CachedObject object);
 
-    void removeTransactionInfo(long id);
-
-    void resetSession(Session session, Session targetSession, int mode);
+    public void removeTransactionInfo(long id);
 }

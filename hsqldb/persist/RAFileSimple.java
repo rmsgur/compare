@@ -1,4 +1,4 @@
-/* Copyright (c) 2001-2015, The HSQL Development Group
+/* Copyright (c) 2001-2011, The HSQL Development Group
  * All rights reserved.
  *
  * Redistribution and use in source and binary forms, with or without
@@ -44,21 +44,22 @@ import org.hsqldb.error.ErrorCode;
  * for backup and lobs.
  *
  * @author Fred Toussi (fredt@users dot sourceforge.net)
- * @version  2.3.3
+ * @version  2.3.0
  * @since  1.9.0
  */
 final class RAFileSimple implements RandomAccessInterface {
 
-    final RandomAccessFile  file;
-    final boolean           readOnly;
-    final EventLogInterface logger;
+    final RandomAccessFile file;
+    final boolean          readOnly;
+    final Database         database;
 
-    RAFileSimple(EventLogInterface logger, String name,
-                 String openMode) throws FileNotFoundException, IOException {
+    RAFileSimple(Database database, String name,
+                       String openMode)
+                       throws FileNotFoundException, IOException {
 
-        this.file   = new RandomAccessFile(name, openMode);
-        this.logger = logger;
-        readOnly    = openMode.equals("r");
+        this.file     = new RandomAccessFile(name, openMode);
+        this.database = database;
+        readOnly      = openMode.equals("r");
     }
 
     public long length() throws IOException {
@@ -117,7 +118,7 @@ final class RAFileSimple implements RandomAccessInterface {
                 file.writeByte(0);
             }
         } catch (IOException e) {
-            logger.logWarningEvent("data file enlarge failed ", e);
+            database.logger.logWarningEvent("data file enlarge failed ", e);
 
             return false;
         }
@@ -148,7 +149,7 @@ final class RAFileSimple implements RandomAccessInterface {
             try {
                 file.getFD().sync();
             } catch (Throwable tt) {
-                logger.logSevereEvent("RA file sync error ", t);
+                database.logger.logSevereEvent("RA file sync error ", t);
 
                 throw Error.error(t, ErrorCode.FILE_IO_ERROR, null);
             }

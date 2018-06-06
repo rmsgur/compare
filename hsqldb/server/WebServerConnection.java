@@ -1,4 +1,4 @@
-/* Copyright (c) 2001-2017, The HSQL Development Group
+/* Copyright (c) 2001-2011, The HSQL Development Group
  * All rights reserved.
  *
  * Redistribution and use in source and binary forms, with or without
@@ -63,9 +63,9 @@ import org.hsqldb.rowio.RowOutputBinary;
 
 // fredt@users 20021002 - patch 1.7.1 - changed notification method
 // unsaved@users 20021113 - patch 1.7.2 - SSL support
-// campbell-burnet@users 20030510 - patch 1.7.2 - SSL support moved to factory interface
-// campbell-burnet@users 20030510 - patch 1.7.2 - general lint removal
-// campbell-burnet@users 20030514 - patch 1.7.2 - localized error responses
+// boucherb@users 20030510 - patch 1.7.2 - SSL support moved to factory interface
+// boucherb@users 20030510 - patch 1.7.2 - general lint removal
+// boucherb@users 20030514 - patch 1.7.2 - localized error responses
 // fredt@users 20030628 - patch 1.7.2 - new protocol, persistent sessions
 
 /**
@@ -79,9 +79,12 @@ import org.hsqldb.rowio.RowOutputBinary;
  *  session.<p>
  *  (fredt@users)
  *
+ * Rewritten in version HSQLDB 1.7.2, based on original Hypersonic code.
+ *
+ * @author Thomas Mueller (Hypersonic SQL Group)
  * @author Fred Toussi (fredt@users dot sourceforge.net)
- * @version 2.3.4
- * @since 1.6.2
+ * @version 2.2.9
+ * @since Hypersonic SQL
  */
 class WebServerConnection implements Runnable {
 
@@ -117,7 +120,7 @@ class WebServerConnection implements Runnable {
             BYTES_POST    = "POST".getBytes("ISO-8859-1");
             BYTES_CONTENT = "Content-Length: ".getBytes("ISO-8859-1");
         } catch (UnsupportedEncodingException e) {
-            throw Error.runtimeError(ErrorCode.U_S0500, "RowOutputTextLog");
+            Error.runtimeError(ErrorCode.U_S0500, "RowOutputTextLog");
         }
     }
 
@@ -339,9 +342,8 @@ class WebServerConnection implements Runnable {
 
             //
             Result resultOut;
-            int    type = resultIn.getType();
 
-            if (type == ResultConstants.CONNECT) {
+            if (resultIn.getType() == ResultConstants.CONNECT) {
                 try {
                     String databaseName = resultIn.getDatabaseName();
                     int    dbIndex      = server.getDBIndex(databaseName);
@@ -353,14 +355,19 @@ class WebServerConnection implements Runnable {
                                                    resultIn.getSubString(),
                                                    resultIn.getZoneString(),
                                                    resultIn.getUpdateCount());
-                    resultOut =
-                        Result.newConnectionAcknowledgeResponse(session);
+
+                    resultIn.readAdditionalResults(session, dataIn, rowIn);
+
+                    resultOut = Result.newConnectionAcknowledgeResponse(
+                        session.getDatabase(), session.getId(), dbID);
                 } catch (HsqlException e) {
                     resultOut = Result.newErrorResult(e);
                 } catch (RuntimeException e) {
                     resultOut = Result.newErrorResult(e);
                 }
             } else {
+                int dbID = resultIn.getDatabaseId();
+
                 if (session == null) {
                     resultOut = Result.newErrorResult(
                         Error.error(ErrorCode.SERVER_DATABASE_DISCONNECTED));
@@ -368,13 +375,11 @@ class WebServerConnection implements Runnable {
                     resultIn.setSession(session);
                     resultIn.readLobResults(session, dataIn, rowIn);
 
-                    if (type == ResultConstants.SQLCANCEL) {
-                        resultOut = session.cancel(resultIn);
-                    } else {
-                        resultOut = session.execute(resultIn);
-                    }
+                    resultOut = session.execute(resultIn);
                 }
             }
+
+            int type = resultIn.getType();
 
 // patched 2.2.9 by Aart 2012-05-15: Make sure 'Content-length' is correctly set
             if (type == ResultConstants.DISCONNECT
@@ -417,7 +422,7 @@ class WebServerConnection implements Runnable {
             dataOut.close();
 
 // patch-end 2.2.9 by Aart 2012-05-15
-        } catch (IOException e) {
+        } catch (Exception e) {
             server.printStackTrace(e);
         }
     }
@@ -527,7 +532,7 @@ class WebServerConnection implements Runnable {
     }
 
     /**
-     *  Processes an HTTP error condition, sending an error response to
+     *  Processess an HTTP error condition, sending an error response to
      *  the client.
      *
      * @param code the error condition code

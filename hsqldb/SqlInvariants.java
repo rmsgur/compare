@@ -1,4 +1,4 @@
-/* Copyright (c) 2001-2016, The HSQL Development Group
+/* Copyright (c) 2001-2011, The HSQL Development Group
  * All rights reserved.
  *
  * Redistribution and use in source and binary forms, with or without
@@ -39,10 +39,10 @@ import org.hsqldb.error.ErrorCode;
  * Invariant schema objects.
  *
  * @author Fred Toussi (fredt@users dot sourceforge.net)
- * @version 2.3.1
+ * @version 2.3.0
  * @since 1.9.0
  */
-public final class SqlInvariants {
+public class SqlInvariants {
 
     /**
      * The role name reserved for authorization of INFORMATION_SCHEMA and
@@ -103,25 +103,23 @@ public final class SqlInvariants {
         MODULE_HSQLNAME = HsqlNameManager.newSystemObjectName(MODULE,
                 SchemaObject.SCHEMA);
         DUAL_TABLE_HSQLNAME = HsqlNameManager.newSystemObjectName(DUAL,
-                SchemaObject.TABLE);
-        DUAL_TABLE_HSQLNAME.schema = SYSTEM_SCHEMA_HSQLNAME;
+                SchemaObject.SCHEMA);
         DUAL_COLUMN_HSQLNAME = HsqlNameManager.newSystemObjectName(DUMMY,
-                SchemaObject.COLUMN);
-        DUAL_COLUMN_HSQLNAME.parent = DUAL_TABLE_HSQLNAME;
+                SchemaObject.SCHEMA);
         SYSTEM_INDEX_HSQLNAME = HsqlNameManager.newSystemObjectName(IDX,
                 SchemaObject.INDEX);
 
         SYSTEM_SUBQUERY_HSQLNAME.setSchemaIfNull(SYSTEM_SCHEMA_HSQLNAME);
     }
 
-    public static void checkSchemaNameNotSystem(String name) {
+    public static final void checkSchemaNameNotSystem(String name) {
 
         if (isSystemSchemaName(name)) {
             throw Error.error(ErrorCode.X_42503, name);
         }
     }
 
-    public static boolean isSystemSchemaName(String name) {
+    public static final boolean isSystemSchemaName(String name) {
 
         if (SqlInvariants.DEFINITION_SCHEMA.equals(name)
                 || SqlInvariants.INFORMATION_SCHEMA.equals(name)
@@ -133,7 +131,7 @@ public final class SqlInvariants {
         return false;
     }
 
-    public static boolean isLobsSchemaName(String name) {
+    public static final boolean isLobsSchemaName(String name) {
 
         if (SqlInvariants.LOBS_SCHEMA.equals(name)) {
             return true;
@@ -142,7 +140,7 @@ public final class SqlInvariants {
         return false;
     }
 
-    public static boolean isSchemaNameSystem(HsqlName name) {
+    public static final boolean isSchemaNameSystem(HsqlName name) {
 
         if (name.schema != null) {
             name = name.schema;

@@ -1,4 +1,4 @@
-/* Copyright (c) 2001-2017, The HSQL Development Group
+/* Copyright (c) 2001-2011, The HSQL Development Group
  * All rights reserved.
  *
  * Redistribution and use in source and binary forms, with or without
@@ -41,12 +41,18 @@ import org.hsqldb.result.Result;
  * Implementation of Statement for simple PSM control statements.
  *
  * @author Fred Toussi (fredt@users dot sourceforge.net)
- * @version 2.3.3
+ * @version 2.2.7
  * @since 1.9.0
  */
 public class StatementSimple extends Statement {
 
+    String   sqlState;
+    String   message;
     HsqlName label;
+
+    //
+    ColumnSchema[] variables;
+    int[]          variableIndexes;
 
     StatementSimple(int type, HsqlName label) {
 
@@ -57,11 +63,33 @@ public class StatementSimple extends Statement {
         this.label             = label;
     }
 
+    StatementSimple(int type, String sqlState, String message) {
+
+        super(type, StatementTypes.X_SQL_CONTROL);
+
+        references             = new OrderedHashSet();
+        isTransactionStatement = false;
+        this.sqlState          = sqlState;
+        this.message           = message;
+    }
+
     public String getSQL() {
 
         StringBuffer sb = new StringBuffer();
 
         switch (type) {
+
+            case StatementTypes.SIGNAL :
+                sb.append(Tokens.T_SIGNAL).append(' ');
+                sb.append(Tokens.T_SQLSTATE);
+                sb.append(' ').append('\'').append(sqlState).append('\'');
+                break;
+
+            case StatementTypes.RESIGNAL :
+                sb.append(Tokens.T_RESIGNAL).append(' ');
+                sb.append(Tokens.T_SQLSTATE);
+                sb.append(' ').append('\'').append(sqlState).append('\'');
+                break;
 
             case StatementTypes.ITERATE :
                 sb.append(Tokens.T_ITERATE).append(' ').append(label);
@@ -97,7 +125,7 @@ public class StatementSimple extends Statement {
         try {
             result = getResult(session);
         } catch (Throwable t) {
-            result = Result.newErrorResult(t);
+            result = Result.newErrorResult(t, null);
         }
 
         if (result.isError()) {
@@ -111,12 +139,19 @@ public class StatementSimple extends Statement {
 
         switch (type) {
 
+            /** @todo - check sqlState against allowed values */
+            case StatementTypes.SIGNAL :
+            case StatementTypes.RESIGNAL :
+                HsqlException ex = Error.error(message, sqlState);
+
+                return Result.newErrorResult(ex);
+
             case StatementTypes.ITERATE :
             case StatementTypes.LEAVE :
                 return Result.newPSMResult(type, label.name, null);
 
             default :
-                throw Error.runtimeError(ErrorCode.U_S0500, "StatementSimple");
+                throw Error.runtimeError(ErrorCode.U_S0500, "");
         }
     }
 
@@ -125,6 +160,11 @@ public class StatementSimple extends Statement {
         boolean resolved = false;
 
         switch (type) {
+
+            case StatementTypes.SIGNAL :
+            case StatementTypes.RESIGNAL :
+                resolved = true;
+                break;
 
             case StatementTypes.ITERATE : {
                 StatementCompound statement = parent;
@@ -155,7 +195,7 @@ public class StatementSimple extends Statement {
                 break;
 
             default :
-                throw Error.runtimeError(ErrorCode.U_S0500, "StatementSimple");
+                throw Error.runtimeError(ErrorCode.U_S0500, "");
         }
 
         if (!resolved) {
@@ -167,7 +207,7 @@ public class StatementSimple extends Statement {
         return "";
     }
 
-    public boolean isCatalogLock(int model) {
+    public boolean isCatalogLock() {
         return false;
     }
 

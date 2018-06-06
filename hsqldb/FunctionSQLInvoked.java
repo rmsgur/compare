@@ -1,4 +1,4 @@
-/* Copyright (c) 2001-2016, The HSQL Development Group
+/* Copyright (c) 2001-2011, The HSQL Development Group
  * All rights reserved.
  *
  * Redistribution and use in source and binary forms, with or without
@@ -44,7 +44,7 @@ import org.hsqldb.types.Type;
  * Implementation of SQL-invoked user-defined function calls - PSM and JRT
  *
  * @author Fred Toussi (fredt@users dot sourceforge.net)
- * @version 2.3.5
+ * @version 2.0.1
  * @since 1.9.0
  */
 public class FunctionSQLInvoked extends Expression {
@@ -66,8 +66,8 @@ public class FunctionSQLInvoked extends Expression {
     }
 
     public HsqlList resolveColumnReferences(Session session,
-            RangeGroup rangeGroup, int rangeCount, RangeGroup[] rangeGroups,
-            HsqlList unresolvedSet, boolean acceptsSequences) {
+            RangeGroup rangeGroup, int rangeCount,
+            RangeGroup[] rangeGroups, HsqlList unresolvedSet, boolean acceptsSequences) {
 
         HsqlList conditionSet = condition.resolveColumnReferences(session,
             rangeGroup, rangeCount, rangeGroups, null, false);
@@ -85,10 +85,7 @@ public class FunctionSQLInvoked extends Expression {
 
             return unresolvedSet;
         } else {
-            return super.resolveColumnReferences(session, rangeGroup,
-                                                 rangeCount, rangeGroups,
-                                                 unresolvedSet,
-                                                 acceptsSequences);
+            return super.resolveColumnReferences(session, rangeGroup, rangeCount, rangeGroups, unresolvedSet, acceptsSequences);
         }
     }
 
@@ -119,7 +116,8 @@ public class FunctionSQLInvoked extends Expression {
 
     private Object getValueInternal(Session session, Object[] aggregateData) {
 
-        boolean  isValue = false;
+        boolean  isValue       = false;
+        int      variableCount = routine.getVariableCount();
         Result   result;
         int      extraArg = routine.javaMethodWithConnection ? 1
                                                              : 0;
@@ -187,6 +185,14 @@ public class FunctionSQLInvoked extends Expression {
     }
 
     public Object getValue(Session session) {
+
+        if (opType == OpTypes.SIMPLE_COLUMN) {
+            Object value =
+                session.sessionContext.rangeIterators[rangePosition]
+                    .getCurrent(columnIndex);
+
+            return value;
+        }
 
         Object returnValue = getValueInternal(session, null);
 
@@ -262,12 +268,15 @@ public class FunctionSQLInvoked extends Expression {
 
     public boolean equals(Expression other) {
 
-        if (other instanceof FunctionSQLInvoked) {
-            FunctionSQLInvoked o = (FunctionSQLInvoked) other;
+        if (!(other instanceof FunctionSQLInvoked)) {
+            return false;
+        }
 
-            return super.equals(other) && opType == other.opType
-                   && routineSchema == o.routineSchema && routine == o.routine
-                   && condition.equals(o.condition);
+        FunctionSQLInvoked o = (FunctionSQLInvoked) other;
+
+        if (opType == other.opType && routineSchema == o.routineSchema
+                && routine == o.routine && condition.equals(o.condition)) {
+            return super.equals(other);
         }
 
         return false;

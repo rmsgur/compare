@@ -1,4 +1,4 @@
-/* Copyright (c) 2001-2017, The HSQL Development Group
+/* Copyright (c) 2001-2011, The HSQL Development Group
  * All rights reserved.
  *
  * Redistribution and use in source and binary forms, with or without
@@ -38,7 +38,7 @@ import org.hsqldb.StatementTypes;
  * between the client and the engine when sending Result objects back
  * and forth.
  *
- * @author Campbell Burnet (campbell-burnet@users dot sourceforge.net)
+ * @author Campbell Boucher-Burnet (boucherb@users dot sourceforge.net)
  * @author Fred Toussi (fredt@users dot sourceforge.net)
  * @since 2.1.1
  * @version 1.7.2
@@ -64,7 +64,7 @@ public interface ResultConstants {
     int UPDATECOUNT = HSQL_API_BASE + 1;
 
     /**
-     * Indicates that the Result object encapsulates an
+     * Indicates that the Result object encapsualtes an
      * error response.
      */
     int ERROR = HSQL_API_BASE + 2;
@@ -77,17 +77,11 @@ public interface ResultConstants {
 
     /**
      * Indicates that the Result object encapsulates a response
-     * that communicates the acknowledgement of newly allocated
+     * that communicates the acknowlegement of newly allocated
      * Statement object in the form of its statementID
      * and metadata
      */
     int PREPARE_ACK = HSQL_API_BASE + 4;
-
-    /**
-     * Indicates that Result encapsulates a request to cancel execution of
-     * a CLI routine.
-     */
-    int SQLCANCEL = HSQL_API_BASE + 5;
 
     /**
      * Indicates that the Result object encapsulates a result

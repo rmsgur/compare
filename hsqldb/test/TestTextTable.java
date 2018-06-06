@@ -1,4 +1,4 @@
-/* Copyright (c) 2001-2015, The HSQL Development Group
+/* Copyright (c) 2001-2011, The HSQL Development Group
  * All rights reserved.
  *
  * Redistribution and use in source and binary forms, with or without
@@ -109,8 +109,6 @@ public class TestTextTable extends TestBase {
             try {
                 String completeFileName = m_name + ".csv";
 
-                FileUtil.getFileUtil().delete(completeFileName);
-
                 textFile = new PrintStream(
                     FileUtil.getFileUtil().openOutputStreamElement(
                         completeFileName));
@@ -187,7 +185,7 @@ public class TestTextTable extends TestBase {
 
     /** Creates a new instance of TestTextTable */
     public TestTextTable(String testName) {
-        super(testName, "jdbc:hsqldb:file:test", false, false);
+        super(testName, null, false, false);
     }
 
     /**
@@ -214,7 +212,7 @@ public class TestTextTable extends TestBase {
         }
     }
 
-    public void setUp() throws Exception {
+    public void setUp() {
 
         super.setUp();
         setupTextFiles();
@@ -505,46 +503,46 @@ public class TestTextTable extends TestBase {
             } catch (java.sql.SQLException es) {    /* that's expected here */
             }
 
+/*
             // new - a malformed data source assignment by user should not survive
             // and should revert to the existing one
             assertTrue(
-                "A table with an invalid data source should fall back to original read-only.",
-                !isReadOnly(m_products.getName()));
+                "A table with an invalid data source should fall back to read-only.",
+                isReadOnly(m_products.getName()));
+
             assertEquals(
                 "A data source which cannot be set should nonetheless be remembered.",
-                m_products.getDataSourceSpec(),
-                getDataSourceSpec(m_products.getName()));
+                newDataSourceSpec, getDataSourceSpec(m_products.getName()));
+*/
 
             // the data source spec should even survive a shutdown
             executeStatement("SHUTDOWN");
 
             m_connection = newConnection();
             m_statement  = m_connection.createStatement();
-
-            assertEquals("A data source should survive a database shutdown.",
-                         m_products.getDataSourceSpec(),
-                         getDataSourceSpec(m_products.getName()));
+/*
+            assertEquals(
+                "A data source pointing to a mailformed file should survive a database shutdown.",
+                newDataSourceSpec, getDataSourceSpec(m_products.getName()));
             assertTrue(
-                "After shutdown and DB-reconnect, the table should keepe read-only attribute.",
-                !isReadOnly(m_products.getName()));
+                "After shutdown and DB-reconnect, the table with a malformed source should be read-only, again.",
+                isReadOnly(m_products.getName()));
+*/
 
             // reconnect after fixing the file
-            FileUtil.getFileUtil().delete(fileName);
-
             textFile = new PrintStream(
                 FileUtil.getFileUtil().openOutputStreamElement(fileName));
 
             textFile.println("1;some text");
             textFile.close();
-            m_statement.execute(sqlSetTable + " SOURCE \"" + newDataSourceSpec
-                                + "\"");
+            executeStatement(sqlSetTable + " SOURCE ON");
             assertFalse(
                 "The file was fixed, reconnect was successful, so the table shouldn't be read-only.",
                 isReadOnly(m_products.getName()));
 
             // finally re-create the proper version of the table for any further tests
-            m_statement.execute(sqlSetTable + " SOURCE \""
-                                + m_products.getDataSourceSpec() + "\"");
+            m_products.createTextFile();
+            m_products.createTable(m_connection);
             verifyTableContent(m_products.getName(), m_products.getData());
         } catch (junit.framework.AssertionFailedError e) {
             throw e;

@@ -1,4 +1,4 @@
-/* Copyright (c) 2001-2016, The HSQL Development Group
+/* Copyright (c) 2001-2011, The HSQL Development Group
  * All rights reserved.
  *
  * Redistribution and use in source and binary forms, with or without
@@ -48,7 +48,7 @@ import org.hsqldb.lib.ArraySort;
  * Class for ARRAY type objects.<p>
  *
  * @author Fred Toussi (fredt@users dot sourceforge.net)
- * @version 2.3.3
+ * @version 2.2.9
  * @since 2.0.0
  */
 public class ArrayType extends Type {
@@ -268,9 +268,8 @@ public class ArrayType extends Type {
             Object[] array = new Object[data.length];
 
             for (int i = 0; i < data.length; i++) {
-                Object o = dataType.convertJavaToSQL(session, data[i]);
-
-                array[i] = dataType.convertToTypeLimits(session, o);
+                array[i] = dataType.convertJavaToSQL(session, data[i]);
+                array[i] = dataType.convertToTypeLimits(session, data[i]);
             }
 
             return array;
@@ -356,9 +355,9 @@ public class ArrayType extends Type {
         }
 
         if (maxCardinality >= ((ArrayType) otherType).maxCardinality) {
-            return dataType.canMoveFrom(otherType);
+            return dataType.canMoveFrom((ArrayType) otherType);
         } else {
-            if (dataType.canMoveFrom(otherType) == -1) {
+            if (dataType.canMoveFrom((ArrayType) otherType) == -1) {
                 return -1;
             }
 
@@ -479,9 +478,12 @@ public class ArrayType extends Type {
             return true;
         }
 
-        if (other instanceof ArrayType) {
-            return super.equals(other)
-                   && maxCardinality == ((ArrayType) other).maxCardinality
+        if (other instanceof Type) {
+            if (((Type) other).typeCode != Types.SQL_ARRAY) {
+                return false;
+            }
+
+            return maxCardinality == ((ArrayType) other).maxCardinality
                    && dataType.equals(((ArrayType) other).dataType);
         }
 

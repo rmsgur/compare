@@ -1,4 +1,4 @@
-/* Copyright (c) 2001-2016, The HSQL Development Group
+/* Copyright (c) 2001-2011, The HSQL Development Group
  * All rights reserved.
  *
  * Redistribution and use in source and binary forms, with or without
@@ -31,11 +31,10 @@
 
 package org.hsqldb.rowio;
 
+import java.io.IOException;
+
 import org.hsqldb.error.Error;
 import org.hsqldb.error.ErrorCode;
-import org.hsqldb.persist.TextFileSettings;
-
-// fredt@users - 2.3.4 - patch for user-defined quote char by Damjan Jovanovic
 
 /**
  * Fields in the source file need not be quoted. Methods in this class unquote
@@ -43,7 +42,7 @@ import org.hsqldb.persist.TextFileSettings;
  * case.
  *
  * @author Bob Preston (sqlbob@users dot sourceforge.net)
- * @version 2.3.4
+ * @version 2.2.9
  * @since 1.7.0
  */
 public class RowInputTextQuoted extends RowInputText {
@@ -51,38 +50,27 @@ public class RowInputTextQuoted extends RowInputText {
     private static final int NORMAL_FIELD   = 0;
     private static final int NEED_END_QUOTE = 1;
     private static final int FOUND_QUOTE    = 2;
-    private final char       quoteChar;
-    int                      charLength = 0;
+    private char[]           qtext;
 
-    public RowInputTextQuoted(TextFileSettings textFileSettings) {
-
-        super(textFileSettings);
-
-        this.quoteChar = textFileSettings.quoteChar;
+    public RowInputTextQuoted(String fieldSep, String varSep,
+                              String longvarSep, boolean allQuoted) {
+        super(fieldSep, varSep, longvarSep, allQuoted);
     }
 
     public void setSource(String text, long pos, int byteSize) {
 
         super.setSource(text, pos, byteSize);
 
-        charLength = text.length();
-
-        for (int i = charLength - 1; i > -1; i--) {
-            if (text.charAt(i) == TextFileSettings.CR_CHAR
-                    || text.charAt(i) == TextFileSettings.LF_CHAR) {
-                charLength--;
-            } else {
-                break;
-            }
-        }
+        qtext = text.toCharArray();
     }
 
-    protected String getField(String sep, int sepLen, boolean isEnd) {
+    protected String getField(String sep, int sepLen,
+                              boolean isEnd) throws IOException {
 
         //fredt - now the only supported behaviour is emptyIsNull
         String s = null;
 
-        if (next >= charLength || text.charAt(next) != quoteChar) {
+        if (next >= qtext.length || qtext[next] != '\"') {
             return super.getField(sep, sepLen, isEnd);
         }
 
@@ -98,7 +86,7 @@ public class RowInputTextQuoted extends RowInputText {
                 end = text.indexOf(sep, next);
             }
 
-            for (; next < charLength; next++) {
+            for (; next < qtext.length; next++) {
                 switch (state) {
 
                     case NORMAL_FIELD :
@@ -106,45 +94,38 @@ public class RowInputTextQuoted extends RowInputText {
                         if (next == end) {
                             next += sepLen;
                             done = true;
-                        } else if (text.charAt(next) == quoteChar) {
+                        } else if (qtext[next] == '\"') {
 
                             //-- Beginning of field
                             state = NEED_END_QUOTE;
                         } else {
-                            sb.append(text.charAt(next));
+                            sb.append(qtext[next]);
                         }
                         break;
 
                     case NEED_END_QUOTE :
-                        if (text.charAt(next) == quoteChar) {
+                        if (qtext[next] == '\"') {
                             state = FOUND_QUOTE;
                         } else {
-                            sb.append(text.charAt(next));
+                            sb.append(qtext[next]);
                         }
                         break;
 
                     case FOUND_QUOTE :
-                        if (text.charAt(next) == quoteChar) {
+                        if (qtext[next] == '\"') {
 
                             //-- Escaped quote
-                            sb.append(text.charAt(next));
+                            sb.append(qtext[next]);
 
                             state = NEED_END_QUOTE;
                         } else {
+                            next  += sepLen - 1;
+                            state = NORMAL_FIELD;
+
                             if (!isEnd) {
-                                end = text.indexOf(sep, next);
+                                next++;
 
-                                if (end < 0) {
-                                    end = charLength;
-                                }
-
-                                sb.append(text, next, end);
-
-                                next = end + sepLen;
                                 done = true;
-                            } else {
-                                next  += sepLen - 1;
-                                state = NORMAL_FIELD;
                             }
                         }
                         break;
@@ -157,9 +138,13 @@ public class RowInputTextQuoted extends RowInputText {
 
             s = sb.toString();
         } catch (Exception e) {
-            String message = String.valueOf(field);
+            Object[] messages = new Object[] {
+                new Integer(field), e.toString()
+            };
 
-            throw Error.error(e, ErrorCode.M_TEXT_SOURCE_FIELD_ERROR, message);
+            throw new IOException(
+                Error.getMessage(
+                    ErrorCode.M_TEXT_SOURCE_FIELD_ERROR, 0, messages));
         }
 
         return s;

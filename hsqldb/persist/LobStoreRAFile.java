@@ -1,4 +1,4 @@
-/* Copyright (c) 2001-2015, The HSQL Development Group
+/* Copyright (c) 2001-2011, The HSQL Development Group
  * All rights reserved.
  *
  * Redistribution and use in source and binary forms, with or without
@@ -37,25 +37,24 @@ import org.hsqldb.error.ErrorCode;
 
 /**
  * @author Fred Toussi (fredt@users dot sourceforge.net)
- * @version 2.3.3
+ * @version 2.3.0
  * @since 1.9.0
  */
 public class LobStoreRAFile implements LobStore {
 
     final int             lobBlockSize;
-    String                fileName;
     RandomAccessInterface file;
     Database              database;
 
     public LobStoreRAFile(Database database, int lobBlockSize) {
 
-        this.database     = database;
         this.lobBlockSize = lobBlockSize;
-        this.fileName     = database.getPath() + ".lobs";
+        this.database     = database;
 
         try {
+            String name = database.getPath() + ".lobs";
             boolean exists =
-                database.logger.getFileAccess().isStreamElement(fileName);
+                database.logger.getFileAccess().isStreamElement(name);
 
             if (exists) {
                 openFile();
@@ -68,15 +67,15 @@ public class LobStoreRAFile implements LobStore {
     private void openFile() {
 
         try {
+            String  name     = database.getPath() + ".lobs";
             boolean readonly = database.isFilesReadOnly();
 
             if (database.logger.isStoredFileAccess()) {
-                file = RAFile.newScaledRAFile(database, fileName, readonly,
+                file = RAFile.newScaledRAFile(database, name, readonly,
                                               RAFile.DATA_FILE_STORED);
             } else {
-                file = new RAFileSimple(database.logger, fileName,
-                                        readonly ? "r"
-                                                 : "rws");
+                file = new RAFileSimple(database, name, readonly ? "r"
+                                                                 : "rws");
             }
         } catch (Throwable t) {
             throw Error.error(ErrorCode.DATA_FILE_ERROR, t);

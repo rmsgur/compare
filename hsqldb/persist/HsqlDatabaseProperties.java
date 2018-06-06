@@ -1,4 +1,4 @@
-/* Copyright (c) 2001-2017, The HSQL Development Group
+/* Copyright (c) 2001-2011, The HSQL Development Group
  * All rights reserved.
  *
  * Redistribution and use in source and binary forms, with or without
@@ -34,6 +34,7 @@ package org.hsqldb.persist;
 import java.util.Enumeration;
 
 import org.hsqldb.Database;
+import org.hsqldb.DatabaseURL;
 import org.hsqldb.error.Error;
 import org.hsqldb.error.ErrorCode;
 import org.hsqldb.lib.HashMap;
@@ -46,7 +47,7 @@ import org.hsqldb.lib.StringUtil;
  * Manages a .properties file for a database.
  *
  * @author Fred Toussi (fredt@users dot sourceforge.net)
- * @version 2.4.0
+ * @version 2.3.0
  * @since 1.7.0
  */
 public class HsqlDatabaseProperties extends HsqlProperties {
@@ -86,7 +87,7 @@ public class HsqlDatabaseProperties extends HsqlProperties {
      * If the system property "hsqldb.method_class_names" is not set, then
      * static methods of all available Java classes can be accessed as functions
      * in HSQLDB. If the property is set, then only the list of semicolon
-     * separated method names becomes accessible. An empty property value means
+     * seperated method names becomes accessible. An empty property value means
      * no class is accessible.<p>
      *
      * A property value that ends with .* is treated as a wild card and allows
@@ -148,26 +149,13 @@ public class HsqlDatabaseProperties extends HsqlProperties {
 
     // versions
     public static final String VERSION_STRING_1_8_0 = "1.8.0";
+    public static final String THIS_VERSION         = "2.3.0";
+    public static final String THIS_FULL_VERSION    = "2.3.0";
+    public static final String THIS_CACHE_VERSION   = "2.0.0";
     public static final String PRODUCT_NAME         = "HSQL Database Engine";
-
-//#ifdef JAVA8
-/*
-
-    public static final String THIS_VERSION         = "2.4.0";
-    public static final String THIS_FULL_VERSION    = "2.4.0";
     public static final int    MAJOR                = 2,
-                               MINOR                = 4,
+                               MINOR                = 3,
                                REVISION             = 0;
-*/
-
-//#else
-    public static final String THIS_VERSION      = "2.3.5";
-    public static final String THIS_FULL_VERSION = "2.3.5";
-    public static final int    MAJOR             = 2,
-                               MINOR             = 3,
-                               REVISION          = 5;
-
-//#endif JAVA8
 
     /**
      * system properties supported by HSQLDB
@@ -186,22 +174,18 @@ public class HsqlDatabaseProperties extends HsqlProperties {
     private static final String hsqldb_modified = "modified";
 
     //
-    public static final String tx_timestamp = "tx_timestamp";
-
-    //
     public static final String hsqldb_cache_version = "hsqldb.cache_version";
 
     //
     public static final String runtime_gc_interval = "runtime.gc_interval";
 
     //
-    public static final String url_ifexists          = "ifexists";
-    public static final String url_create            = "create";
-    public static final String url_default_schema    = "default_schema";
-    public static final String url_check_props       = "check_props";
-    public static final String url_get_column_name   = "get_column_name";
-    public static final String url_close_result      = "close_result";
-    public static final String url_allow_empty_batch = "allow_empty_batch";
+    public static final String url_ifexists        = "ifexists";
+    public static final String url_create          = "create";
+    public static final String url_default_schema  = "default_schema";
+    public static final String url_check_props     = "check_props";
+    public static final String url_get_column_name = "get_column_name";
+    public static final String url_close_result    = "close_result";
 
     //
     public static final String url_storage_class_name = "storage_class_name";
@@ -254,43 +238,37 @@ public class HsqlDatabaseProperties extends HsqlProperties {
         "hsqldb.full_log_replay";
     public static final String hsqldb_large_data  = "hsqldb.large_data";
     public static final String hsqldb_files_space = "hsqldb.files_space";
-    public static final String hsqldb_digest      = "hsqldb.digest";
+    public static final String hsqldb_files_check = "hsqldb.files_check";
 
     //
-    public static final String jdbc_translate_tti_types =
-        "jdbc.translate_tti_types";
-
-    //
-    public static final String sql_restrict_exec       = "sql.restrict_exec";
     public static final String sql_ref_integrity       = "sql.ref_integrity";
     public static final String sql_compare_in_locale = "sql.compare_in_locale";
     public static final String sql_enforce_size        = "sql.enforce_size";
     public static final String sql_enforce_strict_size =
         "sql.enforce_strict_size";    // synonym for sql_enforce_size
-    public static final String sql_enforce_refs    = "sql.enforce_refs";
-    public static final String sql_enforce_names   = "sql.enforce_names";
-    public static final String sql_regular_names   = "sql.regular_names";
-    public static final String sql_enforce_types   = "sql.enforce_types";
-    public static final String sql_enforce_tdcd    = "sql.enforce_tdc_delete";
-    public static final String sql_enforce_tdcu    = "sql.enforce_tdc_update";
-    public static final String sql_char_literal    = "sql.char_literal";
-    public static final String sql_concat_nulls    = "sql.concat_nulls";
-    public static final String sql_nulls_first     = "sql.nulls_first";
-    public static final String sql_nulls_order     = "sql.nulls_order";
-    public static final String sql_unique_nulls    = "sql.unique_nulls";
-    public static final String sql_convert_trunc   = "sql.convert_trunc";
-    public static final String sql_avg_scale       = "sql.avg_scale";
-    public static final String sql_double_nan      = "sql.double_nan";
-    public static final String sql_syntax_db2      = "sql.syntax_db2";
-    public static final String sql_syntax_mss      = "sql.syntax_mss";
-    public static final String sql_syntax_mys      = "sql.syntax_mys";
-    public static final String sql_syntax_ora      = "sql.syntax_ora";
-    public static final String sql_syntax_pgs      = "sql.syntax_pgs";
-    public static final String sql_longvar_is_lob  = "sql.longvar_is_lob";
-    public static final String sql_pad_space       = "sql.pad_space";
-    public static final String sql_ignore_case     = "sql.ignore_case";
-    public static final String sql_live_object     = "sql.live_object";
-    public static final String sql_sys_index_names = "sql.sys_index_names";
+    public static final String sql_enforce_refs  = "sql.enforce_refs";
+    public static final String sql_enforce_names = "sql.enforce_names";
+    public static final String sql_regular_names = "sql.regular_names";
+    public static final String sql_enforce_types = "sql.enforce_types";
+    public static final String sql_enforce_tdcd  = "sql.enforce_tdc_delete";
+    public static final String sql_enforce_tdcu  = "sql.enforce_tdc_update";
+    public static final String sql_concat_nulls  = "sql.concat_nulls";
+    public static final String sql_nulls_first   = "sql.nulls_first";
+    public static final String sql_nulls_order   = "sql.nulls_order";
+    public static final String sql_unique_nulls  = "sql.unique_nulls";
+    public static final String sql_convert_trunc = "sql.convert_trunc";
+    public static final String sql_avg_scale     = "sql.avg_scale";
+    public static final String sql_double_nan    = "sql.double_nan";
+    public static final String sql_syntax_db2    = "sql.syntax_db2";
+    public static final String sql_syntax_mss    = "sql.syntax_mss";
+    public static final String sql_syntax_mys    = "sql.syntax_mys";
+    public static final String sql_syntax_ora    = "sql.syntax_ora";
+    public static final String sql_syntax_pgs    = "sql.syntax_pgs";
+    public static final String jdbc_translate_tti_types =
+        "jdbc.translate_tti_types";
+    public static final String sql_longvar_is_lob = "sql.longvar_is_lob";
+    public static final String sql_pad_space      = "sql.pad_space";
+    public static final String sql_ignore_case    = "sql.ignore_case";
 
     //
     public static final String textdb_cache_scale = "textdb.cache_scale";
@@ -305,10 +283,6 @@ public class HsqlDatabaseProperties extends HsqlProperties {
     public static final String textdb_fs           = "textdb.fs";
     public static final String textdb_vs           = "textdb.vs";
     public static final String textdb_lvs          = "textdb.lvs";
-    public static final String textdb_qc           = "textdb.qc";
-
-    //
-    public static final String hsqldb_min_reuse = "hsqldb.min_reuse";
 
     static {
 
@@ -331,8 +305,6 @@ public class HsqlDatabaseProperties extends HsqlProperties {
                      HsqlProperties.getMeta(textdb_vs, SQL_PROPERTY, null));
         textMeta.put(textdb_lvs,
                      HsqlProperties.getMeta(textdb_lvs, SQL_PROPERTY, null));
-        textMeta.put(textdb_qc,
-                     HsqlProperties.getMeta(textdb_qc, SQL_PROPERTY, "\""));
         textMeta.put(textdb_encoding,
                      HsqlProperties.getMeta(textdb_encoding, SQL_PROPERTY,
                                             "ISO-8859-1"));
@@ -381,13 +353,6 @@ public class HsqlDatabaseProperties extends HsqlProperties {
         dbMeta.put(hsqldb_default_table_type,
                    HsqlProperties.getMeta(hsqldb_default_table_type,
                                           SQL_PROPERTY, "MEMORY"));
-        dbMeta.put(hsqldb_digest,
-                   HsqlProperties.getMeta(hsqldb_digest, SQL_PROPERTY, "MD5"));
-        dbMeta.put(sql_live_object,
-                   HsqlProperties.getMeta(sql_live_object, SQL_PROPERTY,
-                                          false));
-        dbMeta.put(tx_timestamp,
-                   HsqlProperties.getMeta(tx_timestamp, SYSTEM_PROPERTY));
 
         // boolean defaults for user defined props
         dbMeta.put(hsqldb_tx_conflict_rollback,
@@ -414,9 +379,6 @@ public class HsqlDatabaseProperties extends HsqlProperties {
         dbMeta.put(sql_ref_integrity,
                    HsqlProperties.getMeta(sql_ref_integrity, SQL_PROPERTY,
                                           true));
-        dbMeta.put(sql_restrict_exec,
-                   HsqlProperties.getMeta(sql_restrict_exec, SQL_PROPERTY,
-                                          false));
 
         // SQL reserved words not allowed as some identifiers
         dbMeta.put(sql_enforce_names,
@@ -441,9 +403,6 @@ public class HsqlDatabaseProperties extends HsqlProperties {
                                           true));
         dbMeta.put(sql_enforce_tdcu,
                    HsqlProperties.getMeta(sql_enforce_tdcu, SQL_PROPERTY,
-                                          true));
-        dbMeta.put(sql_char_literal,
-                   HsqlProperties.getMeta(sql_char_literal, SQL_PROPERTY,
                                           true));
         dbMeta.put(sql_concat_nulls,
                    HsqlProperties.getMeta(sql_concat_nulls, SQL_PROPERTY,
@@ -498,9 +457,12 @@ public class HsqlDatabaseProperties extends HsqlProperties {
                    HsqlProperties.getMeta(hsqldb_large_data, SQL_PROPERTY,
                                           false));
         dbMeta.put(hsqldb_files_space,
-                   HsqlProperties.getMeta(hsqldb_files_space, SQL_PROPERTY, 0,
+                   HsqlProperties.getMeta(hsqldb_files_space, SQL_PROPERTY,
+                                          false));
+        dbMeta.put(hsqldb_files_check,
+                   HsqlProperties.getMeta(hsqldb_files_check, SQL_PROPERTY, 0,
                                           new int[] {
-            0, 1, 2, 4, 8, 16, 32, 64
+            0, 1
         }));
 
         // integral defaults for user-defined props - sets
@@ -560,13 +522,6 @@ public class HsqlDatabaseProperties extends HsqlProperties {
         dbMeta.put(hsqldb_nio_max_size,
                    HsqlProperties.getMeta(hsqldb_nio_max_size, SQL_PROPERTY,
                                           256, 64, 262144));
-        dbMeta.put(sql_sys_index_names,
-                   HsqlProperties.getMeta(sql_sys_index_names, SQL_PROPERTY,
-                                          false));
-        dbMeta.put(hsqldb_min_reuse,
-                   HsqlProperties.getMeta(hsqldb_min_reuse, SQL_PROPERTY, 0,
-                                          0, 1024 * 1024));
-
     }
 
     private Database database;
@@ -610,7 +565,7 @@ public class HsqlDatabaseProperties extends HsqlProperties {
 
         boolean exists;
 
-        if (!database.getType().isFileBased()) {
+        if (!DatabaseURL.isFileBasedDatabaseType(database.getType())) {
             return true;
         }
 
@@ -656,8 +611,8 @@ public class HsqlDatabaseProperties extends HsqlProperties {
 
     public void save() {
 
-        if (!database.getType().isFileBased() || database.isFilesReadOnly()
-                || database.isFilesInJar()) {
+        if (!DatabaseURL.isFileBasedDatabaseType(database.getType())
+                || database.isFilesReadOnly() || database.isFilesInJar()) {
             return;
         }
 
@@ -670,9 +625,6 @@ public class HsqlDatabaseProperties extends HsqlProperties {
             }
 
             props.setProperty(hsqldb_version, THIS_VERSION);
-            props.setProperty(
-                tx_timestamp,
-                Long.toString(database.logger.getFilesTimestamp()));
 
             if (database.logger.isStoredFileAccess()) {
                 if (!database.logger.isNewStoredFileAccess()) {
@@ -764,7 +716,7 @@ public class HsqlDatabaseProperties extends HsqlProperties {
                 }
 
                 if (strict && !validVal) {
-                    throw Error.error(ErrorCode.X_42556, error);
+                    throw Error.error(ErrorCode.X_42556, propertyName);
                 }
             }
         }
@@ -859,6 +811,19 @@ public class HsqlDatabaseProperties extends HsqlProperties {
         return 500;
     }
 
+//---------------------
+// new properties to review / persist
+    public static final int NO_MESSAGE = 1;
+
+    public int getErrorLevel() {
+        return NO_MESSAGE;
+    }
+
+    public boolean divisionByZero() {
+        return false;
+    }
+
+//------------------------
     public void setDBModified(int mode) {
 
         String value;
@@ -975,17 +940,6 @@ public class HsqlDatabaseProperties extends HsqlProperties {
         }
 
         return value.booleanValue();
-    }
-
-    public String getStringPropertyDefault(String key) {
-
-        Object[] metaData = (Object[]) dbMeta.get(key);
-
-        if (metaData == null) {
-            throw Error.error(ErrorCode.X_42555, key);
-        }
-
-        return (String) metaData[HsqlProperties.indexDefaultValue];
     }
 
     public String getStringProperty(String key) {

@@ -1,4 +1,4 @@
-/* Copyright (c) 2001-2017, The HSQL Development Group
+/* Copyright (c) 2001-2011, The HSQL Development Group
  * All rights reserved.
  *
  * Redistribution and use in source and binary forms, with or without
@@ -31,6 +31,7 @@
 
 package org.hsqldb.persist;
 
+import org.hsqldb.HsqlException;
 import org.hsqldb.Row;
 import org.hsqldb.RowAction;
 import org.hsqldb.Session;
@@ -43,18 +44,16 @@ import org.hsqldb.rowio.RowInputInterface;
 
 /**
  * @author Fred Toussi (fredt@users dot sourceforge.net)
- * @version 2.3.5
+ * @version 2.3.0
  * @since 2.3.0
  */
 public abstract class SimpleStore implements PersistentStore {
 
-    protected DataFileCache        cache;
+    public DataFileCache        cache;
     protected TableSpaceManager spaceManager;
+    long                        storageSize;
     protected int               defaultObjectSize;
 
-    public boolean isRowStore() {
-        return false;
-    }
     public void set(CachedObject object) {}
 
     public CachedObject get(long i) {
@@ -93,7 +92,7 @@ public abstract class SimpleStore implements PersistentStore {
     }
 
     public CachedObject getNewCachedObject(Session session, Object object,
-                                           boolean tx) {
+                                           boolean tx) throws HsqlException {
         throw Error.runtimeError(ErrorCode.U_S0500, "PersistentStore");
     }
 
@@ -150,15 +149,16 @@ public abstract class SimpleStore implements PersistentStore {
 
     public void setElementCount(Index key, long size, long uniqueSize) {}
 
-    public void setAccessor(Index key, CachedObject accessor) {}
-
     public void setAccessor(Index key, long accessor) {}
+
+    public void setAccessor(Index key, CachedObject accessor) {}
 
     public boolean hasNull(int pos) {
         return false;
     }
 
-    public void resetAccessorKeys(Session session, Index[] keys) {}
+    public void resetAccessorKeys(Session session,
+                                  Index[] keys) throws HsqlException {}
 
     public void setMemory(boolean mode) {}
 
@@ -168,28 +168,28 @@ public abstract class SimpleStore implements PersistentStore {
         return object;
     }
 
-    public void indexRow(Session session, Row row) {}
+    public void indexRow(Session session, Row row) throws HsqlException {}
 
-    public void indexRows(Session session) {}
+    public void indexRows(Session session) throws HsqlException {}
 
     public RowIterator rowIterator() {
         return null;
+    }
+
+    public int getAccessCount() {
+        return 0;
     }
 
     public Index[] getAccessorKeys() {
         return null;
     }
 
-    public void moveDataToSpace(Session session) {}
+    public void moveDataToSpace() {}
 
     public void moveData(Session session, PersistentStore other, int colindex,
                          int adjust) {}
 
     public void setReadOnly(boolean readonly) {}
-
-    public void readLock() {}
-
-    public void readUnlock() {}
 
     public void writeLock() {}
 

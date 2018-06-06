@@ -1,4 +1,4 @@
-/* Copyright (c) 2001-2014, The HSQL Development Group
+/* Copyright (c) 2001-2011, The HSQL Development Group
  * All rights reserved.
  *
  * Redistribution and use in source and binary forms, with or without
@@ -31,16 +31,10 @@
 
 package org.hsqldb;
 
-/**
- * @author Fred Toussi (fredt@users dot sourceforge.net)
- * @version 2.3.2
- * @since 2.2.9
- */
-
 public interface RangeGroup {
 
-    RangeGroup emptyGroup = new RangeGroupEmpty();
-    RangeGroup[] emptyArray = new RangeGroup[]{
+    public static final RangeGroup emptyGroup = new RangeGroupEmpty();
+    public static final RangeGroup[] emptyArray = new RangeGroup[]{
         emptyGroup };
 
     RangeVariable[] getRangeVariables();
@@ -49,7 +43,7 @@ public interface RangeGroup {
 
     boolean isVariable();
 
-    public class RangeGroupSimple implements RangeGroup {
+    public static class RangeGroupSimple implements RangeGroup {
 
         RangeVariable[] ranges;
         RangeGroup      baseGroup;
@@ -91,7 +85,7 @@ public interface RangeGroup {
         }
     }
 
-    public class RangeGroupEmpty implements RangeGroup {
+    public static class RangeGroupEmpty implements RangeGroup {
 
         RangeGroupEmpty() {
 

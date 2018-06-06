@@ -1,4 +1,4 @@
-/* Copyright (c) 2001-2016, The HSQL Development Group
+/* Copyright (c) 2001-2011, The HSQL Development Group
  * All rights reserved.
  *
  * Redistribution and use in source and binary forms, with or without
@@ -43,7 +43,7 @@ import org.hsqldb.lib.IntKeyIntValueHashMap;
  * Common elements for Type instances for DATETIME and INTERVAL.<p>
  *
  * @author Fred Toussi (fredt@users dot sourceforge.net)
- * @version 2.3.5
+ * @version 2.0.1
  * @since 1.9.0
  */
 public abstract class DTIType extends Type {
@@ -124,11 +124,7 @@ public abstract class DTIType extends Type {
     public static final int MONTH_NAME      = Types.SQL_TYPE_NUMBER_LIMIT + 9;
     public static final int SECONDS_MIDNIGHT = Types.SQL_TYPE_NUMBER_LIMIT
         + 10;
-    public static final int ISO_YEAR    = Types.SQL_TYPE_NUMBER_LIMIT + 11;
-    public static final int MILLISECOND = Types.SQL_TYPE_NUMBER_LIMIT + 12;
-    public static final int MICROSECOND = Types.SQL_TYPE_NUMBER_LIMIT + 13;
-    public static final int NANOSECOND  = Types.SQL_TYPE_NUMBER_LIMIT + 14;
-    public static final int TIMEZONE    = Types.SQL_TYPE_NUMBER_LIMIT + 15;
+    public static final int ISO_YEAR = Types.SQL_TYPE_NUMBER_LIMIT + 11;
 
     //
     public final int startIntervalType;
@@ -199,7 +195,7 @@ public abstract class DTIType extends Type {
             if (i == startPartIndex) {
                 int startDigits = precision == 0 ? 2
                                                  : (int) precision;
-                int zeros       = startDigits - getPrecisionExponent(part);
+                int zeros = (int) startDigits - getPrecisionExponent(part);
 /*
                 for (int j = 0; j < zeros; j++) {
                     buffer.append('0');
@@ -257,7 +253,8 @@ public abstract class DTIType extends Type {
             case DAY_OF_YEAR :
             case DAY_OF_WEEK :
             case WEEK_OF_YEAR :
-                if (!isDateTimeType()) {
+                if (!isDateTimeType()
+                        || startIntervalType != Types.SQL_INTERVAL_YEAR) {
                     throw Error.error(ErrorCode.X_42561);
                 }
 
@@ -267,20 +264,20 @@ public abstract class DTIType extends Type {
                     return Type.SQL_INTEGER;
                 }
             case Types.SQL_INTERVAL_SECOND :
-                if (part == startIntervalType || part == endIntervalType) {
-
-                    // type is INTERVAL SECOND
-                    // or TIMESTAMP or INTERVAL x TO SECOND
-                    if (scale == 0) {
-                        return Type.SQL_BIGINT;
+                if (part == startIntervalType) {
+                    if (scale != 0) {
+                        return new NumberType(Types.SQL_DECIMAL,
+                                              precision + scale, scale);
                     }
-
-                    return new NumberType(Types.SQL_DECIMAL,
-                                          maxIntervalSecondPrecision + scale,
-                                          scale);
+                } else if (part == endIntervalType) {
+                    if (scale != 0) {
+                        return new NumberType(Types.SQL_DECIMAL,
+                                              maxIntervalPrecision + scale,
+                                              scale);
+                    }
                 }
 
-                throw Error.error(ErrorCode.X_42561);
+            // fall through
             case Types.SQL_INTERVAL_YEAR :
             case Types.SQL_INTERVAL_MONTH :
             case Types.SQL_INTERVAL_DAY :
@@ -292,12 +289,6 @@ public abstract class DTIType extends Type {
 
                 return Type.SQL_INTEGER;
 
-            // used for DATEPART function
-            case MILLISECOND :
-            case MICROSECOND :
-            case NANOSECOND :
-                return Type.SQL_BIGINT;
-
             case SECONDS_MIDNIGHT :
                 if (!isDateTimeType()
                         || endIntervalType < Types.SQL_INTERVAL_SECOND) {
@@ -306,7 +297,6 @@ public abstract class DTIType extends Type {
 
                 return Type.SQL_INTEGER;
 
-            case TIMEZONE :
             case TIMEZONE_HOUR :
             case TIMEZONE_MINUTE :
                 if (typeCode != Types.SQL_TIMESTAMP_WITH_TIME_ZONE
@@ -361,23 +351,11 @@ public abstract class DTIType extends Type {
             case Tokens.SECOND :
                 return Types.SQL_INTERVAL_SECOND;
 
-            case Tokens.MILLISECOND :
-                return MILLISECOND;
-
-            case Tokens.MICROSECOND :
-                return MICROSECOND;
-
-            case Tokens.NANOSECOND :
-                return NANOSECOND;
-
             case Tokens.TIMEZONE_HOUR :
                 return TIMEZONE_HOUR;
 
             case Tokens.TIMEZONE_MINUTE :
                 return TIMEZONE_MINUTE;
-
-            case Tokens.TIMEZONE :
-                return TIMEZONE;
 
             case Tokens.DAY_NAME :
                 return DAY_NAME;

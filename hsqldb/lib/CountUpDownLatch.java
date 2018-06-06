@@ -1,4 +1,4 @@
-/* Copyright (c) 2001-2017, The HSQL Development Group
+/* Copyright (c) 2001-2011, The HSQL Development Group
  * All rights reserved.
  *
  * Redistribution and use in source and binary forms, with or without
@@ -31,203 +31,65 @@
 
 package org.hsqldb.lib;
 
-import java.util.concurrent.TimeUnit;
-import java.util.concurrent.locks.AbstractQueuedSynchronizer;
+import java.util.concurrent.CountDownLatch;
 
 /**
- * A variation on {@link java.util.CountDownLatch} to allow counting up.
- * <p>
- * Unlike the older version, which was a wrapper for
- * {@link java.util.concurrent.CountDownLatch}, this version directly mimics
- * CountDownLatch by delegating to {@link AbstractQueuedSynchronizer}.
- * <p>
- * The primary advantage of mimicry is that volatile variables are not used,
- * meaning that the underlying java libraries and java runtime are free to
- * fully and unrestrictedly capitalize upon whatever lock-free / wait-free
- * algorithms and hardware primitives are available (see:
- * http://www.ibm.com/developerworks/java/library/j-jtp11234/).
- * <p>
- * The secondary advantage is that by eliminating an inner CountDownLatch
- * instance that must be discarded and replaced every time the count increments
- * from zero, heap memory object burn rate is reduced.
+ * Wrapper for CountDownLatch to allow counting up.<p>
  *
- *
- * @author Campbell Burnet (campbell-burnet@users dot sourceforge.net)
+ * @author Fred Toussi (fredt@users dot sourceforge.net)
+ * @version 2.0.1
+ * @since 1.9.0
  */
 public class CountUpDownLatch {
 
-    /**
-     * Synchronization control For CountUpDownLatch2.
-     *
-     * Uses AQS state property to represent count.
-     */
-    private static final class Sync extends AbstractQueuedSynchronizer {
-
-        private static final long serialVersionUID = 1L;
-
-        Sync(int count) {
-            setState(count);
-        }
-
-        int getCount() {
-            return getState();
-        }
-
-        /**
-         * Queries if the state of this synchronizer permits it to be acquired
-         * in the shared mode, and if so to acquire it.
-         *
-         * @param ignored
-         * @return -1 on failure; 1 if acquisition in shared mode succeeded and
-         *         subsequent shared-mode acquires might also succeed, in which
-         *         case a subsequent waiting thread must check availability.
-         */
-        protected int tryAcquireShared(int ignored) {
-            return getState() == 0 ? 1
-                                   : -1;
-        }
-
-        /**
-         * Updates the state of this object to the {@code requestedCount} value,
-         * returning {@code true} on transition to zero.
-         *
-         * Note that negative {@code requestedCount} values are silently
-         * converted to zero.
-         *
-         * @param requestedCount the value of the count property to be set
-         * @return {@code true} if this release of shared mode may permit a
-         *         waiting acquire (shared or exclusive) to succeed; and
-         *         {@code false} otherwise
-         */
-        protected boolean tryReleaseShared(int requestedCount) {
-
-            final int     newCount = Math.max(0, requestedCount);
-            final boolean result   = (newCount == 0);
-
-            for (;;) {
-                if (compareAndSetState(getState(), newCount)) {
-                    return result;
-                }
-            }
-        }
-    }
-
-    private final Sync sync;
+    volatile CountDownLatch latch;
+    volatile int            count;
 
     public CountUpDownLatch() {
-        this(0);
+        latch = new CountDownLatch(1);
     }
 
-    /**
-     * Constructs a {@code CountUpDownLatch2} initialized with the given value.
-     *
-     * @param initialCount the initial value representing the number of times
-     *        {@link #countDown} must be invoked before threads can pass
-     *        through {@link #await}
-     * @throws IllegalArgumentException if {@code initialCount} is negative
-     */
-    public CountUpDownLatch(int initialCount) {
+    public void await() throws InterruptedException {
 
-        if (initialCount < 0) {
-            throw new IllegalArgumentException("count < 0");
+        if (count == 0) {
+            return;
         }
 
-        this.sync = new Sync(initialCount);
+        latch.await();
     }
 
-    /**
-     * Causes the current thread to wait until the latch has counted down to
-     * zero, unless the thread is {@linkplain Thread#interrupt interrupted}.
-     *
-     * <p>This method has the same semantics as the method of the same name in
-     * {@link java.util.concurrent.CountDownLatch}.
-     *
-     * @throws InterruptedException if the current thread is interrupted
-     *         while waiting
-     */
-    public void await() throws InterruptedException {
-        sync.acquireSharedInterruptibly(1);
-    }
-
-    /**
-     * Causes the current thread to wait until the latch has counted down to
-     * zero, unless the thread is {@linkplain Thread#interrupt interrupted},
-     * or the specified waiting time elapses.
-     *
-     * <p>This method has the same semantics as the method of the same name in
-     * {@link java.util.concurrent.CountDownLatch}.
-     *
-     * @param timeout the maximum time to wait
-     * @param unit the time unit of the {@code timeout} argument
-     * @return {@code true} if the count reached zero and {@code false}
-     *         if the waiting time elapsed before the count reached zero
-     * @throws InterruptedException if the current thread is interrupted
-     *         while waiting
-     */
-    public boolean await(long timeout,
-                         TimeUnit unit) throws InterruptedException {
-        return sync.tryAcquireSharedNanos(1, unit.toNanos(timeout));
-    }
-
-    /**
-     * Decrements the count of the latch, releasing all waiting threads if
-     * the count reaches zero.
-     *
-     * <p>If the current count is greater than zero then it is decremented.
-     * If the new count is zero then all waiting threads are re-enabled for
-     * thread scheduling purposes.
-     *
-     * <p>If the current count equals zero then nothing happens.
-     */
-    public void countUp() {
-        sync.releaseShared(sync.getCount() + 1);
-    }
-
-    /**
-     * Decrements the count of the latch, releasing all waiting threads if
-     * the count reaches zero.
-     *
-     * <p>If the current count is greater than zero then it is decremented.
-     * If the new count is zero then all waiting threads are re-enabled for
-     * thread scheduling purposes.
-     *
-     * <p>If the current count equals zero then nothing happens.
-     */
     public void countDown() {
-        sync.releaseShared(sync.getCount() - 1);
+
+        count--;
+
+        if (count == 0) {
+            latch.countDown();
+        }
     }
 
-    /**
-     * Returns the current count.
-     *
-     * <p>This method is typically used only for debugging and testing purposes.
-     *
-     * @return the current count
-     */
     public long getCount() {
-        return sync.getCount();
+        return count;
     }
 
-    /**
-     * Sets the current count.
-     *
-     * <p>If the new count is zero then all waiting threads are re-enabled for
-     * thread scheduling purposes.
-     *
-     * @param newCount the new count for the latch
-     */
-    public void setCount(int newCount) {
-        sync.releaseShared(newCount);
+    public void countUp() {
+
+        if (latch.getCount() == 0) {
+            latch = new CountDownLatch(1);
+        }
+
+        count++;
     }
 
-    /**
-     * Returns a string identifying this latch, as well as its state.
-     * The state, in brackets, includes the String {@code "Count ="}
-     * followed by the current count.
-     *
-     * @return a string identifying this latch, as well as its state
-     */
-    public String toString() {
-        return super.toString() + "[Count = " + sync.getCount() + "]";
+    public void setCount(int count) {
+
+        if (count == 0) {
+            if (latch.getCount() != 0) {
+                latch.countDown();
+            }
+        } else if (latch.getCount() == 0) {
+            latch = new CountDownLatch(1);
+        }
+
+        this.count = count;
     }
 }

@@ -1,4 +1,4 @@
-/* Copyright (c) 2001-2017, The HSQL Development Group
+/* Copyright (c) 2001-2011, The HSQL Development Group
  * All rights reserved.
  *
  * Redistribution and use in source and binary forms, with or without
@@ -54,7 +54,7 @@ import org.hsqldb.result.Result;
  * (PUBLIC_USER_NAME is kept in the list because it's needed by MetaData
  * routines via "listVisibleUsers(x, true)").
  *
- * @author Campbell Burnet (campbell-burnet@users dot sourceforge.net)
+ * @author Campbell Boucher-Burnet (boucherb@users dot sourceforge.net)
  * @author Fred Toussi (fredt@users dot sourceforge.net)
  *
  * @version 2.3.0
@@ -127,7 +127,7 @@ public final class UserManager {
         }
 
         // this cannot fail
-        userList.add(name.name, user);
+        boolean success = userList.add(name.name, user);
 
         return user;
     }
@@ -175,7 +175,7 @@ public final class UserManager {
      *    <LI>revoking all rights from the removed User<br>
      *        (this ensures that in case there are still references to the
      *        just dropped User object, those references
-     *        cannot be used to erroneously access database objects).
+     *        cannot be used to erronously access database objects).
      *
      *  </UL> <p>
      *
@@ -254,7 +254,7 @@ public final class UserManager {
          */
         Result result =
             extAuthenticationFunction.invokeJavaMethodDirect(new String[] {
-            granteeManager.database.getNameString(), name, password
+            granteeManager.database.getUniqueName(), name, password
         });
 
         if (result.isError()) {

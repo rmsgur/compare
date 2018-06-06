@@ -1,4 +1,4 @@
-/* Copyright (c) 2001-2017, The HSQL Development Group
+/* Copyright (c) 2001-2011, The HSQL Development Group
  * All rights reserved.
  *
  * Redistribution and use in source and binary forms, with or without
@@ -45,7 +45,7 @@ import org.hsqldb.result.ResultConstants;
  * java.sql.PreparedStatement. Contains common members and methods.
  *
  * @author fredt@usrs
- * @version 2.3.5
+ * @version 2.3.0
  * @since 1.9.0
  * @revised JDK 1.7, HSQLDB 2.0.1
  */
@@ -67,7 +67,7 @@ import org.hsqldb.result.ResultConstants;
  */
 
 /**
- * review the following issues:
+ * @todo 1.9.0 - review the following issues:
  *
  * Does not always close ResultSet object directly when closed. Although RS
  * objects will eventually be closed when accessed, the change is not reflected
@@ -124,16 +124,17 @@ class JDBCStatementBase {
     /** The first warning in the chain. Null if there are no warnings. */
     protected SQLWarning rootWarning;
 
+    /** Counter for ResultSet in getMoreResults(). */
+    protected int resultSetCounter;
+
     /** Query timeout in seconds */
     protected int queryTimeout;
 
     /** connection generation */
     int connectionIncarnation;
 
-    /** Implementation in subclasses
-     * @throws SQLException on access error
-     */
-    void close() throws SQLException {}
+    /** Implementation in subclasses */
+    public synchronized void close() throws SQLException {}
 
     /**
      * An internal check for closed statements.
@@ -223,7 +224,7 @@ class JDBCStatementBase {
             // if statement has been used with executeQuery and the result is update count
             // return an empty result for 1.8 compatibility
             if (resultOut.getStatementType() == StatementTypes.RETURN_RESULT) {
-                return JDBCResultSet.newEmptyResultSet();
+                return JDBCResultSet.newEptyResultSet();
             }
         }
 
@@ -267,7 +268,7 @@ class JDBCStatementBase {
     }
 
     ResultSet getGeneratedResultSet() throws SQLException {
-        checkClosed();
+
         if (generatedResultSet != null) {
             generatedResultSet.close();
         }

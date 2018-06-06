@@ -1,4 +1,4 @@
-/* Copyright (c) 2001-2017, The HSQL Development Group
+/* Copyright (c) 2001-2011, The HSQL Development Group
  * All rights reserved.
  *
  * Redistribution and use in source and binary forms, with or without
@@ -37,18 +37,18 @@ import org.hsqldb.lib.HashSet;
 import org.hsqldb.lib.IntValueHashMap;
 import org.hsqldb.persist.HsqlDatabaseProperties;
 
-// campbell-burnet@users 20051207 - patch 1.8.x initial JDBC 4.0 support work
+// boucherb@users 20051207 - patch 1.8.x initial JDBC 4.0 support work
 // fredt@users - 2.0.0 code changes
 
 /**
  * Defines the constants that are used to identify SQL types for HSQLDB JDBC
- * interface type reporting. The actual type constant values are equivalent
+ * inteface type reporting. The actual type constant values are equivalent
  * to those defined in the latest java.sql.Types, where available,
- * or those defined by ansi/iso SQL 2003 otherwise. A type sub-identifier
+ * or those defined by ansi/iso SQL 2003 otherwise. A type sub-identifer
  * has been added to differentiate HSQLDB-specific type specializations.
  *
- * @author Campbell Burnet (campbell-burnet@users dot sourceforge.net)
- * @version 2.4.0
+ * @author Campbell Boucher-Burnet (boucherb@users dot sourceforge.net)
+ * @version 2.3.0
  * @since 1.7.2
  */
 public class Types {
@@ -118,7 +118,7 @@ public class Types {
 
     // These values are not in table 37 of the SQL CLI 2003 FCD, but some
     // are found in tables 6-9 and some are found in Annex A1:
-    // c Header File SQLCLI.H and/or addenda in other documents,
+    // c Header File SQLCLI.H and/or addendums in other documents,
     // such as:
     // SQL 2003 Part 9: Management of External Data (SQL/MED) : DATALINK
     // SQL 2003 Part 14: XML-Related Specifications (SQL/XML) : XML
@@ -195,7 +195,7 @@ public class Types {
     public static final int BLOB = 2004;
 
     /**
-     * The constant in the Java programming language, sometimes referred to
+     * The constant in the Java programming language, somtimes referred to
      * as a type code, that identifies the generic SQL type
      * <code>BOOLEAN</code>.
      *
@@ -220,7 +220,7 @@ public class Types {
     public static final int CLOB = 2005;
 
     /**
-     * The constant in the Java programming language, sometimes referred to
+     * The constant in the Java programming language, somtimes referred to
      * as a type code, that identifies the generic SQL type <code>DATALINK</code>.
      *
      * @since JDK 1.4
@@ -340,15 +340,6 @@ public class Types {
     public static final int REF = 2006;
 
     /**
-     * The constant in the Java programming language, sometimes referred to
-     * as a type code, that identifies the generic SQL type
-     * <code>REF_CURSOR</code>.
-     *
-     * @since JDK 1.8
-     */
-    public static final int REF_CURSOR = 2012;
-
-    /**
      * <P>The constant in the Java programming language, sometimes referred
      * to as a type code, that identifies the generic SQL type
      * <code>SMALLINT</code>.
@@ -374,27 +365,9 @@ public class Types {
     /**
      * <P>The constant in the Java programming language, sometimes referred
      * to as a type code, that identifies the generic SQL type
-     * <code>TIME_WITH_TIMEZONE </code>.
-     *
-     * @since JDK 1.8
-     */
-    public static final int TIME_WITH_TIMEZONE = 2013;
-
-    /**
-     * <P>The constant in the Java programming language, sometimes referred
-     * to as a type code, that identifies the generic SQL type
      * <code>TIMESTAMP</code>.
      */
     public static final int TIMESTAMP = SQL_TIMESTAMP;
-
-    /**
-     * <P>The constant in the Java programming language, sometimes referred
-     * to as a type code, that identifies the generic SQL type
-     * <code>TIMESTAMP_WITH_TIMEZONE </code>.
-     *
-     * @since JDK 1.8
-     */
-    public static final int TIMESTAMP_WITH_TIMEZONE = 2014;
 
     /**
      * <P>The constant in the Java programming language, sometimes referred
@@ -423,7 +396,7 @@ public class Types {
 //     * <code>XML</code>.
 //     *
 //     * @since SQL 2003
-//     * @deprecated
+//     * @deprectated
 //     * @see #SQLXML
 //     */
 //    public static final int XML = 137;
@@ -483,7 +456,7 @@ public class Types {
     /**
      * The default HSQLODB type sub-identifier. This indicates that an
      * HSQLDB type with this sub-type, if supported, is the very closest
-     * thing HSQLDB offers to the JDBC/SQL2003 type
+     * thing HSQLDB offerers to the JDBC/SQL2003 type
      */
     public static final int TYPE_SUB_DEFAULT = 1;
 
@@ -563,7 +536,7 @@ public class Types {
 // lookup for types
     static final IntValueHashMap javaTypeNumbers;
 
-//  campbell-burnet@users - We can't handle method invocations in
+//  boucherb@users - We can't handle method invocations in
 //                   Function.java whose number class is
 //                   narrower than the corresponding internal
 //                   wrapper
@@ -577,7 +550,6 @@ public class Types {
         javaTypeNumbers.put("double", Types.SQL_DOUBLE);
         javaTypeNumbers.put("java.lang.Double", Types.SQL_DOUBLE);
         javaTypeNumbers.put("java.lang.String", Types.SQL_VARCHAR);
-        javaTypeNumbers.put("java.lang.CharSequence", Types.SQL_VARCHAR);
         javaTypeNumbers.put(DateClassName, Types.SQL_DATE);
         javaTypeNumbers.put(TimeClassName, Types.SQL_TIME);
         javaTypeNumbers.put(TimestampClassName, Types.SQL_TIMESTAMP);
@@ -593,18 +565,11 @@ public class Types {
         javaTypeNumbers.put("java.lang.Short", Types.SQL_SMALLINT);
         javaTypeNumbers.put("long", Types.SQL_BIGINT);
         javaTypeNumbers.put("java.lang.Long", Types.SQL_BIGINT);
-        javaTypeNumbers.put("[B", Types.SQL_VARBINARY);
+        javaTypeNumbers.put("[B", Types.SQL_BINARY);
         javaTypeNumbers.put("java.lang.Object", Types.OTHER);
         javaTypeNumbers.put("java.lang.Void", Types.SQL_ALL_TYPES);
-        javaTypeNumbers.put("java.util.UUID", Types.SQL_GUID);
-        javaTypeNumbers.put("java.time.LocalDate", Types.SQL_DATE);
-        javaTypeNumbers.put("java.time.LocalTime", Types.SQL_TIME);
-        javaTypeNumbers.put("java.time.LocalDateTime", Types.SQL_TIMESTAMP);
-        javaTypeNumbers.put("java.time.OffsetDateTime", Types.SQL_TIMESTAMP_WITH_TIME_ZONE);
-        javaTypeNumbers.put("java.time.OffsetTime", Types.SQL_TIME_WITH_TIME_ZONE);
-        javaTypeNumbers.put("java.time.Duration", Types.SQL_INTERVAL_SECOND);
-        javaTypeNumbers.put("java.time.Period", Types.SQL_INTERVAL_MONTH);
 
+        //
         illegalParameterClasses = new HashSet();
 
         illegalParameterClasses.add(Byte.TYPE);
@@ -618,18 +583,19 @@ public class Types {
     }
 
     /**
-     * Retrieves the type object corresponding to the class
+     * Retieves the type object corresponding to the class
      * of an IN, IN OUT or OUT parameter or a return type.  <p>
      *
      *
      * @param  c a Class instance
      * @return java.sql.Types int value
-     * @throws  org.hsqldb.HsqlException
+     * @throws  HsqlException
      */
     public static Type getParameterSQLType(Class c) {
 
-        String name;
-        int    typeCode;
+        String  name;
+        int     typeCode;
+        boolean isArray;
 
         if (c == null) {
             throw Error.runtimeError(ErrorCode.U_S0500, "Types");
@@ -652,15 +618,15 @@ public class Types {
             name     = c1.getName();
             typeCode = javaTypeNumbers.get(name, Integer.MIN_VALUE);
 
-            if (typeCode == Types.SQL_ALL_TYPES) {
-                return null;
-            }
-
             if (typeCode != Integer.MIN_VALUE) {
                 return Type.getDefaultTypeWithSize(typeCode);
             }
 
-            return null;
+            if (typeCode == Types.SQL_ALL_TYPES) {
+                return null;
+            }
+
+            return Type.getDefaultTypeWithSize(typeCode);
         }
 
         if (name.equals("java.sql.Array")) {

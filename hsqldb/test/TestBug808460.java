@@ -1,4 +1,4 @@
-/* Copyright (c) 2001-2015, The HSQL Development Group
+/* Copyright (c) 2001-2011, The HSQL Development Group
  * All rights reserved.
  *
  * Redistribution and use in source and binary forms, with or without
@@ -29,15 +29,64 @@
  */
 
 
-package org.hsqldb.persist;
+package org.hsqldb.test;
 
-public interface EventLogInterface {
+import java.sql.Connection;
+import java.sql.Statement;
 
-    void logSevereEvent(String message, Throwable t);
+import junit.framework.TestCase;
+import junit.framework.TestResult;
 
-    void logWarningEvent(String message, Throwable t);
+/**
+ * HSQLDB TestBug808460 Junit test case. <p>
+ *
+ * @author  boucherb@users
+ * @version 1.7.2
+ * @since 1.7.2
+ */
+public class TestBug808460 extends TestBase {
 
-    void logInfoEvent(String message);
+    public TestBug808460(String name) {
+        super(name);
+    }
 
-    void logDetailEvent(String message);
+    /* Implements the TestBug808460 test */
+    public void test() throws Exception {
+
+        Connection conn = newConnection();
+        Statement  stmt = conn.createStatement();
+
+        stmt.executeQuery("SELECT * FROM INFORMATION_SCHEMA.SYSTEM_SESSIONS");
+        conn.close();
+
+        conn = newConnection();
+        stmt = conn.createStatement();
+
+        stmt.executeQuery("SELECT * FROM INFORMATION_SCHEMA.SYSTEM_SESSIONS");
+        conn.close();
+    }
+
+    /* Runs TestBug808460 test from the command line*/
+    public static void main(String[] args) throws Exception {
+
+        TestResult            result;
+        TestCase              test;
+        java.util.Enumeration failures;
+        int                   count;
+
+        result = new TestResult();
+        test   = new TestBug808460("test");
+
+        test.run(result);
+
+        count = result.failureCount();
+
+        System.out.println("TestBug808460 failure count: " + count);
+
+        failures = result.failures();
+
+        while (failures.hasMoreElements()) {
+            System.out.println(failures.nextElement());
+        }
+    }
 }

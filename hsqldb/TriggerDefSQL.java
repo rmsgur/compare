@@ -1,4 +1,4 @@
-/* Copyright (c) 2001-2014, The HSQL Development Group
+/* Copyright (c) 2001-2011, The HSQL Development Group
  * All rights reserved.
  *
  * Redistribution and use in source and binary forms, with or without
@@ -38,7 +38,7 @@ import org.hsqldb.result.Result;
  * Implementation of SQL TRIGGER objects.<p>
  *
  * @author Fred Toussi (fredt@users dot sourceforge.net)
- * @version 2.3.2
+ * @version 2.0.1
  * @since 1.9.0
  */
 public class TriggerDefSQL extends TriggerDef {
@@ -66,10 +66,7 @@ public class TriggerDefSQL extends TriggerDef {
         return null;
     }
 
-    public void compile(Session session, SchemaObject parentObject) {
-
-        routine.compile(session, null);
-    }
+    public void compile(Session session, SchemaObject parentObject) {}
 
     public String getClassName() {
         return null;

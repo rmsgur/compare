@@ -1,4 +1,4 @@
-/* Copyright (c) 2001-2017, The HSQL Development Group
+/* Copyright (c) 2001-2011, The HSQL Development Group
  * All rights reserved.
  *
  * Redistribution and use in source and binary forms, with or without
@@ -43,7 +43,7 @@ import org.hsqldb.result.ResultLob;
  * Locator for CLOB.<p>
  *
  * @author Fred Toussi (fredt@users dot sourceforge.net)
- * @version 2.3.5
+ * @version 2.2.6
  * @since 1.9.0
  */
 public class ClobDataID implements ClobData {
@@ -90,17 +90,6 @@ public class ClobDataID implements ClobData {
     public String getSubString(SessionInterface session, long pos,
                                int length) {
 
-        long clobLength = length(session);
-
-        if (pos >= clobLength) {
-            return "";
-        }
-
-        if (pos + length >= clobLength) {
-            length = (int) (clobLength - pos);
-        }
-
-
         char[] chars = getChars(session, pos, length);
 
         return new String(chars);
@@ -136,10 +125,6 @@ public class ClobDataID implements ClobData {
     }
 
     public void truncate(SessionInterface session, long len) {
-
-        if (len >= length(session)) {
-            return;
-        }
 
         ResultLob resultOut = ResultLob.newLobTruncateRequest(id, len);
         Result    resultIn  = session.execute(resultOut);
@@ -270,8 +255,8 @@ public class ClobDataID implements ClobData {
 
     public boolean equals(Object other) {
 
-        if (other instanceof ClobDataID) {
-            return id == ((ClobDataID) other).id;
+        if (other instanceof BlobDataID) {
+            return id == ((BlobDataID) other).id;
         }
 
         return false;

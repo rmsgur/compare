@@ -1,4 +1,4 @@
-/* Copyright (c) 2001-2017, The HSQL Development Group
+/* Copyright (c) 2001-2011, The HSQL Development Group
  * All rights reserved.
  *
  * Redistribution and use in source and binary forms, with or without
@@ -36,7 +36,7 @@ import org.hsqldb.map.BaseHashMap;
 /**
  *
  * @author Fred Toussi (fredt@users dot sourceforge.net)
- * @version 2.3.3
+ * @version 1.9.0
  * @since 1.7.2
  */
 public class IntKeyHashMap extends BaseHashMap {
@@ -80,21 +80,6 @@ public class IntKeyHashMap extends BaseHashMap {
         return super.containsKey(key);
     }
 
-    public int capacity() {
-        return super.capacity();
-    }
-
-    public void putAll(IntKeyHashMap other) {
-
-        Iterator it = other.keySet().iterator();
-
-        while (it.hasNext()) {
-            int key = it.nextInt();
-
-            put(key, other.get(key));
-        }
-    }
-
     public void valuesToArray(Object[] array) {
 
         Iterator it = values().iterator();
@@ -136,23 +121,23 @@ public class IntKeyHashMap extends BaseHashMap {
         }
 
         public boolean contains(Object o) {
-            throw new UnsupportedOperationException();
+            throw new RuntimeException();
         }
 
         public Object get(Object key) {
-            throw new UnsupportedOperationException();
+            throw new RuntimeException();
         }
 
         public boolean add(Object value) {
-            throw new UnsupportedOperationException();
+            throw new RuntimeException();
         }
 
         public boolean addAll(Collection c) {
-            throw new UnsupportedOperationException();
+            throw new RuntimeException();
         }
 
         public boolean remove(Object o) {
-            throw new UnsupportedOperationException();
+            throw new RuntimeException();
         }
 
         public boolean isEmpty() {
@@ -175,19 +160,19 @@ public class IntKeyHashMap extends BaseHashMap {
         }
 
         public boolean contains(Object o) {
-            throw new UnsupportedOperationException();
+            throw new RuntimeException();
         }
 
         public boolean add(Object value) {
-            throw new UnsupportedOperationException();
+            throw new RuntimeException();
         }
 
         public boolean addAll(Collection c) {
-            throw new UnsupportedOperationException();
+            throw new RuntimeException();
         }
 
         public boolean remove(Object o) {
-            throw new UnsupportedOperationException();
+            throw new RuntimeException();
         }
 
         public boolean isEmpty() {

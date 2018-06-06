@@ -1,4 +1,4 @@
-/* Copyright (c) 2001-2017, The HSQL Development Group
+/* Copyright (c) 2001-2011, The HSQL Development Group
  * All rights reserved.
  *
  * Redistribution and use in source and binary forms, with or without
@@ -41,7 +41,6 @@ package org.hsqldb.auth;
  * @since 2.0.1
  */
 public interface AuthFunctionBean {
-
     /**
      * Return a list of authorized roles or null to indicate that the
      * implementation does not intend to produce a specific role list but only
@@ -49,10 +48,8 @@ public interface AuthFunctionBean {
      * A return value of String[0] is different from returning null, and means
      * that the user should not be granted any roles.
      *
-     * @param userName String
-     * @param password String
      * @throws Exception If user should not be allowed access to the specified
-     *         database.  Other registered AuthFunctionBeans will not be attempted.
+     *         database.  Other registed AuthFunctionBeans will not be attempted.
      * @throws RuntimeException Upon system problem.  The exception will be
      *         logged to the HyperSQL application logger and other registered
      *         AuthFunctionBeans (if any) will be attempted.
@@ -60,5 +57,6 @@ public interface AuthFunctionBean {
      *         authentication function contract, except that the role/schema
      *         list is returned as a String[] instead of a java.sql.Array.
      */
-    String[] authenticate(String userName, String password) throws Exception;
+    public String[] authenticate(
+            String userName, String password) throws Exception;
 }

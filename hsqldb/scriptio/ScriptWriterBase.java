@@ -1,4 +1,4 @@
-/* Copyright (c) 2001-2016, The HSQL Development Group
+/* Copyright (c) 2001-2011, The HSQL Development Group
  * All rights reserved.
  *
  * Redistribution and use in source and binary forms, with or without
@@ -37,6 +37,7 @@ import java.io.OutputStream;
 
 import org.hsqldb.Database;
 import org.hsqldb.DatabaseManager;
+import org.hsqldb.HsqlNameManager;
 import org.hsqldb.HsqlNameManager.HsqlName;
 import org.hsqldb.NumberSequence;
 import org.hsqldb.Row;
@@ -72,7 +73,7 @@ import org.hsqldb.result.Result;
  *
  * The implementation of this class and its subclasses support the formats
  * used for writing the data. Since 1.7.2 the data can also be
- * written as binary in order to speed up shutdown and startup.<p>
+ * written as binray in order to speed up shutdown and startup.<p>
  *
  * From 1.7.2, two separate files are used, one for the DDL + DATA BLOCK and
  * the other for the LOG BLOCK.<p>
@@ -85,7 +86,7 @@ import org.hsqldb.result.Result;
  * DatabaseScriptReader and its subclasses read back the data at startup time.
  *
  * @author Fred Toussi (fredt@users dot sourceforge.net)
- * @version 2.3.4
+ * @version 2.1.1
  * @since 1.7.2
  */
 public abstract class ScriptWriterBase implements Runnable {
@@ -106,10 +107,9 @@ public abstract class ScriptWriterBase implements Runnable {
      * this determines if the script is the normal script (false) used
      * internally by the engine or a user-initiated snapshot of the DB (true)
      */
-    boolean          isUserScript;
+    boolean          isDump;
     boolean          includeCachedData;
     boolean          includeIndexRoots;
-    boolean          includeTableInit;
     long             byteCount;
     long             lineCount;
     volatile boolean needsSync;
@@ -142,13 +142,13 @@ public abstract class ScriptWriterBase implements Runnable {
     }
 
     ScriptWriterBase(Database db, String file, boolean includeCachedData,
-                     boolean isNewFile, boolean isUserScript) {
+                     boolean isNewFile, boolean isDump) {
 
         initBuffers();
 
         boolean exists = false;
 
-        if (isUserScript) {
+        if (isDump) {
             exists = FileUtil.getFileUtil().exists(file);
         } else {
             exists = db.logger.getFileAccess().isStreamElement(file);
@@ -159,7 +159,7 @@ public abstract class ScriptWriterBase implements Runnable {
         }
 
         this.database          = db;
-        this.isUserScript      = isUserScript;
+        this.isDump            = isDump;
         this.includeCachedData = includeCachedData;
         this.includeIndexRoots = !includeCachedData;
         outFile                = file;
@@ -178,10 +178,6 @@ public abstract class ScriptWriterBase implements Runnable {
 
     public void setIncludeCachedData(boolean include) {
         this.includeCachedData = include;
-    }
-
-    public void setIncludeTableInit(boolean include) {
-        this.includeTableInit = include;
     }
 
     protected abstract void initBuffers();
@@ -240,6 +236,7 @@ public abstract class ScriptWriterBase implements Runnable {
                 forceSync();
                 fileStreamOut.close();
 
+                fileStreamOut = null;
                 outDescriptor = null;
                 isClosed      = true;
             }
@@ -272,8 +269,8 @@ public abstract class ScriptWriterBase implements Runnable {
     protected void openFile() {
 
         try {
-            FileAccess   fa  = isUserScript ? FileUtil.getFileUtil()
-                                            : database.logger.getFileAccess();
+            FileAccess   fa  = isDump ? FileUtil.getFileUtil()
+                                      : database.logger.getFileAccess();
             OutputStream fos = fa.openOutputStreamElement(outFile);
 
             outDescriptor = fa.getFileSync(fos);
@@ -342,8 +339,8 @@ public abstract class ScriptWriterBase implements Runnable {
                         RowIterator it =
                             t.rowIteratorClustered(currentSession);
 
-                        while (it.next()) {
-                            Row row = it.getCurrentRow();
+                        while (it.hasNext()) {
+                            Row row = it.getNextRow();
 
                             writeRow(currentSession, row, t);
                         }
@@ -367,8 +364,8 @@ public abstract class ScriptWriterBase implements Runnable {
 
         RowSetNavigator nav = r.initialiseNavigator();
 
-        while (nav.next()) {
-            Object[] data = nav.getCurrent();
+        while (nav.hasNext()) {
+            Object[] data = (Object[]) nav.getNext();
 
             writeLogStatement(currentSession, (String) data[0]);
         }

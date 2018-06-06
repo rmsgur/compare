@@ -31,14 +31,12 @@
 
 package org.hsqldb.sample;
 
-import java.io.File;
 import java.sql.Connection;
 import java.sql.DriverManager;
 import java.sql.ResultSet;
 import java.sql.ResultSetMetaData;
 import java.sql.SQLException;
 import java.sql.Statement;
-import java.util.Scanner;
 
 /**
  * Title:        Testdb
@@ -52,7 +50,7 @@ import java.util.Scanner;
  */
 public class Testdb {
 
-    static Connection conn;                                                //our connnection to the db - presist for life of program
+    Connection conn;                                                //our connnection to the db - presist for life of program
 
     // we dont want this garbage collected until we are done
     public Testdb(String db_file_name_prefix) throws Exception {    // note more general exception
@@ -67,7 +65,8 @@ public class Testdb {
         // of the db.
         // It can contain directory names relative to the
         // current working directory
-        conn = DriverManager.getConnection("jdbc:hsqldb:hsql://localhost",    // filenames
+        conn = DriverManager.getConnection("jdbc:hsqldb:"
+                                           + db_file_name_prefix,    // filenames
                                            "SA",                     // username
                                            "");                      // password
     }
@@ -160,45 +159,45 @@ public class Testdb {
             return;                   // bye bye
         }
 
-        long start_time = System.currentTimeMillis();
+        try {
+
+            //make an empty table
+            //
+            // by declaring the id column IDENTITY, the db will automatically
+            // generate unique values for new rows- useful for row keys
+            db.update(
+                "CREATE TABLE sample_table ( id INTEGER IDENTITY, str_col VARCHAR(256), num_col INTEGER)");
+        } catch (SQLException ex2) {
+
+            //ignore
+            //ex2.printStackTrace();  // second time we run program
+            //  should throw execption since table
+            // already there
+            //
+            // this will have no effect on the db
+        }
+
         try {
 
             // add some rows - will create duplicates if run more then once
             // the id column is automatically generated
-        	/*File file = new File("C:\\Users\\GUENHYUK\\Desktop\\HSQLDB homework\\data.sql");
-        	Scanner input = new Scanner(file);
-        	input.useDelimiter("\n");
-        	
-        	while(input.hasNext())
-        	{
-        		String str = input.next();
-        		db.update(str);
-        	}*/
+            db.update(
+                "INSERT INTO sample_table(str_col,num_col) VALUES('Ford', 100)");
+            db.update(
+                "INSERT INTO sample_table(str_col,num_col) VALUES('Toyota', 200)");
+            db.update(
+                "INSERT INTO sample_table(str_col,num_col) VALUES('Honda', 300)");
+            db.update(
+                "INSERT INTO sample_table(str_col,num_col) VALUES('GM', 400)");
+
             // do a query
-            //db.query("SELECT * FROM sample_table WHERE num_col < 250");
-        	//db.update("create table aaa(name varchar(20));");
+            db.query("SELECT * FROM sample_table WHERE num_col < 250");
+
             // at end of program
-            //db.shutdown();
-        	
-        	//db.query("select * from nation");
-        	//db.query("select    c_name,    c_custkey,    o_orderkey,    o_orderdate,    o_totalprice,    sum(l_quantity) from    customer,    orders,    lineitem where    o_orderkey in (        select        l_orderkey        from            lineitem        group by            l_orderkey having                sum(l_quantity) > 313    )    and c_custkey = o_custkey    and o_orderkey = l_orderkey group by    c_name,    c_custkey,    o_orderkey,    o_orderdate,    o_totalprice order by    o_totalprice desc,    o_orderdate;");
-        	for(int k = 0; k < 13; k++) {
-        		if(k == 3)
-        		{
-        			start_time = System.currentTimeMillis();
-        		}
-        		System.out.println("Start" + k);
-        		long time = System.currentTimeMillis();
-        		db.query("select    100.00 * sum(case        when p_type like 'PROMO%'            then l_extendedprice * (1 - l_discount)        else 0    end) / sum(l_extendedprice * (1 - l_discount)) as promo_revenue from    lineitem,    part where    l_partkey = p_partkey    and l_shipdate >= date '1996-07-01'    and l_shipdate < date '1996-07-01' + interval '1' month;");
-        		System.out.println(k + ": " + (System.currentTimeMillis()-time) + "ms");
-        	}
-        } /*catch (SQLException ex3) {
+            db.shutdown();
+        } catch (SQLException ex3) {
             ex3.printStackTrace();
-        }*/ catch(Exception e) {
-        	System.out.println("File not foud");
         }
-        System.out.println("total: " + (System.currentTimeMillis()-start_time) + "ms");
-        System.out.println("Done");
     }    // main()
 }    // class Testdb
 

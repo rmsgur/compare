@@ -1,4 +1,4 @@
-/* Copyright (c) 2001-2016, The HSQL Development Group
+/* Copyright (c) 2001-2011, The HSQL Development Group
  * All rights reserved.
  *
  * Redistribution and use in source and binary forms, with or without
@@ -34,7 +34,7 @@ package org.hsqldb.persist;
 import java.io.UnsupportedEncodingException;
 
 import org.hsqldb.Database;
-import org.hsqldb.DatabaseType;
+import org.hsqldb.DatabaseURL;
 import org.hsqldb.HsqlException;
 import org.hsqldb.Table;
 import org.hsqldb.error.Error;
@@ -46,6 +46,7 @@ import org.hsqldb.rowio.RowInputText;
 import org.hsqldb.rowio.RowInputTextQuoted;
 import org.hsqldb.rowio.RowOutputText;
 import org.hsqldb.rowio.RowOutputTextQuoted;
+import org.hsqldb.scriptio.ScriptWriterText;
 
 // Ito Kazumitsu 20030328 - patch 1.7.2 - character encoding support
 // Dimitri Maziuk - patch for NL in string support
@@ -66,7 +67,7 @@ import org.hsqldb.rowio.RowOutputTextQuoted;
  *
  * @author Bob Preston (sqlbob@users dot sourceforge.net)
  * @author Fred Toussi (fredt@users dot sourceforge.net)
- * @version 2.3.3
+ * @version 2.3.0
  * @since 1.7.0
  */
 public class TextCache extends DataFileCache {
@@ -123,11 +124,22 @@ public class TextCache extends DataFileCache {
     protected void initBuffers() {
 
         if (textFileSettings.isQuoted || textFileSettings.isAllQuoted) {
-            rowIn  = new RowInputTextQuoted(textFileSettings);
-            rowOut = new RowOutputTextQuoted(textFileSettings);
+            rowIn = new RowInputTextQuoted(textFileSettings.fs,
+                                           textFileSettings.vs,
+                                           textFileSettings.lvs,
+                                           textFileSettings.isAllQuoted);
+            rowOut = new RowOutputTextQuoted(textFileSettings.fs,
+                                             textFileSettings.vs,
+                                             textFileSettings.lvs,
+                                             textFileSettings.isAllQuoted,
+                                             textFileSettings.stringEncoding);
         } else {
-            rowIn  = new RowInputText(textFileSettings);
-            rowOut = new RowOutputText(textFileSettings);
+            rowIn = new RowInputText(textFileSettings.fs, textFileSettings.vs,
+                                     textFileSettings.lvs, false);
+            rowOut = new RowOutputText(textFileSettings.fs,
+                                       textFileSettings.vs,
+                                       textFileSettings.lvs, false,
+                                       textFileSettings.stringEncoding);
         }
     }
 
@@ -139,7 +151,7 @@ public class TextCache extends DataFileCache {
         fileFreePosition = 0;
 
         try {
-            int type = database.getType() == DatabaseType.DB_RES
+            int type = database.getType() == DatabaseURL.S_RES
                        ? RAFile.DATA_FILE_JAR
                        : RAFile.DATA_FILE_TEXT;
 
@@ -153,7 +165,7 @@ public class TextCache extends DataFileCache {
 
             initBuffers();
 
-            spaceManager = new DataSpaceManagerSimple(this, readonly);
+            spaceManager = new DataSpaceManagerSimple(this);
         } catch (Throwable t) {
             throw Error.error(t, ErrorCode.FILE_IO_ERROR,
                               ErrorCode.M_TextCache_opening_file_error,
@@ -170,7 +182,7 @@ public class TextCache extends DataFileCache {
     }
 
     /**
-     *  Writes newly created rows to disk. In the current implementation,
+     *  Writes newly created rows to disk. In the current implentation,
      *  such rows have already been saved, so this method just removes a
      *  source file that has no rows.
      */
@@ -186,7 +198,7 @@ public class TextCache extends DataFileCache {
             cache.saveAll();
 
             boolean empty = (dataFile.length()
-                             <= textFileSettings.bytesForLineEnd.length);
+                             <= TextFileSettings.NL.length());
 
             dataFile.synch();
             dataFile.close();
@@ -276,18 +288,15 @@ public class TextCache extends DataFileCache {
     private void clearRowImage(CachedObject row) {
 
         try {
-            int length = row.getStorageSize();
-            int count  = length - textFileSettings.bytesForLineEnd.length;
+            int length = row.getStorageSize()
+                         - ScriptWriterText.BYTES_LINE_SEP.length;
 
             rowOut.reset();
 
             HsqlByteArrayOutputStream out = rowOut.getOutputStream();
 
-            for (; count > 0; count -= textFileSettings.bytesForSpace.length) {
-                out.write(textFileSettings.bytesForSpace);
-            }
-
-            out.write(textFileSettings.bytesForLineEnd);
+            out.fill(' ', length);
+            out.write(ScriptWriterText.BYTES_LINE_SEP);
             dataFile.seek(row.getPos());
             dataFile.write(out.getBuffer(), 0, out.size());
         } catch (Throwable t) {
@@ -306,7 +315,7 @@ public class TextCache extends DataFileCache {
         }
     }
 
-    public void add(CachedObject object, boolean keep) {
+    public void add(CachedObject object) {
 
         writeLock.lock();
 
@@ -341,7 +350,7 @@ public class TextCache extends DataFileCache {
                 buffer.setSize(object.getStorageSize());
 
                 String rowString =
-                    buffer.toString(textFileSettings.charEncoding);
+                    buffer.toString(textFileSettings.stringEncoding);
 
                 ((RowInputText) rowIn).setSource(rowString, object.getPos(),
                                                  buffer.size());
@@ -428,7 +437,7 @@ public class TextCache extends DataFileCache {
             String firstLine = header + TextFileSettings.NL;
 
             try {
-                buf = firstLine.getBytes(textFileSettings.charEncoding);
+                buf = firstLine.getBytes(textFileSettings.stringEncoding);
             } catch (UnsupportedEncodingException e) {
                 buf = firstLine.getBytes();
             }
@@ -442,7 +451,7 @@ public class TextCache extends DataFileCache {
         }
     }
 
-    public long getLineNumber() {
+    public int getLineNumber() {
         return ((RowInputText) rowIn).getLineNumber();
     }
 
@@ -459,7 +468,7 @@ public class TextCache extends DataFileCache {
     }
 
     public TextFileReader getTextFileReader() {
-        return TextFileReader8.newTextFileReader(dataFile, textFileSettings,
-                rowIn, cacheReadonly);
+        return new TextFileReader(dataFile, textFileSettings, rowIn,
+                                  cacheReadonly);
     }
 }

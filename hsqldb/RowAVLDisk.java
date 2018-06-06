@@ -1,7 +1,7 @@
 /*
  * For work developed by the HSQL Development Group:
  *
- * Copyright (c) 2001-2016, The HSQL Development Group
+ * Copyright (c) 2001-2011, The HSQL Development Group
  * All rights reserved.
  *
  * Redistribution and use in source and binary forms, with or without
@@ -85,7 +85,7 @@ import org.hsqldb.rowio.RowOutputInterface;
 // fredt@users 20020920 - patch 1.7.1 - refactoring to cut memory footprint
 // fredt@users 20021205 - patch 1.7.2 - enhancements
 // fredt@users 20021215 - doc 1.7.2 - javadoc comments
-// campbell-burnet@users - 20040411 - doc 1.7.2 - javadoc comments
+// boucherb@users - 20040411 - doc 1.7.2 - javadoc comments
 
 /**
  *  In-memory representation of a disk-based database row object with  methods
@@ -95,7 +95,7 @@ import org.hsqldb.rowio.RowOutputInterface;
  *
  * @author Fred Toussi (fredt@users dot sourceforge dot net)
  * @author Thomas Mueller (Hypersonic SQL Group)
- * @version 2.3.5
+ * @version 2.2.9
  * @since Hypersonic SQL
  */
 public class RowAVLDisk extends RowAVL {
@@ -142,15 +142,14 @@ public class RowAVLDisk extends RowAVL {
      * @param in data source
      * @throws IOException
      */
-    public RowAVLDisk(PersistentStore store,
-                      RowInputInterface in) throws IOException {
+    public RowAVLDisk(TableBase t, RowInputInterface in) throws IOException {
 
-        super(store.getTable(), (Object[]) null);
+        super(t, (Object[]) null);
 
-        position    = in.getFilePosition();
+        position    = in.getPos();
         storageSize = in.getSize();
 
-        int indexcount = store.getAccessorKeys().length;
+        int indexcount = t.getIndexCount();
 
         nPrimaryNode = new NodeAVLDisk(this, in, 0);
 
@@ -209,6 +208,13 @@ public class RowAVLDisk extends RowAVL {
         position = pos;
     }
 
+    /**
+     * Sets flag for row data change.
+     */
+    public synchronized void setChanged(boolean changed) {
+        hasDataChanged = changed;
+    }
+
     public boolean isNew() {
         return isNew;
     }
@@ -220,13 +226,6 @@ public class RowAVLDisk extends RowAVL {
      */
     public synchronized boolean hasChanged() {
         return hasNodesChanged || hasDataChanged;
-    }
-
-    public synchronized void setChanged(boolean flag) {
-
-        hasNodesChanged = flag;
-        hasDataChanged  = flag;
-        isNew           = flag;
     }
 
     /**
@@ -253,11 +252,33 @@ public class RowAVLDisk extends RowAVL {
     }
 
     /**
-     * No action as references don't need to be removed
+     * Only unlinks nodes. Is not a destroy() method
      */
-    public void delete(PersistentStore store) {}
+    public void delete(PersistentStore store) {
 
-    public void destroy() {}
+        RowAVLDisk row = this;
+
+        if (!row.keepInMemory(true)) {
+            row = (RowAVLDisk) store.get(row, true);
+        }
+
+        super.delete(store);
+        row.keepInMemory(false);
+    }
+
+    public void destroy() {
+
+        NodeAVL n = nPrimaryNode;
+
+        while (n != null) {
+            NodeAVL last = n;
+
+            n          = n.nNext;
+            last.nNext = null;
+        }
+
+        nPrimaryNode = null;
+    }
 
     public synchronized boolean keepInMemory(boolean keep) {
 
@@ -284,7 +305,20 @@ public class RowAVLDisk extends RowAVL {
     }
 
     public synchronized void setInMemory(boolean in) {
+
         isInMemory = in;
+
+        if (in) {
+            return;
+        }
+
+        NodeAVL n = nPrimaryNode;
+
+        while (n != null) {
+            n.setInMemory(in);
+
+            n = n.nNext;
+        }
     }
 
     public void setNewNodes(PersistentStore store) {
@@ -319,6 +353,9 @@ public class RowAVLDisk extends RowAVL {
         if (hasDataChanged) {
             out.writeData(this, table.colTypes);
             out.writeEnd();
+
+            hasDataChanged = false;
+            isNew          = false;
         }
     }
 
@@ -336,6 +373,8 @@ public class RowAVLDisk extends RowAVL {
 
         out.writeData(this, table.colTypes);
         out.writeEnd();
+
+        isNew = false;
     }
 
     /**
@@ -356,5 +395,7 @@ public class RowAVLDisk extends RowAVL {
 
             n = n.nNext;
         }
+
+        hasNodesChanged = false;
     }
 }

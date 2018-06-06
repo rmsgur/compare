@@ -1,4 +1,4 @@
-/* Copyright (c) 2001-2016, The HSQL Development Group
+/* Copyright (c) 2001-2011, The HSQL Development Group
  * All rights reserved.
  *
  * Redistribution and use in source and binary forms, with or without
@@ -51,7 +51,7 @@ import org.hsqldb.lib.Storage;
  * CACHED table storage.
  *
  * @author Fred Toussi (fredt@users dot sourceforge.net)
- * @version 2.3.3
+ * @version 2.3.0
  * @since  1.7.2
  */
 final class RAFile implements RandomAccessInterface {
@@ -66,10 +66,10 @@ final class RAFile implements RandomAccessInterface {
     //
     static final int  bufferScale = 12;
     static final int  bufferSize  = 1 << bufferScale;
-    static final long bufferMask  = 0xffffffffffffffffL << bufferScale;
+    static final long bufferMask  = 0xffffffffffffffffl << bufferScale;
 
     //
-    final EventLogInterface         logger;
+    final Database                  database;
     final RandomAccessFile          file;
     final FileDescriptor            fileDescriptor;
     private final boolean           readOnly;
@@ -143,30 +143,34 @@ final class RAFile implements RandomAccessInterface {
         if (type == DATA_FILE_JAR) {
             return new RAFileInJar(name);
         } else if (type == DATA_FILE_TEXT) {
-            RAFile ra = new RAFile(database.logger, name, readonly, false,
-                                   true);
+            RAFile ra = new RAFile(database, name, readonly, false, true);
 
             return ra;
         } else if (type == DATA_FILE_RAF) {
-            return new RAFile(database.logger, name, readonly, true, false);
+            return new RAFile(database, name, readonly, true, false);
         } else {
             java.io.File fi     = new java.io.File(name);
             long         length = fi.length();
 
             if (length > database.logger.propNioMaxSize) {
-                return new RAFile(database.logger, name, readonly, true,
-                                  false);
+                return new RAFile(database, name, readonly, true, false);
             }
 
-            return new RAFileHybrid(database, name, readonly);
+            try {
+                Class.forName("java.nio.MappedByteBuffer");
+
+                return new RAFileHybrid(database, name, readonly);
+            } catch (Exception e) {
+                return new RAFile(database, name, readonly, true, false);
+            }
         }
     }
 
-    RAFile(EventLogInterface logger, String name, boolean readonly,
+    RAFile(Database database, String name, boolean readonly,
             boolean extendLengthToBlock,
             boolean commitOnChange) throws FileNotFoundException, IOException {
 
-        this.logger       = logger;
+        this.database     = database;
         this.fileName     = name;
         this.readOnly     = readonly;
         this.extendLength = extendLengthToBlock;
@@ -224,8 +228,8 @@ final class RAFile implements RandomAccessInterface {
             bufferOffset = filePos;
         } catch (IOException e) {
             resetPointer();
-            logger.logWarningEvent("Read Error " + filePos + " " + readLength,
-                                   e);
+            database.logger.logWarningEvent(" " + filePos + " " + readLength,
+                                            e);
 
             throw e;
         }
@@ -252,7 +256,7 @@ final class RAFile implements RandomAccessInterface {
             return val;
         } catch (IOException e) {
             resetPointer();
-            logger.logWarningEvent("read failed", e);
+            database.logger.logWarningEvent("read failed", e);
 
             throw e;
         }
@@ -318,7 +322,7 @@ final class RAFile implements RandomAccessInterface {
             }
         } catch (IOException e) {
             resetPointer();
-            logger.logWarningEvent("failed to read a byte array", e);
+            database.logger.logWarningEvent("failed to read a byte array", e);
 
             throw e;
         }
@@ -343,7 +347,7 @@ final class RAFile implements RandomAccessInterface {
             }
         } catch (IOException e) {
             resetPointer();
-            logger.logWarningEvent("failed to write a byte array", e);
+            database.logger.logWarningEvent("failed to write a byte array", e);
 
             throw e;
         }
@@ -411,7 +415,7 @@ final class RAFile implements RandomAccessInterface {
             try {
                 fileDescriptor.sync();
             } catch (Throwable tt) {
-                logger.logSevereEvent("RA file sync error ", tt);
+                database.logger.logSevereEvent("RA file sync error ", tt);
 
                 throw Error.error(t, ErrorCode.FILE_IO_ERROR, null);
             }
@@ -419,11 +423,8 @@ final class RAFile implements RandomAccessInterface {
     }
 
     private int writeToBuffer(byte[] b, int off, int len) throws IOException {
-
-        int count = ArrayUtil.copyBytes(seekPosition - off, b, off, len,
-                                        bufferOffset, buffer, buffer.length);
-
-        return count;
+        return ArrayUtil.copyBytes(seekPosition - off, b, off, len,
+                                   bufferOffset, buffer, buffer.length);
     }
 
     private long getExtendLength(long position) {
@@ -444,8 +445,7 @@ final class RAFile implements RandomAccessInterface {
             scaleUp = 12;
         }
 
-        position = ArrayUtil.getBinaryNormalisedCeiling(position,
-                bufferScale + scaleUp);
+        position = getBinaryNormalisedCeiling(position, bufferScale + scaleUp);
 
         return position;
     }
@@ -466,7 +466,8 @@ final class RAFile implements RandomAccessInterface {
 
                 fileLength = newSize;
             } catch (IOException e) {
-                logger.logWarningEvent("data file enlarge failed ", e);
+                database.logger.logWarningEvent("data file enlarge failed ",
+                                                e);
 
                 throw e;
             }
@@ -481,5 +482,20 @@ final class RAFile implements RandomAccessInterface {
 
             readIntoBuffer();
         } catch (Throwable e) {}
+    }
+
+    /**
+     * uses 2**scale form and returns a multipe of this that is larger or equal to value
+     */
+    static long getBinaryNormalisedCeiling(long value, int scale) {
+
+        long mask    = 0xffffffffffffffffl << scale;
+        long newSize = value & mask;
+
+        if (newSize != value) {
+            newSize += 1 << scale;
+        }
+
+        return newSize;
     }
 }

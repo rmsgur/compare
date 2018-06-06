@@ -1,4 +1,4 @@
-/* Copyright (c) 2001-2016, The HSQL Development Group
+/* Copyright (c) 2001-2011, The HSQL Development Group
  * All rights reserved.
  *
  * Redistribution and use in source and binary forms, with or without
@@ -43,7 +43,6 @@ import java.nio.channels.FileChannel.MapMode;
 import org.hsqldb.Database;
 import org.hsqldb.error.Error;
 import org.hsqldb.error.ErrorCode;
-import org.hsqldb.lib.ArrayUtil;
 import org.hsqldb.lib.java.JavaSystem;
 
 /**
@@ -54,26 +53,26 @@ import org.hsqldb.lib.java.JavaSystem;
  * ScaledRAFile is used for data access.
  *
  * @author Fred Toussi (fredt@users dot sourceforge.net)
- * @version  2.3.3
+ * @version  2.3.0
  * @since 1.8.0.5
  */
 final class RAFileNIO implements RandomAccessInterface {
 
-    private final EventLogInterface logger;
-    private final boolean           readOnly;
-    private final long              maxLength;
-    private long                    fileLength;
-    private RandomAccessFile        file;
-    private FileDescriptor          fileDescriptor;
-    private MappedByteBuffer        buffer;
-    private long                    bufferPosition;
-    private int                     bufferLength;
-    private long                    currentPosition;
-    private FileChannel             channel;
-    private boolean                 buffersModified;
+    private final Database   database;
+    private final boolean    readOnly;
+    private final long       maxLength;
+    private long             fileLength;
+    private RandomAccessFile file;
+    private FileDescriptor   fileDescriptor;
+    private MappedByteBuffer buffer;
+    private long             bufferPosition;
+    private int              bufferLength;
+    private long             currentPosition;
+    private FileChannel      channel;
+    private boolean          buffersModified;
 
     //
-    private MappedByteBuffer[] buffers = new MappedByteBuffer[]{};
+    private MappedByteBuffer buffers[] = new MappedByteBuffer[]{};
 
     //
     private static final String JVM_ERROR = "NIO access failed";
@@ -81,13 +80,13 @@ final class RAFileNIO implements RandomAccessInterface {
     //
     static final int largeBufferScale = 24;
     static final int largeBufferSize  = 1 << largeBufferScale;
-    static final long largeBufferMask = 0xffffffffffffffffL
+    static final long largeBufferMask = 0xffffffffffffffffl
                                         << largeBufferScale;
 
-    RAFileNIO(EventLogInterface logger, String name, boolean readOnly,
-              long requiredLength, long maxLength) throws IOException {
+    RAFileNIO(Database database, String name, boolean readOnly,
+                    long requiredLength, long maxLength) throws IOException {
 
-        this.logger    = logger;
+        this.database  = database;
         this.maxLength = maxLength;
 
         java.io.File tempFile = new java.io.File(name);
@@ -100,7 +99,7 @@ final class RAFileNIO implements RandomAccessInterface {
             }
 
             requiredLength =
-                ArrayUtil.getBinaryNormalisedCeiling(requiredLength,
+                RAFile.getBinaryNormalisedCeiling(requiredLength,
                     largeBufferScale);
         }
 
@@ -129,13 +128,17 @@ final class RAFileNIO implements RandomAccessInterface {
         try {
             return file.length();
         } catch (IOException e) {
-            logger.logWarningEvent(JVM_ERROR, e);
+            database.logger.logWarningEvent(JVM_ERROR, e);
 
             throw e;
-        } catch (Throwable t) {
-            logger.logWarningEvent(JVM_ERROR, t);
+        } catch (Throwable e) {
+            database.logger.logWarningEvent(JVM_ERROR, e);
 
-            IOException io = JavaSystem.toIOException(t);
+            IOException io = new IOException(e.toString());
+
+            try {
+                io.initCause(e);
+            } catch (Throwable e1) {}
 
             throw io;
         }
@@ -147,13 +150,13 @@ final class RAFileNIO implements RandomAccessInterface {
             positionBufferSeek(newPos);
             buffer.position((int) (newPos - bufferPosition));
         } catch (IllegalArgumentException e) {
-            logger.logWarningEvent(JVM_ERROR, e);
+            database.logger.logWarningEvent(JVM_ERROR, e);
 
             IOException io = JavaSystem.toIOException(e);
 
             throw io;
         } catch (Throwable t) {
-            logger.logWarningEvent(JVM_ERROR, t);
+            database.logger.logWarningEvent(JVM_ERROR, t);
 
             IOException io = JavaSystem.toIOException(t);
 
@@ -165,10 +168,14 @@ final class RAFileNIO implements RandomAccessInterface {
 
         try {
             return currentPosition;
-        } catch (Throwable t) {
-            logger.logWarningEvent(JVM_ERROR, t);
+        } catch (Throwable e) {
+            database.logger.logWarningEvent(JVM_ERROR, e);
 
-            IOException io = JavaSystem.toIOException(t);
+            IOException io = new IOException(e.toString());
+
+            try {
+                io.initCause(e);
+            } catch (Throwable e1) {}
 
             throw io;
         }
@@ -182,10 +189,14 @@ final class RAFileNIO implements RandomAccessInterface {
             positionBufferMove(1);
 
             return value;
-        } catch (Throwable t) {
-            logger.logWarningEvent(JVM_ERROR, t);
+        } catch (Throwable e) {
+            database.logger.logWarningEvent(JVM_ERROR, e);
 
-            IOException io = JavaSystem.toIOException(t);
+            IOException io = new IOException(e.toString());
+
+            try {
+                io.initCause(e);
+            } catch (Throwable e1) {}
 
             throw io;
         }
@@ -195,8 +206,6 @@ final class RAFileNIO implements RandomAccessInterface {
 
         try {
             while (true) {
-                checkBuffer();
-
                 long transferLength = bufferPosition + bufferLength
                                       - currentPosition;
 
@@ -215,7 +224,7 @@ final class RAFileNIO implements RandomAccessInterface {
                 }
             }
         } catch (Throwable t) {
-            logger.logWarningEvent(JVM_ERROR, t);
+            database.logger.logWarningEvent(JVM_ERROR, t);
 
             IOException io = JavaSystem.toIOException(t);
 
@@ -232,7 +241,7 @@ final class RAFileNIO implements RandomAccessInterface {
 
             return value;
         } catch (Throwable t) {
-            logger.logWarningEvent(JVM_ERROR, t);
+            database.logger.logWarningEvent(JVM_ERROR, t);
 
             IOException io = JavaSystem.toIOException(t);
 
@@ -249,7 +258,7 @@ final class RAFileNIO implements RandomAccessInterface {
 
             return value;
         } catch (Throwable t) {
-            logger.logWarningEvent(JVM_ERROR, t);
+            database.logger.logWarningEvent(JVM_ERROR, t);
 
             IOException io = JavaSystem.toIOException(t);
 
@@ -259,16 +268,12 @@ final class RAFileNIO implements RandomAccessInterface {
 
     public void write(byte[] b, int offset, int length) throws IOException {
 
-        long transferLength;
-
         try {
             buffersModified = true;
 
             while (true) {
-                checkBuffer();
-
-                transferLength = bufferPosition + bufferLength
-                                 - currentPosition;
+                long transferLength = bufferPosition + bufferLength
+                                      - currentPosition;
 
                 if (transferLength > length) {
                     transferLength = length;
@@ -285,7 +290,7 @@ final class RAFileNIO implements RandomAccessInterface {
                 }
             }
         } catch (Throwable t) {
-            logger.logWarningEvent(JVM_ERROR, t);
+            database.logger.logWarningEvent(JVM_ERROR, t);
 
             IOException io = JavaSystem.toIOException(t);
 
@@ -301,7 +306,7 @@ final class RAFileNIO implements RandomAccessInterface {
             buffer.putInt(i);
             positionBufferMove(4);
         } catch (Throwable t) {
-            logger.logWarningEvent(JVM_ERROR, t);
+            database.logger.logWarningEvent(JVM_ERROR, t);
 
             IOException io = JavaSystem.toIOException(t);
 
@@ -317,7 +322,7 @@ final class RAFileNIO implements RandomAccessInterface {
             buffer.putLong(i);
             positionBufferMove(8);
         } catch (Throwable t) {
-            logger.logWarningEvent(JVM_ERROR, t);
+            database.logger.logWarningEvent(JVM_ERROR, t);
 
             IOException io = JavaSystem.toIOException(t);
 
@@ -328,7 +333,8 @@ final class RAFileNIO implements RandomAccessInterface {
     public void close() throws IOException {
 
         try {
-            logger.logDetailEvent("NIO file close, size: " + fileLength);
+            database.logger.logDetailEvent("NIO file close, size: "
+                                           + fileLength);
 
             buffer  = null;
             channel = null;
@@ -343,7 +349,7 @@ final class RAFileNIO implements RandomAccessInterface {
 
             // System.gc();
         } catch (Throwable t) {
-            logger.logWarningEvent("NIO buffer close error", t);
+            database.logger.logWarningEvent("NIO buffer close error", t);
 
             IOException io = JavaSystem.toIOException(t);
 
@@ -398,11 +404,11 @@ final class RAFileNIO implements RandomAccessInterface {
             buffers                    = newBuffers;
             fileLength                 += newBufferLength;
 
-            logger.logDetailEvent("NIO buffer instance, file size "
-                                  + fileLength);
+            database.logger.logDetailEvent("NIO buffer instance, file size "
+                                           + fileLength);
         } catch (Throwable e) {
-            logger.logDetailEvent("NOI buffer allocate failed, file size "
-                                  + newFileLength);
+            database.logger.logDetailEvent(
+                "NOI buffer allocate failed, file size " + newFileLength);
 
             return false;
         }
@@ -439,8 +445,9 @@ final class RAFileNIO implements RandomAccessInterface {
             try {
                 buffers[i].force();
             } catch (Throwable t) {
-                logger.logWarningEvent("NIO buffer force error: pos "
-                                       + i * largeBufferSize + " ", t);
+                database.logger.logWarningEvent("NIO buffer force error: pos "
+                                                + i * largeBufferSize
+                                                + " ", t);
 
                 if (!error) {
                     errIndex = i;
@@ -455,8 +462,9 @@ final class RAFileNIO implements RandomAccessInterface {
                 try {
                     buffers[i].force();
                 } catch (Throwable t) {
-                    logger.logWarningEvent("NIO buffer force error "
-                                           + i * largeBufferSize + " ", t);
+                    database.logger.logWarningEvent("NIO buffer force error "
+                                                    + i * largeBufferSize
+                                                    + " ", t);
                 }
             }
         }
@@ -466,7 +474,7 @@ final class RAFileNIO implements RandomAccessInterface {
 
             buffersModified = false;
         } catch (Throwable t) {
-            logger.logSevereEvent("NIO RA file sync error ", t);
+            database.logger.logSevereEvent("NIO RA file sync error ", t);
 
             throw Error.error(t, ErrorCode.FILE_IO_ERROR, null);
         }
@@ -499,45 +507,19 @@ final class RAFileNIO implements RandomAccessInterface {
 
     private void setCurrentBuffer(long offset) {
 
-        if(readOnly) {
-            return;
-        }
-
         int bufferIndex = (int) (offset >> largeBufferScale);
 
         // when moving to last position in file
         if (bufferIndex == buffers.length) {
             bufferIndex    = buffers.length - 1;
-            bufferPosition = (long) bufferIndex * largeBufferSize;
+            bufferPosition = largeBufferSize;
             buffer         = buffers[bufferIndex];
 
             return;
         }
 
         buffer         = buffers[bufferIndex];
-        bufferPosition = offset & largeBufferMask;
-    }
-
-    /**
-     * checks for two types of potential errors before reads and writes and
-     * fixes them.
-     *
-     */
-    private void checkBuffer() {
-
-        if(readOnly) {
-            return;
-        }
-        int bufferIndex = (int) (currentPosition >> largeBufferScale);
-
-        if (currentPosition != bufferPosition + buffer.position()) {
-            buffer         = buffers[bufferIndex];
-            bufferPosition = currentPosition & largeBufferMask;
-
-            buffer.position((int) (currentPosition - bufferPosition));
-        } else if (buffer != buffers[bufferIndex]) {
-            buffer = buffers[bufferIndex];
-        }
+        bufferPosition = offset &= largeBufferMask;
     }
 
     /**

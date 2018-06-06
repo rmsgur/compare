@@ -1,4 +1,4 @@
-/* Copyright (c) 2001-2017, The HSQL Development Group
+/* Copyright (c) 2001-2011, The HSQL Development Group
  * All rights reserved.
  *
  * Redistribution and use in source and binary forms, with or without
@@ -35,20 +35,21 @@ import java.sql.ResultSetMetaData;
 import java.sql.SQLException;
 
 import org.hsqldb.error.ErrorCode;
+import org.hsqldb.persist.HsqlDatabaseProperties;
 import org.hsqldb.result.ResultMetaData;
 import org.hsqldb.types.DateTimeType;
 import org.hsqldb.types.IntervalType;
 import org.hsqldb.types.Type;
 import org.hsqldb.types.Types;
 
-/* $Id: JDBCResultSetMetaData.java 5737 2017-04-02 10:33:23Z fredt $ */
+/* $Id: JDBCResultSetMetaData.java 5259 2013-07-05 20:19:09Z fredt $ */
 
 // fredt@users    - 20040412 - removed DITypeInfo dependencies
-// campbell-burnet@users - 200404xx - removed unused imports;refinement for better
+// boucherb@users - 200404xx - removed unused imports;refinement for better
 //                             usability of getColumnDisplaySize;
 //                             javadoc updates
-// campbell-burnet@users - 20051207 - patch 1.8.0.x initial JDBC 4.0 support work
-// campbell-burnet@users - 20060522 - doc   1.9.0 full synch up to Mustang Build 84
+// boucherb@users - 20051207 - patch 1.8.0.x initial JDBC 4.0 support work
+// boucherb@users - 20060522 - doc   1.9.0 full synch up to Mustang Build 84
 // fredt@users - 1.9.0 usage of types and new ResultMetadata and ColumnMetaData
 // Revision 1.15  2006/07/12 12:29:42  boucherb
 // patch 1.9.0
@@ -91,13 +92,14 @@ import org.hsqldb.types.Types;
  * speed, accuracy, jar-footprint and retention of JDBC resources. <p>
  *
  * (fredt@users) <br>
- * (campbell-burnet@users)<p>
+ * (boucherb@users)<p>
  * </div>
  * <!-- end release-specific documentation -->
  *
- * @author Campbell Burnet (campbell-burnet@users dot sourceforge.net)
+ * @author Campbell Boucher-Burnet (boucherb@users dot sourceforge.net)
  * @author Fred Toussi (fredt@users dot sourceforge.net)
  * @version 2.2.6
+ * @revised JDK 1.6, HSQLDB 2.0
  * @see JDBCStatement#executeQuery
  * @see JDBCStatement#getResultSet
  * @see java.sql.ResultSetMetaData
@@ -329,19 +331,19 @@ public class JDBCResultSetMetaData implements ResultSetMetaData {
      *
      * HSQLDB 2.0 fully supports this feature.  <p>
      *
-     * The current calculation follows these rules:
+     * The current calculation follows these rules: <p>
      *
      * <ol>
      * <li>Long character types and datetime types:<p>
      *
-     *     The maximum length/precision, repectively.
+     *     The maximum length/precision, repectively.<p>
      *
-     * <li>CHAR and VARCHAR types:
+     * <li>CHAR and VARCHAR types: <p>
      *
      *      <ul>
      *      <li> If the result set column is a direct pass through of a table
      *           column value and column size was declared, then the declared
-     *           value is returned.
+     *           value is returned. <p>
      *
      *      <li> Otherwise, the computed length according to SQL Standard is
      *           returned. For very large values, the value of the system property
@@ -358,19 +360,19 @@ public class JDBCResultSetMetaData implements ResultSetMetaData {
      *      and serves only as the current best effort at providing a
      *      value that maximizes usability across a wide range of tools,
      *      given that the HSQLDB database engine allows very large
-     *      lengths to be declared.
+     *      lengths to be declared. <p>
      *
      * <li>Number types: <p>
      *
      *     The max precision, plus the length of the negation character (1),
      *     plus (if applicable) the maximum number of characters that may
      *     occupy the exponent character sequence.  Note that some legacy tools
-     *     do not correctly handle BIGINT values of greater than 18 digits.
+     *     do not correctly handle BIGINT values of greater than 18 digits. <p>
      *
      * <li>BOOLEAN type: <p>
      *
      *     The length of the character sequence "false" (5), the longer of the
-     *     two boolean value String representations.
+     *     two boolean value String representations. <p>
      *
      * <li>Remaining types: <p>
      *
@@ -412,12 +414,12 @@ public class JDBCResultSetMetaData implements ResultSetMetaData {
      * <h3>HSQLDB-Specific Information:</h3> <p>
      *
      * In HSQLDB, a <code>ResultSet</code> column label is determined using the
-     * following order of precedence:
+     * following order of precedence:<p>
      *
      * <OL>
      * <LI>The label (alias) specified in the generating query.</LI>
      * <LI>The name of the underlying column, if no label is specified.<br>
-     * <LI>C1, C2, etc. for computed columns that have no label.</LI>
+     * <L1>C1, C2, etc. for computed columns that have no label.</LI>
      * </OL> <p>
      *
      * </div>
@@ -450,13 +452,13 @@ public class JDBCResultSetMetaData implements ResultSetMetaData {
      * <h3>HSQLDB-Specific Information:</h3> <p>
      *
      * In HSQLDB, a ResultSet column name is determined using the following
-     * order of precedence:
+     * order of prcedence:<p>
      *
      * <OL>
-     * <LI>The name of the underlying column, if the ResultSet column
+     * <LI>The name of the underlying columnm, if the ResultSet column
      *   represents a column in a table.</LI>
      * <LI>The label or alias specified in the generating query.</LI>
-     * <LI>C1, C2, etc. for computed columns that have no label.</LI>
+     * <L1>C1, C2, etc. for computed columns that have no label.</LI>
      * </OL> <p>
      *
      * If the <code>jdbc.get_column_name</code> property of the JDBC Connection
@@ -511,7 +513,7 @@ public class JDBCResultSetMetaData implements ResultSetMetaData {
 
         checkColumn(column);
 
-        String name = resultMetaData.columns[--column].getSchemaNameString();
+        String name = resultMetaData.columns[--column].getSchemaNameString();;
 
         return name == null ? ""
                             : name;
@@ -522,7 +524,7 @@ public class JDBCResultSetMetaData implements ResultSetMetaData {
      * (JDBC4 clarification:)
      * Get the designated column's specified column size.
      * For numeric data, this is the maximum precision.  For character data, this is the [maximum] length in characters.
-     * For datetime datatypes, this is the [maximum] length in characters of the String representation (assuming the
+     * For datetime datatypes, this is the [maximim] length in characters of the String representation (assuming the
      * maximum allowed precision of the fractional seconds component). For binary data, this is the [maximum] length in bytes.  For the ROWID datatype,
      * this is the length in bytes[, as returned by the implementation-specific java.sql.RowId.getBytes() method]. 0 is returned for data types where the
      * column size is not applicable.
@@ -619,7 +621,7 @@ public class JDBCResultSetMetaData implements ResultSetMetaData {
      * allowed by the Standard. <p>
      *
      * However, not all clients respect the SQL Standard and may use a
-     * catalog qualifier in a context where it is not supported by the Standard.
+     * catalog qualifier in a context where it is not suppoted by the Standard.
      * <p>
      *
      * For greater detail, see discussion at:
@@ -653,7 +655,7 @@ public class JDBCResultSetMetaData implements ResultSetMetaData {
      * <h3>HSQLDB-Specific Information:</h3> <p>
      *
      * This reports the SQL type code of the column. For time and timestamp
-     * types that are WITH TIME ZONE, the values as the SQL Standard CLI
+     * types that are WITH TIME ZONE, the values as the SQL Standarc CLI
      * codes.<p>
      *
      * </div>
@@ -702,7 +704,7 @@ public class JDBCResultSetMetaData implements ResultSetMetaData {
      * <div class="ReleaseSpecificDocumentation">
      * <h3>HSQLDB-Specific Information:</h3> <p>
      *
-     * From 2.0 this method returns true if the ResultSet is not updatable
+     * From 2.0 this method returns true if the ResuleSet is not updatable
      * or the column in question is not updatable.<p>
      * </div>
      * <!-- end release-specific documentation -->
@@ -728,7 +730,7 @@ public class JDBCResultSetMetaData implements ResultSetMetaData {
      * <div class="ReleaseSpecificDocumentation">
      * <h3>HSQLDB-Specific Information:</h3> <p>
      *
-     * From 2.0 this method returns false if the ResultSet is not updatable
+     * From 2.0 this method returns false if the ResuleSet is not updatable
      * or the column in question is not updatable.<p>
      *
      * </div>
@@ -755,7 +757,7 @@ public class JDBCResultSetMetaData implements ResultSetMetaData {
      * <div class="ReleaseSpecificDocumentation">
      * <h3>HSQLDB-Specific Information:</h3> <p>
      *
-     * From 2.0 this method returns false if the ResultSet is not updatable
+     * From 2.0 this method returns false if the ResuleSet is not updatable
      * or the column in question is not updatable.<p>
      *
      * </div>
@@ -802,7 +804,8 @@ public class JDBCResultSetMetaData implements ResultSetMetaData {
      * <code>ResultSet.getObject</code> to retrieve the value in the specified
      * column. This is the class name used for custom mapping.
      * @exception SQLException if a database access error occurs
-     * @since JDK 1.2
+     * @since JDK 1.2 (JDK 1.1.x developers: read the overview for
+     *      JDBCResultSet)
      */
     public String getColumnClassName(int column) throws SQLException {
 
@@ -831,7 +834,7 @@ public class JDBCResultSetMetaData implements ResultSetMetaData {
      * @param iface A Class defining an interface that the result must implement.
      * @return an object that implements the interface. May be a proxy for the actual implementing object.
      * @throws java.sql.SQLException If no object found that implements the interface
-     * @since JDK 1.6
+     * @since JDK 1.6, HSQLDB 1.8.x
      */
 //#ifdef JAVA6
     @SuppressWarnings("unchecked")
@@ -859,7 +862,7 @@ public class JDBCResultSetMetaData implements ResultSetMetaData {
      * @return true if this implements the interface or directly or indirectly wraps an object that does.
      * @throws java.sql.SQLException  if an error occurs while determining whether this is a wrapper
      * for an object with the given interface.
-     * @since JDK 1.6
+     * @since JDK 1.6, HSQLDB 1.8.x
      */
 //#ifdef JAVA6
     public boolean isWrapperFor(
@@ -885,6 +888,8 @@ public class JDBCResultSetMetaData implements ResultSetMetaData {
      *
      * @param meta the ResultMetaData object from which to construct a new
      *        JDBCResultSetMetaData object
+     * @param props the HsqlProperties object from which to construct a
+     *        new JDBCResultSetMetaData object
      * @throws SQLException if a database access error occurs
      */
     JDBCResultSetMetaData(ResultMetaData meta, boolean isUpdatable,
@@ -917,8 +922,12 @@ public class JDBCResultSetMetaData implements ResultSetMetaData {
             return;
         }
 
-        useColumnName    = conn.isUseColumnName;
-        translateTTIType = conn.isTranslateTTIType;
+        useColumnName = conn.isUseColumnName;
+
+        if (conn.clientProperties != null) {
+            translateTTIType = conn.clientProperties.isPropertyTrue(
+                HsqlDatabaseProperties.jdbc_translate_tti_types);
+        }
     }
 
     /**
@@ -946,6 +955,8 @@ public class JDBCResultSetMetaData implements ResultSetMetaData {
         if (this.translateTTIType) {
             if (type.isIntervalType()) {
                 type = ((IntervalType) type).getCharacterType();
+            } else if (type.isDateTimeTypeWithZone()) {
+                type = ((DateTimeType) type).getDateTimeTypeWithoutZone();
             }
         }
 
@@ -959,7 +970,7 @@ public class JDBCResultSetMetaData implements ResultSetMetaData {
      * object is an instance, the at-sign character `<code>@</code>',
      * the unsigned hexadecimal representation of the hash code of the
      * object and a comma-delimited list of this object's indexed attributes,
-     * enclosed in square brackets.
+     * enclosed in square brakets.
      *
      * @return  a string representation of the object.
      */

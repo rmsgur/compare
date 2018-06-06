@@ -1,4 +1,4 @@
-/* Copyright (c) 2001-2016, The HSQL Development Group
+/* Copyright (c) 2001-2011, The HSQL Development Group
  * All rights reserved.
  *
  * Redistribution and use in source and binary forms, with or without
@@ -36,6 +36,7 @@ import java.io.IOException;
 
 import org.hsqldb.Database;
 import org.hsqldb.HsqlException;
+import org.hsqldb.HsqlNameManager;
 import org.hsqldb.HsqlNameManager.HsqlName;
 import org.hsqldb.NumberSequence;
 import org.hsqldb.Row;
@@ -68,15 +69,18 @@ import org.hsqldb.scriptio.ScriptWriterText;
  *  the contents of these files into its database file. The script format is
  *  always TEXT in this case.
  *
+ *  Class has the same name as a class in Hypersonic SQL, but has been
+ *  completely rewritten since HSQLDB 1.8.0 and earlier.
+ *
  * @author Fred Toussi (fredt@users dot sourceforge.net)
  * @author Bob Preston (sqlbob@users dot sourceforge.net) - text table support
- * @version 2.3.4
+ * @version 2.2.9
  * @since 1.8.0
  */
 public class Log {
 
     private HsqlDatabaseProperties properties;
-    private String                 baseFileName;
+    private String                 fileName;
     private Database               database;
     private FileAccess             fa;
     ScriptWriterBase               dbLogWriter;
@@ -90,19 +94,25 @@ public class Log {
 
     Log(Database db) {
 
-        database     = db;
-        fa           = db.logger.getFileAccess();
-        baseFileName = db.getPath();
-        properties   = db.getProperties();
+        database   = db;
+        fa         = db.logger.getFileAccess();
+        fileName   = db.getPath();
+        properties = db.getProperties();
     }
 
     void initParams() {
 
-        maxLogSize     = database.logger.getLogSize() * 1024L * 1024;
-        writeDelay     = database.logger.getWriteDelay();
+        maxLogSize     = database.logger.propLogSize * 1024L * 1024;
+        writeDelay     = database.logger.propWriteDelay;
         filesReadOnly  = database.isFilesReadOnly();
-        scriptFileName = baseFileName + Logger.scriptFileExtension;
-        logFileName    = baseFileName + Logger.logFileExtension;
+        scriptFileName = fileName + Logger.scriptFileExtension;
+    }
+
+    void setupLogFile() {
+
+        if (logFileName == null) {
+            logFileName = fileName + Logger.logFileExtension;
+        }
     }
 
     /**
@@ -158,10 +168,8 @@ public class Log {
                     HsqlDatabaseProperties.FILES_NOT_MODIFIED);
 
             // continue as non-modified files
-            // delete log file as zero length file is possible
             // fall through
             case HsqlDatabaseProperties.FILES_NOT_MODIFIED :
-                deleteLog();
                 database.logger.logInfoEvent(
                     "open start - state not modified");
 
@@ -199,7 +207,7 @@ public class Log {
         deleteOldTempFiles();
         deleteTempFileDirectory();
         writeScript(script);
-        database.logger.textTableManager.closeAllTextCaches(script);
+        database.logger.closeAllTextCaches(script);
 
         if (cache != null) {
             cache.close();
@@ -259,7 +267,7 @@ public class Log {
             cache.release();
         }
 
-        database.logger.textTableManager.closeAllTextCaches(false);
+        database.logger.closeAllTextCaches(false);
         closeLog();
     }
 
@@ -269,35 +277,32 @@ public class Log {
     void deleteNewAndOldFiles() {
 
         deleteOldDataFiles();
-        fa.removeElement(baseFileName + Logger.dataFileExtension
+        fa.removeElement(fileName + Logger.dataFileExtension
                          + Logger.newFileExtension);
-        fa.removeElement(baseFileName + Logger.backupFileExtension
+        fa.removeElement(fileName + Logger.backupFileExtension
                          + Logger.newFileExtension);
         fa.removeElement(scriptFileName + Logger.newFileExtension);
     }
 
     void deleteBackup() {
-        fa.removeElement(baseFileName + Logger.backupFileExtension);
+        fa.removeElement(fileName + Logger.backupFileExtension);
     }
 
     void backupData() {
 
         DataFileCache.backupFile(database,
-                                 baseFileName + Logger.dataFileExtension,
-                                 baseFileName + Logger.backupFileExtension,
-                                 false);
+                                 fileName + Logger.dataFileExtension,
+                                 fileName + Logger.backupFileExtension, false);
     }
 
     void renameNewDataFile() {
         DataFileCache.renameDataFile(database,
-                                     baseFileName + Logger.dataFileExtension);
+                                     fileName + Logger.dataFileExtension);
     }
 
     void renameNewBackup() {
-
         DataFileCache.renameBackupFile(database,
-                                       baseFileName
-                                       + Logger.backupFileExtension);
+                                       fileName + Logger.backupFileExtension);
     }
 
     void renameNewScript() {
@@ -311,8 +316,8 @@ public class Log {
 
     boolean renameNewDataFileDone() {
 
-        return fa.isStreamElement(baseFileName + Logger.dataFileExtension)
-               && !fa.isStreamElement(baseFileName + Logger.dataFileExtension
+        return fa.isStreamElement(fileName + Logger.dataFileExtension)
+               && !fa.isStreamElement(fileName + Logger.dataFileExtension
                                       + Logger.newFileExtension);
     }
 
@@ -328,11 +333,12 @@ public class Log {
     }
 
     void deleteNewBackup() {
-        fa.removeElement(baseFileName + Logger.backupFileExtension
+        fa.removeElement(fileName + Logger.backupFileExtension
                          + Logger.newFileExtension);
     }
 
     void deleteLog() {
+        setupLogFile();
         fa.removeElement(logFileName);
     }
 
@@ -345,31 +351,32 @@ public class Log {
             return true;
         }
 
-        return database.logger.textTableManager.isAnyTextCacheModified();
+        return database.logger.isAnyTextCacheModified();
     }
 
-    private boolean checkpoint() {
+    void checkpoint() {
 
         if (filesReadOnly) {
-            return true;
+            return;
         }
 
-        boolean result       = checkpointClose();
-        boolean reopenResult = checkpointReopen();
+        boolean result = checkpointClose();
 
-        if (!result) {
+        checkpointReopen();
+
+        if (result) {
+            database.lobManager.deleteUnusedLobs();
+        } else {
             database.logger.logSevereEvent(
                 "checkpoint failed - see previous error", null);
         }
-
-        return reopenResult;
     }
 
     /**
      * Performs checkpoint including pre and post operations. Returns to the
      * same state as before the checkpoint.
      */
-    void checkpoint(Session session, boolean defrag) {
+    void checkpoint(boolean defrag) {
 
         if (filesReadOnly) {
             return;
@@ -381,8 +388,14 @@ public class Log {
             defrag = true;
         }
 
+        // test code
+        /*
+        if (database.logger.isStoredFileAccess) {
+            defrag = false;
+        }
+        */
         if (defrag) {
-            defrag(session);
+            defrag();
         } else {
             checkpoint();
         }
@@ -401,12 +414,10 @@ public class Log {
         database.logger.logInfoEvent("checkpointClose start");
         synchLog();
         database.lobManager.synch();
-        database.logger.logInfoEvent("checkpointClose synched");
         deleteOldDataFiles();
 
         try {
             writeScript(false);
-            database.logger.logInfoEvent("checkpointClose script done");
 
             if (cache != null) {
                 cache.reset();
@@ -471,7 +482,7 @@ public class Log {
     /**
      *  Writes out all the rows to a new file without fragmentation.
      */
-    public void defrag(Session session) {
+    public void defrag() {
 
         database.logger.logInfoEvent("defrag start");
 
@@ -487,10 +498,9 @@ public class Log {
             database.lobManager.synch();
             deleteOldDataFiles();
 
-            DataFileDefrag dfd = cache.defrag(session);
+            DataFileDefrag dfd = cache.defrag();
 
             database.persistentStoreCollection.setNewTableSpaces();
-            database.schemaManager.setIndexRoots(dfd.getIndexRoots());
             database.sessionManager.resetLoggedSchemas();
         } catch (HsqlException e) {
             throw e;
@@ -510,7 +520,7 @@ public class Log {
     }
 
     /**
-     * Returns true if lost space is above the threshold percentage.
+     * Returns true if lost space is above the threshold percentage
      */
     boolean forceDefrag() {
 
@@ -521,13 +531,9 @@ public class Log {
             return false;
         }
 
-        long floor = database.logger.propFileSpaceValue * 1024L * 1024;
-
-        if (floor > limit) {
-            limit = floor;
-        }
-
         long lostSize = cache.getLostBlockSize();
+
+        cache.spaceManager.getLostBlocksSize();
 
         return lostSize > limit;
     }
@@ -545,7 +551,7 @@ public class Log {
     DataFileCache getCache() {
 
         if (cache == null) {
-            cache = new DataFileCache(database, baseFileName);
+            cache = new DataFileCache(database, fileName);
 
             cache.open(filesReadOnly);
         }
@@ -585,14 +591,13 @@ public class Log {
 
     /**
      * Various writeXXX() methods are used for logging statements.
-     * INSERT, DELETE and SEQUENCE statements do not check log size
      */
     void writeOtherStatement(Session session, String s) {
 
         try {
             dbLogWriter.writeOtherStatement(session, s);
         } catch (IOException e) {
-            throw Error.error(ErrorCode.FILE_IO_ERROR, getLogFileName());
+            throw Error.error(ErrorCode.FILE_IO_ERROR, logFileName);
         }
 
         if (maxLogSize > 0 && dbLogWriter.size() > maxLogSize) {
@@ -607,7 +612,11 @@ public class Log {
         try {
             dbLogWriter.writeInsertStatement(session, row, t);
         } catch (IOException e) {
-            throw Error.error(ErrorCode.FILE_IO_ERROR, getLogFileName());
+            throw Error.error(ErrorCode.FILE_IO_ERROR, logFileName);
+        }
+
+        if (maxLogSize > 0 && dbLogWriter.size() > maxLogSize) {
+            database.logger.setCheckpointRequired();
         }
     }
 
@@ -616,7 +625,11 @@ public class Log {
         try {
             dbLogWriter.writeDeleteStatement(session, t, row);
         } catch (IOException e) {
-            throw Error.error(ErrorCode.FILE_IO_ERROR, getLogFileName());
+            throw Error.error(ErrorCode.FILE_IO_ERROR, logFileName);
+        }
+
+        if (maxLogSize > 0 && dbLogWriter.size() > maxLogSize) {
+            database.logger.setCheckpointRequired();
         }
     }
 
@@ -625,7 +638,11 @@ public class Log {
         try {
             dbLogWriter.writeSequenceStatement(session, s);
         } catch (IOException e) {
-            throw Error.error(ErrorCode.FILE_IO_ERROR, getLogFileName());
+            throw Error.error(ErrorCode.FILE_IO_ERROR, logFileName);
+        }
+
+        if (maxLogSize > 0 && dbLogWriter.size() > maxLogSize) {
+            database.logger.setCheckpointRequired();
         }
 
         setModified();
@@ -636,7 +653,7 @@ public class Log {
         try {
             dbLogWriter.writeCommitStatement(session);
         } catch (IOException e) {
-            throw Error.error(ErrorCode.FILE_IO_ERROR, getLogFileName());
+            throw Error.error(ErrorCode.FILE_IO_ERROR, logFileName);
         }
 
         if (maxLogSize > 0 && dbLogWriter.size() > maxLogSize) {
@@ -664,7 +681,7 @@ public class Log {
     }
 
     /**
-     * Wrappers for opening-starting / stopping-closing the log file and
+     * Wrappers for openning-starting / stoping-closing the log file and
      * writer.
      */
     void openLog() {
@@ -672,6 +689,11 @@ public class Log {
         if (filesReadOnly) {
             return;
         }
+
+        setupLogFile();
+
+        //now .log may be zero length with modified=no
+        deleteLog();
 
         Crypto crypto = database.logger.getCrypto();
 
@@ -693,7 +715,7 @@ public class Log {
         }
     }
 
-    void closeLog() {
+    synchronized void closeLog() {
 
         if (dbLogWriter != null) {
             database.logger.logDetailEvent("log close size: "
@@ -765,7 +787,7 @@ public class Log {
                     cache.release();
                 }
 
-                database.logger.textTableManager.closeAllTextCaches(false);
+                database.logger.closeAllTextCaches(false);
             }
 
             database.logger.logWarningEvent("Script processing failure", e);
@@ -787,11 +809,10 @@ public class Log {
      */
     private void processLog() {
 
-        if (fa.isStreamElement(logFileName)) {
-            boolean fullReplay = database.getURLProperties().isPropertyTrue(
-                HsqlDatabaseProperties.hsqldb_full_log_replay);
+        setupLogFile();
 
-            ScriptRunner.runScript(database, logFileName, fullReplay);
+        if (fa.isStreamElement(logFileName)) {
+            ScriptRunner.runScript(database, logFileName);
         }
     }
 

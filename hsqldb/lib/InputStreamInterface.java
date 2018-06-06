@@ -1,4 +1,4 @@
-/* Copyright (c) 2001-2016, The HSQL Development Group
+/* Copyright (c) 2001-2011, The HSQL Development Group
  * All rights reserved.
  *
  * Redistribution and use in source and binary forms, with or without
@@ -40,23 +40,23 @@ import java.io.IOException;
  */
 public interface InputStreamInterface {
 
-    int read() throws IOException;
+    public int read() throws IOException;
 
-    int read(byte[] bytes) throws IOException;
+    public int read(byte bytes[]) throws IOException;
 
-    int read(byte[] bytes, int offset, int length) throws IOException;
+    public int read(byte bytes[], int offset, int length) throws IOException;
 
-    long skip(long count) throws IOException;
+    public long skip(long count) throws IOException;
 
-    int available() throws IOException;
+    public int available() throws IOException;
 
-    void close() throws IOException;
+    public void close() throws IOException;
 
-    void setSizeLimit(long count);
+    public void setSizeLimit(long count);
 
     /**
      * Invariant. Number of characters in stream, including any already read.
      * @return -1 if no explicit limit otherwise the limit
      */
-    long getSizeLimit();
+    public long getSizeLimit();
 }

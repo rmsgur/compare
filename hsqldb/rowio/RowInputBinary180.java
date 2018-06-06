@@ -1,4 +1,4 @@
-/* Copyright (c) 2001-2015, The HSQL Development Group
+/* Copyright (c) 2001-2011, The HSQL Development Group
  * All rights reserved.
  *
  * Redistribution and use in source and binary forms, with or without
@@ -31,6 +31,7 @@
 
 package org.hsqldb.rowio;
 
+import java.io.IOException;
 import java.util.Calendar;
 import java.util.GregorianCalendar;
 
@@ -42,7 +43,7 @@ import org.hsqldb.types.Types;
 
 /**
  * @author Fred Toussi (fredt@users dot sourceforge.net)
- * @version 2.3.3
+ * @version 2.2.9
  * @since 1.9.0
  */
 public class RowInputBinary180 extends RowInputBinary {
@@ -53,13 +54,13 @@ public class RowInputBinary180 extends RowInputBinary {
         super(buf);
     }
 
-    protected TimeData readTime(Type type) {
+    protected TimeData readTime(Type type) throws IOException {
 
         if (type.typeCode == Types.SQL_TIME) {
             long millis = readLong();
 
-            millis = HsqlDateTime.convertMillisFromCalendar(tempCalDefault,
-                    millis);
+            millis = HsqlDateTime.convertMillisFromCalendar(
+                tempCalDefault, millis);
             millis = HsqlDateTime.getNormalisedTime(millis);
 
             return new TimeData((int) (millis / 1000), 0, 0);
@@ -68,25 +69,26 @@ public class RowInputBinary180 extends RowInputBinary {
         }
     }
 
-    protected TimestampData readDate(Type type) {
+    protected TimestampData readDate(Type type) throws IOException {
 
         long millis = readLong();
 
         millis = HsqlDateTime.convertMillisFromCalendar(tempCalDefault,
-                millis);
+                                               millis);
+
         millis = HsqlDateTime.getNormalisedDate(millis);
 
         return new TimestampData(millis / 1000);
     }
 
-    protected TimestampData readTimestamp(Type type) {
+    protected TimestampData readTimestamp(Type type) throws IOException {
 
         if (type.typeCode == Types.SQL_TIMESTAMP) {
             long millis = readLong();
             int  nanos  = readInt();
 
             millis = HsqlDateTime.convertMillisFromCalendar(tempCalDefault,
-                    millis);
+                                                   millis);
 
             return new TimestampData(millis / 1000, nanos);
         } else {

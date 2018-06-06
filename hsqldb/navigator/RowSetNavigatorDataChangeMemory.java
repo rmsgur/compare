@@ -1,4 +1,4 @@
-/* Copyright (c) 2001-2016, The HSQL Development Group
+/* Copyright (c) 2001-2011, The HSQL Development Group
  * All rights reserved.
  *
  * Redistribution and use in source and binary forms, with or without
@@ -35,7 +35,6 @@ import java.io.IOException;
 
 import org.hsqldb.Row;
 import org.hsqldb.Session;
-import org.hsqldb.TableBase;
 import org.hsqldb.error.Error;
 import org.hsqldb.error.ErrorCode;
 import org.hsqldb.lib.ArrayUtil;
@@ -50,13 +49,13 @@ import org.hsqldb.types.Type;
  * operations.
  *
  * @author Fred Toussi (fredt@users dot sourceforge.net)
- * @version 2.3.5
+ * @version 2.2.7
  * @since 1.9.0
  */
 public class RowSetNavigatorDataChangeMemory
 implements RowSetNavigatorDataChange {
 
-    public static final RowSetNavigatorDataChangeMemory emptyRowSet =
+    public static RowSetNavigatorDataChangeMemory emptyRowSet =
         new RowSetNavigatorDataChangeMemory(null);
     int                   size;
     int                   currentPos = -1;
@@ -151,20 +150,6 @@ implements RowSetNavigatorDataChange {
         }
     }
 
-    public boolean addUpdate(Row row, Object[] data, int[] columnMap) {
-
-        int lookup = list.getLookup(row.getId());
-
-        if (lookup == -1) {
-            return false;
-        }
-
-        list.put(row.getId(), row, data);
-        list.setThirdValueByIndex(lookup, columnMap);
-
-        return true;
-    }
-
     public Object[] addRow(Session session, Row row, Object[] data,
                            Type[] types, int[] columnMap) {
 
@@ -216,9 +201,9 @@ implements RowSetNavigatorDataChange {
         }
     }
 
-    public boolean containsDeletedRow(Row refRow) {
+    public boolean containsDeletedRow(Row row) {
 
-        int lookup = list.getLookup(refRow.getId());
+        int lookup = list.getLookup(row.getId());
 
         if (lookup == -1) {
             return false;
@@ -227,120 +212,5 @@ implements RowSetNavigatorDataChange {
         Object[] currentData = (Object[]) list.getSecondValueByIndex(lookup);
 
         return currentData == null;
-    }
-
-    public boolean containsUpdatedRow(Row row, Row refRow, int[] keys) {
-
-        int lookup = list.getLookup(refRow.getId());
-
-        if (lookup > -1) {
-            return true;
-        }
-
-        Object[] rowData = row.getData();
-
-        outerloop:
-        for (int i = 0; i < size; i++) {
-            Row oldRow = (Row) list.getValueByIndex(i);
-
-            if (oldRow.getTable() != row.getTable()) {
-                continue;
-            }
-
-            Type[]   types = row.getTable().getColumnTypes();
-            Object[] data  = (Object[]) list.getSecondValueByIndex(i);
-
-            for (int j = 0; j < keys.length; j++) {
-                int pos = keys[j];
-
-                if (types[pos].compare(session, rowData[pos], data[pos])
-                        != 0) {
-                    continue outerloop;
-                }
-            }
-
-            return true;
-        }
-
-        return false;
-    }
-
-    public void removeCurrent() {}
-
-    public long getRowId() {
-        return getCurrentRow().getId();
-    }
-
-    public boolean isBeforeFirst() {
-        return currentPos == -1;
-    }
-
-    public Object[] getCurrent() {
-        return getCurrentRow().getData();
-    }
-
-    public Object getField(int i) {
-        return getCurrentRow().getData()[i];
-    }
-
-    public void setCurrent(Object[] data) {}
-
-    public void reset() {
-        beforeFirst();
-    }
-
-    public int getRangePosition() {
-        return 1;
-    }
-
-    public RangeIterator getUpdateRowIterator() {
-        return new UpdateRowIterator();
-    }
-
-    class UpdateRowIterator implements RangeIterator {
-
-        public void removeCurrent() {}
-
-        public void release() {}
-
-        public long getRowId() {
-            return 0;
-        }
-
-        public boolean beforeFirst() {
-            return RowSetNavigatorDataChangeMemory.this.beforeFirst();
-        }
-
-        public Row getCurrentRow() {
-            return null;
-        }
-
-        public boolean next() {
-            return RowSetNavigatorDataChangeMemory.this.next();
-        }
-
-        public boolean isBeforeFirst() {
-            return RowSetNavigatorDataChangeMemory.this.isBeforeFirst();
-        }
-
-        public Object[] getCurrent() {
-            return RowSetNavigatorDataChangeMemory.this
-                .getCurrentChangedData();
-        }
-
-        public Object getField(int i) {
-            return RowSetNavigatorDataChangeMemory.this
-                .getCurrentChangedData()[i];
-        }
-
-        public void setCurrent(Object[] data) {}
-
-        public void reset() {
-            beforeFirst();
-        }
-
-        public int getRangePosition() {
-            return 1;
-        }
     }
 }

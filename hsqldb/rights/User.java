@@ -1,4 +1,4 @@
-/* Copyright (c) 2001-2017, The HSQL Development Group
+/* Copyright (c) 2001-2011, The HSQL Development Group
  * All rights reserved.
  *
  * Redistribution and use in source and binary forms, with or without
@@ -31,21 +31,23 @@
 
 package org.hsqldb.rights;
 
+import org.hsqldb.HsqlNameManager;
 import org.hsqldb.HsqlNameManager.HsqlName;
 import org.hsqldb.Tokens;
 import org.hsqldb.error.Error;
 import org.hsqldb.error.ErrorCode;
+import org.hsqldb.lib.MD5;
 import org.hsqldb.lib.StringConverter;
 
 /**
  * A User Object extends Grantee with password for a
  * particular database user.<p>
  *
- * @author Campbell Burnet (campbell-burnet@users dot sourceforge.net)
+ * @author Campbell Boucher-Burnet (boucherb@users dot sourceforge.net)
  * @author Fred Toussi (fredt@users dot sourceforge.net)
  * @author Blaine Simpson (blaine dot simpson at admc dot com)
  *
- * @version 2.3.2
+ * @version 2.1.1
  * @since 1.8.0
  */
 public class User extends Grantee {
@@ -89,19 +91,19 @@ public class User extends Grantee {
     public void setPassword(String password, boolean isDigest) {
 
         if (!isDigest) {
-            password = granteeManager.digest(password);
+            password = MD5.encode(password, null);
         }
 
         this.password = password;
     }
 
     /**
-     * Checks if this object's password attribute equals
+     * Checks if this object's password attibute equals
      * specified argument, else throws.
      */
     public void checkPassword(String value) {
 
-        String digest = granteeManager.digest(value);
+        String digest = MD5.encode(value, null);
 
         if (!digest.equals(password)) {
             throw Error.error(ErrorCode.X_28000);
@@ -180,18 +182,18 @@ public class User extends Grantee {
      * Returns the SQL string for setting password digest.
      *
      */
-    public String getSetUserPasswordDigestSQL(String password,
-            boolean isDigest) {
+    public static String getSetUserPasswordDigestSQL(User user,
+            String password, boolean isDigest) {
 
         if (!isDigest) {
-            password = granteeManager.digest(password);
+            password = MD5.encode(password, null);
         }
 
         StringBuffer sb = new StringBuffer(64);
 
         sb.append(Tokens.T_ALTER).append(' ');
         sb.append(Tokens.T_USER).append(' ');
-        sb.append(getName().getStatementName()).append(' ');
+        sb.append(user.getName().getStatementName()).append(' ');
         sb.append(Tokens.T_SET).append(' ');
         sb.append(Tokens.T_PASSWORD).append(' ').append(Tokens.T_DIGEST);
         sb.append(' ').append('\'').append(password).append('\'');
@@ -203,11 +205,11 @@ public class User extends Grantee {
      * Returns the SQL string for setting password digest.
      *
      */
-    public static String getSetCurrentPasswordDigestSQL(GranteeManager manager,
-            String password, boolean isDigest) {
+    public static String getSetCurrentPasswordDigestSQL(String password,
+            boolean isDigest) {
 
         if (!isDigest) {
-            password = manager.digest(password);
+            password = MD5.encode(password, null);
         }
 
         StringBuffer sb = new StringBuffer(64);

@@ -1,4 +1,4 @@
-/* Copyright (c) 2001-2017, The HSQL Development Group
+/* Copyright (c) 2001-2011, The HSQL Development Group
  * All rights reserved.
  *
  * Redistribution and use in source and binary forms, with or without
@@ -45,7 +45,7 @@ import org.hsqldb.persist.HsqlProperties;
 /**
  * Assists with Server and WebServer configuration tasks.
  *
- * @author  campbell-burnet@users
+ * @author  boucherb@users
  * @version 2.2.7
  * @since 1.7.2
  */
@@ -55,13 +55,13 @@ public final class ServerConfiguration implements ServerConstants {
 
     /**
      * Retrieves the default port that a Server will try to use in the
-     * absence of an explicitly specified one, given the specified
+     * abscence of an explicitly specified one, given the specified
      * value for whether or not to use secure sockets.
      *
-     * @param protocol the protocol specifier code of the Server
+     * @param protocol the protcol specifier code of the Server
      * @param isTls if true, retrieve the default port when using secure
      *      sockets, else the default port when using plain sockets
-     * @return the default port used in the absence of an explicit
+     * @return the default port used in the abscence of an explicit
      *      specification.
      *
      */
@@ -91,7 +91,7 @@ public final class ServerConfiguration implements ServerConstants {
      * Retrieves a new HsqlProperties object, if possible, loaded from the
      * specified file.
      *
-     * @param path the file's path, without the .properties extension
+     * @param path the file's path, without the .properties extention
      *      (which is added automatically)
      * @return a new properties object loaded from the specified file
      */
@@ -275,7 +275,7 @@ public final class ServerConfiguration implements ServerConstants {
     }
 
     /**
-     * Translates unspecified no_system_exit property to false, the default
+     * Tranlates unspecified no_system_exit property to false, the default
      * typically required when a Server is started from the command line.
      *
      * @param p The properties object upon which to perform the translation

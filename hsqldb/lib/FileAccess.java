@@ -1,4 +1,4 @@
-/* Copyright (c) 2001-2014, The HSQL Development Group
+/* Copyright (c) 2001-2011, The HSQL Development Group
  * All rights reserved.
  *
  * Redistribution and use in source and binary forms, with or without
@@ -31,7 +31,6 @@
 
 package org.hsqldb.lib;
 
-import java.io.IOException;
 import java.io.InputStream;
 import java.io.OutputStream;
 
@@ -50,22 +49,23 @@ public interface FileAccess {
     int ELEMENT_READWRITE    = 7;
     int ELEMENT_TRUNCATE     = 8;
 
-    InputStream openInputStreamElement(String streamName)
-    throws IOException;
+    InputStream openInputStreamElement(java.lang.String streamName)
+    throws java.io.IOException;
 
-    OutputStream openOutputStreamElement(String streamName) throws IOException;
+    OutputStream openOutputStreamElement(java.lang.String streamName)
+    throws java.io.IOException;
 
-    boolean isStreamElement(String elementName);
+    boolean isStreamElement(java.lang.String elementName);
 
-    void createParentDirs(String filename);
+    void createParentDirs(java.lang.String filename);
 
-    void removeElement(String filename);
+    void removeElement(java.lang.String filename);
 
-    void renameElement(String oldName, String newName);
+    void renameElement(java.lang.String oldName, java.lang.String newName);
 
-    interface FileSync {
-        void sync() throws IOException;
+    public interface FileSync {
+        void sync() throws java.io.IOException;
     }
 
-    FileSync getFileSync(OutputStream os) throws IOException;
+    FileSync getFileSync(OutputStream os) throws java.io.IOException;
 }

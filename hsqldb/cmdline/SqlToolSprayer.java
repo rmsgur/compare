@@ -1,4 +1,4 @@
-/* Copyright (c) 2001-2014, The HSQL Development Group
+/* Copyright (c) 2001-2011, The HSQL Development Group
  * All rights reserved.
  *
  * Redistribution and use in source and binary forms, with or without
@@ -35,7 +35,7 @@ import java.io.File;
 import java.util.ArrayList;
 import java.util.Date;
 
-/* $Id: SqlToolSprayer.java 5337 2014-01-24 19:26:47Z fredt $ */
+/* $Id: SqlToolSprayer.java 4141 2011-03-14 01:35:49Z fredt $ */
 
 /**
  * Sql Tool Sprayer.
@@ -52,12 +52,12 @@ import java.util.Date;
  * </UL>
  *
  * @see #main(String[])
- * @version $Revision: 5337 $, $Date: 2014-01-24 14:26:47 -0500 (Fri, 24 Jan 2014) $
+ * @version $Revision: 4141 $, $Date: 2011-03-14 01:35:49 +0000 (Mon, 14 Mar 2011) $
  * @author Blaine Simpson (blaine dot simpson at admc dot com)
  */
 public class SqlToolSprayer {
 
-    public static final String LS = System.getProperty("line.separator");
+    public static String LS = System.getProperty("line.separator");
     private static String SYNTAX_MSG =
         "SYNTAX:  java [-D...] SqlToolSprayer 'SQL;' [urlid1 urlid2...]\n"
         + "System properties you may use [default values]:\n"

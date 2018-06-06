@@ -1,4 +1,4 @@
-/* Copyright (c) 2001-2017, The HSQL Development Group
+/* Copyright (c) 2001-2011, The HSQL Development Group
  * All rights reserved.
  *
  * Redistribution and use in source and binary forms, with or without
@@ -123,7 +123,7 @@ implements PooledConnection, JDBCConnectionEventListener {
         }
     }
 
-    synchronized public void connectionErrorOccurred(SQLException e) {
+    synchronized public void connectionErrorOccured(SQLException e) {
 
         ConnectionEvent event = new ConnectionEvent(this, e);
 
@@ -140,8 +140,6 @@ implements PooledConnection, JDBCConnectionEventListener {
     /**
      * Returns true if getConnection() has been called and a leas has been
      * given.
-     *
-     * @return boolean
      */
     synchronized public boolean isInUse() {
         return isInUse;

@@ -1,4 +1,4 @@
-/* Copyright (c) 2001-2017, The HSQL Development Group
+/* Copyright (c) 2001-2011, The HSQL Development Group
  * All rights reserved.
  *
  * Redistribution and use in source and binary forms, with or without
@@ -41,43 +41,41 @@ import org.hsqldb.lib.DoubleIntIndex;
  * Maintains a list of free file blocks with fixed capacity.<p>
  *
  * @author Fred Toussi (fredt@users dot sourceforge.net)
- * @version 2.3.5
+ * @version 2.3.0
  * @since 2.3.0
  */
 public class TableSpaceManagerBlocks implements TableSpaceManager {
 
     DataSpaceManager  spaceManager;
     private final int scale;
-    final int         mainBlockSize;
-    final int         spaceID;
-    final int         minReuse;
+    int               mainBlockSize;
+    int               spaceID;
 
     //
     private DoubleIntIndex lookup;
     private final int      capacity;
-    private long           requestGetCount;
     private long           releaseCount;
     private long           requestCount;
     private long           requestSize;
-    boolean                isModified;
+
+    // reporting vars
+    boolean isModified;
 
     //
     long freshBlockFreePos = 0;
     long freshBlockLimit   = 0;
-    int  fileBlockIndex    = -1;
 
     /**
      *
      */
     public TableSpaceManagerBlocks(DataSpaceManager spaceManager, int tableId,
                                    int fileBlockSize, int capacity,
-                                   int fileScale, int minReuse) {
+                                   int fileScale) {
 
         this.spaceManager  = spaceManager;
         this.scale         = fileScale;
         this.spaceID       = tableId;
         this.mainBlockSize = fileBlockSize;
-        this.minReuse      = minReuse;
         lookup             = new DoubleIntIndex(capacity, true);
 
         lookup.setValuesSearchTarget();
@@ -103,8 +101,8 @@ public class TableSpaceManagerBlocks implements TableSpaceManager {
     public void initialiseFileBlock(DoubleIntIndex spaceList,
                                     long blockFreePos, long blockLimit) {
 
-        freshBlockFreePos = blockFreePos;
-        freshBlockLimit   = blockLimit;
+        this.freshBlockFreePos = blockFreePos;
+        this.freshBlockLimit   = blockLimit;
 
         if (spaceList != null) {
             spaceList.copyTo(lookup);
@@ -121,18 +119,20 @@ public class TableSpaceManagerBlocks implements TableSpaceManager {
             return false;
         }
 
-        if (position != freshBlockLimit) {
-            long released = freshBlockLimit - freshBlockFreePos;
+        if (position == freshBlockLimit) {
+            freshBlockLimit += blockSize;
 
-            if (released > 0) {
-                release(freshBlockFreePos / scale, (int) released);
-            }
-
-            freshBlockFreePos = position;
-            freshBlockLimit   = position;
+            return true;
         }
 
-        freshBlockLimit += blockSize;
+        long released = freshBlockLimit - freshBlockFreePos;
+
+        if (released > 0) {
+            release(freshBlockFreePos / scale, (int) released);
+        }
+
+        freshBlockFreePos = position;
+        freshBlockLimit   = position + blockSize;
 
         return true;
     }
@@ -178,8 +178,6 @@ public class TableSpaceManagerBlocks implements TableSpaceManager {
 
     synchronized public void release(long pos, int rowSize) {
 
-        int rowUnits = rowSize / scale;
-
         isModified = true;
 
         releaseCount++;
@@ -188,19 +186,15 @@ public class TableSpaceManagerBlocks implements TableSpaceManager {
             resetList();
         }
 
-        if (pos + rowUnits >= Integer.MAX_VALUE) {
-            return;
+        if (pos < Integer.MAX_VALUE) {
+            lookup.add(pos, rowSize);
         }
-
-        lookup.add(pos, rowUnits);
     }
 
     /**
      * Returns the position of a free block or 0.
      */
-    synchronized public long getFilePosition(int rowSize, boolean asBlocks) {
-
-        requestGetCount++;
+    synchronized public long getFilePosition(long rowSize, boolean asBlocks) {
 
         if (capacity == 0) {
             return getNewBlock(rowSize, asBlocks);
@@ -211,16 +205,15 @@ public class TableSpaceManagerBlocks implements TableSpaceManager {
                     DataSpaceManager.fixedBlockSizeUnit);
         }
 
-        int index    = -1;
-        int rowUnits = rowSize / scale;
+        int index = -1;
 
-        if (rowSize >= minReuse && lookup.size() > 0) {
-            if (lookup.getValue(0) >= rowUnits) {
+        if (lookup.size() > 0) {
+            if (lookup.getValue(0) >= rowSize) {
                 index = 0;
             } else if (rowSize > Integer.MAX_VALUE) {
                 index = -1;
             } else {
-                index = lookup.findFirstGreaterEqualKeyIndex(rowUnits);
+                index = lookup.findFirstGreaterEqualKeyIndex((int) rowSize);
             }
         }
 
@@ -247,14 +240,14 @@ public class TableSpaceManagerBlocks implements TableSpaceManager {
 
         requestSize += rowSize;
 
+        int length     = lookup.getValue(index);
+        int difference = length - (int) rowSize;
         int key        = lookup.getKey(index);
-        int units      = lookup.getValue(index);
-        int difference = units - rowUnits;
 
         lookup.remove(index);
 
         if (difference > 0) {
-            int pos = key + rowUnits;
+            long pos = key + (rowSize / scale);
 
             lookup.add(pos, difference);
         }
@@ -264,13 +257,7 @@ public class TableSpaceManagerBlocks implements TableSpaceManager {
 
     public void reset() {
 
-        if (freshBlockFreePos == 0) {
-            fileBlockIndex = -1;
-        } else {
-            fileBlockIndex = (int) (freshBlockFreePos / mainBlockSize);
-        }
-
-        spaceManager.freeTableSpace(spaceID, lookup, freshBlockFreePos,
+        spaceManager.freeTableSpace(lookup, freshBlockFreePos,
                                     freshBlockLimit, true);
 
         freshBlockFreePos = 0;
@@ -278,24 +265,17 @@ public class TableSpaceManagerBlocks implements TableSpaceManager {
     }
 
     public long getLostBlocksSize() {
-
-        long total = freshBlockLimit - freshBlockFreePos
-                     + lookup.getTotalValues() * scale;
-
-        return total;
+        return lookup.getTotalValues();
     }
 
     public boolean isDefaultSpace() {
         return spaceID == DataSpaceManager.tableIdDefault;
     }
 
-    public int getFileBlockIndex() {
-        return fileBlockIndex;
-    }
-
     private void resetList() {
 
         // dummy args for file block release
-        spaceManager.freeTableSpace(spaceID, lookup, 0, 0, false);
+        spaceManager.freeTableSpace(lookup, freshBlockFreePos,
+                                    freshBlockFreePos, false);
     }
 }

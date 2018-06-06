@@ -1,4 +1,4 @@
-/* Copyright (c) 2001-2016, The HSQL Development Group
+/* Copyright (c) 2001-2011, The HSQL Development Group
  * All rights reserved.
  *
  * Redistribution and use in source and binary forms, with or without
@@ -42,37 +42,39 @@ import org.hsqldb.types.Type;
 
 /*
  * @author Fred Toussi (fredt@users dot sourceforge.net)
- * @version 2.3.5
+ * @version 2.2.7
  * @since 2.2.7
  */
-public interface RowSetNavigatorDataChange extends RangeIterator {
+public interface RowSetNavigatorDataChange {
 
-    int getSize();
+    public void release();
 
-    int getRowPosition();
+    public int getSize();
 
-    boolean beforeFirst();
+    public int getRowPosition();
 
-    Object[] getCurrentChangedData();
+    public boolean next();
 
-    int[] getCurrentChangedColumns();
+    public boolean beforeFirst();
 
-    void write(RowOutputInterface out, ResultMetaData meta) throws IOException;
+    public Row getCurrentRow();
 
-    void read(RowInputInterface in, ResultMetaData meta) throws IOException;
+    public Object[] getCurrentChangedData();
 
-    void endMainDataSet();
+    public int[] getCurrentChangedColumns();
 
-    boolean addRow(Row row);
+    public void write(RowOutputInterface out,
+                      ResultMetaData meta) throws IOException;
 
-    Object[] addRow(Session session, Row row, Object[] data, Type[] types,
-                    int[] columnMap);
+    public void read(RowInputInterface in,
+                     ResultMetaData meta) throws IOException;
 
-    boolean addUpdate(Row row, Object[] data, int[] columnMap);
+    public void endMainDataSet();
 
-    boolean containsDeletedRow(Row row);
+    public boolean addRow(Row row);
 
-    boolean containsUpdatedRow(Row row, Row refRow, int[] keys);
+    public Object[] addRow(Session session, Row row, Object[] data,
+                           Type[] types, int[] columnMap);
 
-    RangeIterator getUpdateRowIterator();
+    public boolean containsDeletedRow(Row row);
 }

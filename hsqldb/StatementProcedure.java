@@ -1,4 +1,4 @@
-/* Copyright (c) 2001-2016, The HSQL Development Group
+/* Copyright (c) 2001-2011, The HSQL Development Group
  * All rights reserved.
  *
  * Redistribution and use in source and binary forms, with or without
@@ -46,7 +46,7 @@ import org.hsqldb.types.Type;
  * Implementation of Statement for callable procedures.<p>
  *
  * @author Fred Toussi (fredt@users dot sourceforge.net)
- * @version 2.3.5
+ * @version 2.3.0
  * @since 1.9.0
  */
 public class StatementProcedure extends StatementDMQL {
@@ -85,15 +85,12 @@ public class StatementProcedure extends StatementDMQL {
             this.expression = expression;
         }
 
-        setDatabaseObjects(session, compileContext);
+        setDatabseObjects(session, compileContext);
         checkAccessRights(session);
 
         if (procedure != null) {
             session.getGrantee().checkAccess(procedure);
         }
-
-        isTransactionStatement = readTableNames.length > 0
-                                 || writeTableNames.length > 0;
     }
 
     /**
@@ -112,14 +109,9 @@ public class StatementProcedure extends StatementDMQL {
         this.procedure = procedure;
         this.arguments = arguments;
 
-        setDatabaseObjects(session, compileContext);
+        setDatabseObjects(session, compileContext);
         checkAccessRights(session);
         session.getGrantee().checkAccess(procedure);
-
-        if (procedure.isPSM()) {
-            isTransactionStatement = readTableNames.length > 0
-                                     || writeTableNames.length > 0;
-        }
     }
 
     Result getResult(Session session) {
@@ -167,31 +159,27 @@ public class StatementProcedure extends StatementDMQL {
             }
         }
 
-        session.sessionContext.pushRoutineInvocation();
+        session.sessionContext.push();
 
-        Result   result = Result.updateZeroResult;
-        Object[] callArguments;
+        session.sessionContext.routineArguments = data;
+        session.sessionContext.routineVariables = ValuePool.emptyObjectArray;
 
-        try {
-            session.sessionContext.routineArguments = data;
-            session.sessionContext.routineVariables =
-                ValuePool.emptyObjectArray;
+        Result result = Result.updateZeroResult;
 
-            if (procedure.isPSM()) {
-                result = executePSMProcedure(session);
-            } else {
-                Connection connection = session.getInternalConnection();
+        if (procedure.isPSM()) {
+            result = executePSMProcedure(session);
+        } else {
+            Connection connection = session.getInternalConnection();
 
-                result = executeJavaProcedure(session, connection);
-            }
+            result = executeJavaProcedure(session, connection);
+        }
 
-            callArguments = session.sessionContext.routineArguments;
-        } finally {
-            session.sessionContext.popRoutineInvocation();
+        Object[] callArguments = session.sessionContext.routineArguments;
 
-            if (!procedure.isPSM()) {
-                session.releaseInternalConnection();
-            }
+        session.sessionContext.pop();
+
+        if (!procedure.isPSM()) {
+            session.releaseInternalConnection();
         }
 
         if (result.isError()) {
@@ -203,7 +191,7 @@ public class StatementProcedure extends StatementDMQL {
             int          mode  = param.getParameterMode();
 
             if (mode != SchemaObject.ParameterModes.PARAM_IN) {
-                if (arguments[i].isDynamicParam()) {
+                if (this.arguments[i].isDynamicParam()) {
                     int paramIndex = arguments[i].parameterIndex;
 
                     session.sessionContext.dynamicArguments[paramIndex] =
@@ -219,10 +207,9 @@ public class StatementProcedure extends StatementDMQL {
 
         Result r = result;
 
-        result =
-            Result.newCallResponse(getParametersMetaData().getParameterTypes(),
-                                   id,
-                                   session.sessionContext.dynamicArguments);
+        result = Result.newCallResponse(
+            this.getParametersMetaData().getParameterTypes(), this.id,
+            session.sessionContext.dynamicArguments);
 
         if (procedure.returnsTable()) {
             result.addChainedResult(r);
@@ -238,10 +225,8 @@ public class StatementProcedure extends StatementDMQL {
     Result executePSMProcedure(Session session) {
 
         int variableCount = procedure.getVariableCount();
-        int cursorCount   = procedure.getCursorCount();
 
         session.sessionContext.routineVariables = new Object[variableCount];
-        session.sessionContext.routineCursors   = new Result[cursorCount];
 
         Result result = procedure.statement.execute(session);
 
@@ -322,7 +307,7 @@ public class StatementProcedure extends StatementDMQL {
         subQueries.toArray(subQueryArray);
 
         for (int i = 0; i < subqueries.length; i++) {
-            subQueryArray[i].prepareTable(session);
+            subQueryArray[i].prepareTable();
         }
 
         return subQueryArray;
@@ -381,17 +366,8 @@ public class StatementProcedure extends StatementDMQL {
      */
     public ResultMetaData getParametersMetaData() {
 
-        ResultMetaData meta = super.getParametersMetaData();
-
-        for (int i = 0; i < meta.columnLabels.length; i++) {
-            ColumnSchema param = parameters[i].getColumn();
-
-            if (param != null && param.getName() != null) {
-                meta.columnLabels[i] = param.getNameString();
-            }
-        }
-
-        return meta;
+        /** @todo - change the auto-names to the names of params */
+        return super.getParametersMetaData();
     }
 
     void collectTableNamesForRead(OrderedHashSet set) {

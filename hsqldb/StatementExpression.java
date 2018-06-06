@@ -1,4 +1,4 @@
-/* Copyright (c) 2001-2016, The HSQL Development Group
+/* Copyright (c) 2001-2011, The HSQL Development Group
  * All rights reserved.
  *
  * Redistribution and use in source and binary forms, with or without
@@ -70,7 +70,7 @@ public class StatementExpression extends StatementDMQL {
         isTransactionStatement = false;
         this.expression        = expression;
 
-        setDatabaseObjects(session, compileContext);
+        setDatabseObjects(session, compileContext);
         checkAccessRights(session);
     }
 
@@ -108,7 +108,7 @@ public class StatementExpression extends StatementDMQL {
         subQueries.toArray(subQueryArray);
 
         for (int i = 0; i < subqueries.length; i++) {
-            subQueryArray[i].prepareTable(session);
+            subQueryArray[i].prepareTable();
         }
 
         return subQueryArray;
@@ -140,7 +140,7 @@ public class StatementExpression extends StatementDMQL {
 
             result = getResult(session);
         } catch (Throwable t) {
-            result = Result.newErrorResult(t);
+            result = Result.newErrorResult(t, null);
         }
 
         if (result.isError()) {

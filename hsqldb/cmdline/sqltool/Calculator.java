@@ -1,4 +1,4 @@
-/* Copyright (c) 2001-2014, The HSQL Development Group
+/* Copyright (c) 2001-2011, The HSQL Development Group
  * All rights reserved.
  *
  * Redistribution and use in source and binary forms, with or without
@@ -162,7 +162,7 @@ public class Calculator {
      * Otherwise, all remainign atoms will be visited.
      * Every visited atom will be removed from 'atoms'.
      *
-     * @return Value that all visited atoms reduce to.
+     * @returns Value that all visited atoms reduce to.
      */
     public long reduce(int startAtomIndex, boolean stopAtParenClose) {
         // Every occurence of atoms.remove() below is an instance of reduction.
@@ -366,13 +366,13 @@ public class Calculator {
             if (rhValObj != null)
                 throw new IllegalStateException(
                         "++ operator takes no right hand operand");
-            return 1 + outVal;
+            return ++outVal;
         }
         if (opStr.equals("--")) {
             if (rhValObj != null)
                 throw new IllegalStateException(
                         "++ operator takes no right hand operand");
-            return outVal - 1;
+            return --outVal;
         }
         if (rhValObj == null)
             throw new IllegalStateException(

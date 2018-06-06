@@ -1,4 +1,4 @@
-/* Copyright (c) 2001-2015, The HSQL Development Group
+/* Copyright (c) 2001-2011, The HSQL Development Group
  * All rights reserved.
  *
  * Redistribution and use in source and binary forms, with or without
@@ -34,12 +34,6 @@ package org.hsqldb.persist;
 import org.hsqldb.error.Error;
 import org.hsqldb.error.ErrorCode;
 
-/**
- * Base class for a stored object.
- *
- * @author Fred Toussi (fredt@users dot sourceforge dot net)
- * @version 2.3.3
- */
 public abstract class CachedObjectBase implements CachedObject {
 
     boolean isMemory;
@@ -70,10 +64,6 @@ public abstract class CachedObjectBase implements CachedObject {
         return storageSize;
     }
 
-    final public boolean isInvariable() {
-        return false;
-    }
-
     final public boolean isBlock() {
         return true;
     }
@@ -92,10 +82,6 @@ public abstract class CachedObjectBase implements CachedObject {
 
     public boolean hasChanged() {
         return hasChanged;
-    }
-
-    final public void setChanged(boolean flag) {
-        hasChanged = flag;
     }
 
     public boolean isKeepInMemory() {
@@ -128,11 +114,6 @@ public abstract class CachedObjectBase implements CachedObject {
 
     public void setInMemory(boolean in) {
         isInMemory = in;
-    }
-
-    public boolean equals(Object other) {
-        return other instanceof CachedObjectBase
-               && ((CachedObjectBase) other).position == this.position;
     }
 
     public int hashCode() {

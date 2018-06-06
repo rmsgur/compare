@@ -1,4 +1,4 @@
-/* Copyright (c) 2001-2016, The HSQL Development Group
+/* Copyright (c) 2001-2011, The HSQL Development Group
  * All rights reserved.
  *
  * Redistribution and use in source and binary forms, with or without
@@ -31,13 +31,17 @@
 
 package org.hsqldb.persist;
 
+import java.io.IOException;
+
+import org.hsqldb.error.Error;
+import org.hsqldb.error.ErrorCode;
 import org.hsqldb.lib.LongLookup;
 import org.hsqldb.rowio.RowInputInterface;
 import org.hsqldb.rowio.RowOutputInterface;
 
 /**
  * @author Fred Toussi (fredt@users dot sourceforge.net)
- * @version 2.3.3
+ * @version 2.3.0
  * @since 2.3.0
  */
 public class DirectoryBlockCachedObject extends CachedObjectBase {
@@ -59,26 +63,34 @@ public class DirectoryBlockCachedObject extends CachedObjectBase {
         hasChanged     = true;
     }
 
+    public CachedObject newInstance(int size) {
+        return new DirectoryBlockCachedObject(size);
+    }
+
     public void read(RowInputInterface in) {
 
-        this.position = in.getFilePosition();
+        this.position = in.getPos();
 
         int capacity = tableIds.length;
 
-        for (int i = 0; i < capacity; i++) {
-            tableIds[i] = in.readInt();
-        }
+        try {
+            for (int i = 0; i < capacity; i++) {
+                tableIds[i] = in.readInt();
+            }
 
-        for (int i = 0; i < capacity; i++) {
-            bitmapAddress[i] = in.readInt();
-        }
+            for (int i = 0; i < capacity; i++) {
+                bitmapAddress[i] = in.readInt();
+            }
 
-        for (int i = 0; i < capacity; i++) {
-            freeSpace[i] = in.readChar();
-        }
+            for (int i = 0; i < capacity; i++) {
+                freeSpace[i] = in.readChar();
+            }
 
-        for (int i = 0; i < capacity; i++) {
-            freeSpaceBlock[i] = in.readChar();
+            for (int i = 0; i < capacity; i++) {
+                freeSpaceBlock[i] = in.readChar();
+            }
+        } catch (IOException e) {
+            throw Error.error(ErrorCode.GENERAL_IO_ERROR, e);
         }
 
         hasChanged = false;
@@ -93,14 +105,8 @@ public class DirectoryBlockCachedObject extends CachedObjectBase {
     }
 
     public void write(RowOutputInterface out) {
-        write(out, null);
-    }
-
-    public void write(RowOutputInterface out, LongLookup lookup) {
 
         int capacity = tableIds.length;
-
-        out.setStorageSize(storageSize);
 
         for (int i = 0; i < capacity; i++) {
             out.writeInt(tableIds[i]);
@@ -119,6 +125,12 @@ public class DirectoryBlockCachedObject extends CachedObjectBase {
         }
 
         out.writeEnd();
+
+        hasChanged = false;
+    }
+
+    public void write(RowOutputInterface out, LongLookup lookup) {
+        write(out);
     }
 
     public int[] getTableIdArray() {

@@ -1,4 +1,4 @@
-/* Copyright (c) 2001-2016, The HSQL Development Group
+/* Copyright (c) 2001-2011, The HSQL Development Group
  * All rights reserved.
  *
  * Redistribution and use in source and binary forms, with or without
@@ -46,7 +46,7 @@ import org.hsqldb.types.Type;
  * Implementation of Statement for updating result rows.<p>
  *
  * @author Fred Toussi (fredt@users dot sourceforge.net)
- * @version 2.3.2
+ * @version 2.2.7
  * @since 1.9.0
  */
 public class StatementResultUpdate extends StatementDML {
@@ -79,7 +79,7 @@ public class StatementResultUpdate extends StatementDML {
         } catch (Throwable t) {
             clearStructures(session);
 
-            result = Result.newErrorResult(t);
+            result = Result.newErrorResult(t, null);
         }
 
         return result;
@@ -150,7 +150,7 @@ public class StatementResultUpdate extends StatementDML {
             case ResultConstants.INSERT_CURSOR : {
                 Object[] data = baseTable.getNewRowData(session);
 
-                for (int i = 0; i < baseColumnMap.length; i++) {
+                for (int i = 0; i < data.length; i++) {
                     data[baseColumnMap[i]] = args[i];
                 }
 
@@ -187,21 +187,15 @@ public class StatementResultUpdate extends StatementDML {
         return row;
     }
 
-    void setRowActionProperties(Result result, int action,
-                                StatementQuery statement, Type[] types) {
-
-        QueryExpression qe = statement.queryExpression;
+    void setRowActionProperties(Result result, int action, Table table,
+                                Type[] types, int[] columnMap) {
 
         this.result             = result;
         this.actionType         = action;
-        this.baseTable          = qe.getBaseTable();
+        this.baseTable          = table;
         this.types              = types;
-        this.baseColumnMap      = qe.getBaseTableColumnMap();
-        this.writeTableNames[0] = baseTable.getName();
-
-        // used for statement logging - needs improvements to list only the updated values
-        this.sql                = statement.getSQL();
-        this.parameterMetaData  = qe.getMetaData();
+        this.baseColumnMap      = columnMap;
+        this.writeTableNames[0] = table.getName();
     }
 
     void checkAccessRights(Session session) {

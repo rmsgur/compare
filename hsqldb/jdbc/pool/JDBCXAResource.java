@@ -1,4 +1,4 @@
-/* Copyright (c) 2001-2017, The HSQL Development Group
+/* Copyright (c) 2001-2011, The HSQL Development Group
  * All rights reserved.
  *
  * Redistribution and use in source and binary forms, with or without
@@ -43,9 +43,10 @@ import org.hsqldb.jdbc.JDBCConnection;
 
 import java.sql.SQLException;
 
+import org.hsqldb.SessionInterface;
 import org.hsqldb.HsqlException;
 
-// @(#)$Id: JDBCXAResource.java 5741 2017-04-02 16:00:45Z fredt $
+// @(#)$Id: JDBCXAResource.java 5198 2013-03-10 21:54:46Z fredt $
 
 /**
  * Used by a global transaction service to control HSQLDB transactions.
@@ -59,7 +60,7 @@ import org.hsqldb.HsqlException;
  * Therefore, there may be at any time at most one transaction
  * managed by a XAResource object.
  * One implication is, the XAResource can track the current transaction
- * state with a scalar.
+ * state with a scaler.
  * Another implication is, the Xids for most of the XAResource interface
  * methods just introduce unnecessary complexity and an unnecessary point
  * of failure-- there can be only one transaction for this object, so
@@ -72,7 +73,7 @@ import org.hsqldb.HsqlException;
  * N.b. The JDBC Spec does not state whether the prepare and forget
  * methods are XAResource-specific or XADataSource-specific.
  *
- * @version 2.3.3
+ * @version 2.3.0
  * @since 2.0.0
  * @author Blaine Simpson (blaine dot simpson at admc dot com)
  * @see javax.transaction.xa.XAResource
@@ -155,7 +156,7 @@ public class JDBCXAResource implements XAResource {
      *
      * @param xid Xid
      * @param onePhase boolean
-     * @throws XAException on error
+     * @throws XAException
      */
     public void commit(Xid xid, boolean onePhase) throws XAException {
 
@@ -179,9 +180,9 @@ public class JDBCXAResource implements XAResource {
      *
      * @throws XAException generically, since the more specific exceptions
      *   require a JTA API to compile.
-     * @param onePhase boolean
-     */
-    public void commitThis(boolean onePhase) throws XAException {
+      * @param onePhase boolean
+      */
+     public void commitThis(boolean onePhase) throws XAException {
 
         if (onePhase && state == XA_STATE_PREPARED) {
             throw new XAException(
@@ -251,7 +252,7 @@ public class JDBCXAResource implements XAResource {
      *
      * @see javax.transaction.xa.XAResource#forget(Xid)
      * @param xid Xid
-     * @throws XAException on error
+     * @throws XAException
      */
     public void forget(Xid xid) throws XAException {
 
@@ -259,7 +260,7 @@ public class JDBCXAResource implements XAResource {
          * Should this method not attempt to clean up the aborted
          * transaction by rolling back or something?  Maybe the
          * tx manager will already have called rollback() if
-         * it were necessary?
+         * it were necessasry?
          */
         validateXid(xid);
 
@@ -276,7 +277,8 @@ public class JDBCXAResource implements XAResource {
 
     /**
      *
-     * @throws XAException on error
+     * @todo: Implement
+     * @throws XAException
      * @return int
      */
     public int getTransactionTimeout() throws XAException {
@@ -287,9 +289,9 @@ public class JDBCXAResource implements XAResource {
      * Stub. See implementation comment in the method for why this is not
      * implemented yet.
      *
-     * @param xares XAResource
      * @return false.
-     * @throws XAException on error
+     * @param xares XAResource
+     * @throws XAException
      */
     public boolean isSameRM(XAResource xares) throws XAException {
 
@@ -340,7 +342,7 @@ public class JDBCXAResource implements XAResource {
         try {
             connection.getSession().prepareCommit();
         } catch (HsqlException e) {
-            state = XA_STATE_PREPARED;    // ??? didn't prepare
+            state = XA_STATE_PREPARED;  // ??? didn't prepare
 
             throw new XAException(e.getMessage());
         }
@@ -357,7 +359,7 @@ public class JDBCXAResource implements XAResource {
      * XADataSource.
      *
      * @param flag int
-     * @throws XAException on error
+     * @throws XAException
      * @return Xid[]
      */
     public Xid[] recover(int flag) throws XAException {
@@ -370,7 +372,7 @@ public class JDBCXAResource implements XAResource {
      * object.
      *
      * @param xid Xid
-     * @throws XAException on error
+     * @throws XAException
      */
     public void rollback(Xid xid) throws XAException {
 
@@ -417,8 +419,9 @@ public class JDBCXAResource implements XAResource {
 
     /**
      *
+     * @todo: Implement
      * @param seconds int
-     * @throws XAException on error
+     * @throws XAException
      * @return boolean
      */
     public boolean setTransactionTimeout(int seconds) throws XAException {
@@ -431,8 +434,7 @@ public class JDBCXAResource implements XAResource {
 /*
         System.err.println("STARTING NEW Xid: " + xid);
 */
-        if (state != XA_STATE_INITIAL && state != XA_STATE_DISPOSED
-                && state != XA_STATE_ENDED) {
+        if (state != XA_STATE_INITIAL && state != XA_STATE_DISPOSED) {
             throw new XAException("Invalid XAResource state");
         }
 
@@ -449,22 +451,17 @@ public class JDBCXAResource implements XAResource {
         }
 
         try {
-            if (connection.getAutoCommit()) {
-                originalAutoCommitMode = true;      // real/phys.
+            originalAutoCommitMode = connection.getAutoCommit();    // real/phys.
 
-                connection.setAutoCommit(false);    // real/phys.
-            }
+            connection.setAutoCommit(false);                        // real/phys.
         } catch (SQLException se) {
             throw new XAException(se.toString());
         }
 
-        if (!xid.equals(this.xid)) {
-            this.xid = xid;
+        this.xid = xid;
+        state    = XA_STATE_STARTED;
 
-            xaDataSource.addResource(this.xid, this);
-        }
-
-        state = XA_STATE_STARTED;
+        xaDataSource.addResource(this.xid, this);
 
         // N.b.  The DataSource does not have this XAResource in its list
         // until right here.  We can't tell DataSource before our start()

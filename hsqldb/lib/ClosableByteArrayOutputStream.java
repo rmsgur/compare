@@ -1,4 +1,4 @@
-/* Copyright (c) 2001-2017, The HSQL Development Group
+/* Copyright (c) 2001-2011, The HSQL Development Group
  * All rights reserved.
  *
  * Redistribution and use in source and binary forms, with or without
@@ -36,7 +36,7 @@ import java.io.IOException;
 import java.io.OutputStream;
 import java.io.UnsupportedEncodingException;
 
-/* $Id: ClosableByteArrayOutputStream.java 5688 2017-01-20 03:05:02Z fredt $ */
+/* $Id: ClosableByteArrayOutputStream.java 5221 2013-03-30 10:57:58Z fredt $ */
 
 /**
  * @todo - finer-grained synchronization to reduce average
@@ -63,11 +63,11 @@ import java.io.UnsupportedEncodingException;
  * <tt>isClosed()</tt>, <tt>free()</tt> and <tt>isFreed()</tt>. <p>
  *
  * This class is especially useful when an accumulating output stream must be
- * handed off to an external client under contract that the stream should
+ * handed off to an extenal client under contract that the stream should
  * exhibit true Closable behaviour in response both to internally tracked
  * events and to client invocation of the <tt>OutputStream.close()</tt> method.
  *
- * @author campbell-burnet@users
+ * @author boucherb@users
  * @version 1.9.0
  * @since 1.9.0
  */
@@ -153,7 +153,7 @@ public class ClosableByteArrayOutputStream extends OutputStream {
      *      In particular, an <tt>IOException</tt> may be thrown
      *      if this output stream has been {@link #close() closed}.
      */
-    public synchronized void write(byte[] b, int off,
+    public synchronized void write(byte b[], int off,
                                    int len) throws IOException {
 
         checkClosed();
@@ -258,9 +258,9 @@ public class ClosableByteArrayOutputStream extends OutputStream {
     }
 
     /**
-     * Retrieves a copy of this stream's accumulated data, as a byte array.
+     * Retrieves a copy of this stream's accumated data, as a byte array.
      *
-     * @return a copy of this stream's accumulated data, as a byte array.
+     * @return a copy of this stream's accumated data, as a byte array.
      * @see #size()
      * @throws java.io.IOException if an I/O error occurs.
      *      In particular, an <tt>IOException</tt> may be thrown
@@ -274,7 +274,7 @@ public class ClosableByteArrayOutputStream extends OutputStream {
     }
 
     /**
-     * Returns the current size of this stream's accumulated data.
+     * Returns the current size of this stream's accumated data.
      *
      * @return the value of the <tt>count</tt> field, which is the number
      *      of valid bytes in this output stream.
@@ -303,7 +303,7 @@ public class ClosableByteArrayOutputStream extends OutputStream {
     }
 
     /**
-     * Performs an efficient (zero-copy) conversion of the data accumulated in
+     * Performs an effecient (zero-copy) conversion of the data accumulated in
      * this output stream to an input stream. <p>
      *
      * To ensure the future integrity of the resulting input stream, {@link
@@ -329,10 +329,10 @@ public class ClosableByteArrayOutputStream extends OutputStream {
     }
 
     /**
-     * Converts this stream's accumulated data into a string, translating bytes
+     * Converts this stream's accumuated data into a string, translating bytes
      * into characters according to the platform's default character encoding.
      *
-     * @return String translated from this stream's accumulated data.
+     * @return String translated from this stream's accumuated data.
      * @throws RuntimeException may be thrown if this output stream has been
      *      {@link #free() freed}.
      */
@@ -348,7 +348,7 @@ public class ClosableByteArrayOutputStream extends OutputStream {
     }
 
     /**
-     * Converts this stream's accumulated data into a string, translating bytes
+     * Converts this stream's accumuated data into a string, translating bytes
      * into characters according to the specified character encoding.
      *
      * @return String translated from the buffer's contents.

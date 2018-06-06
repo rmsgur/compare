@@ -1,4 +1,4 @@
-/* Copyright (c) 2001-2017, The HSQL Development Group
+/* Copyright (c) 2001-2011, The HSQL Development Group
  * All rights reserved.
  *
  * Redistribution and use in source and binary forms, with or without
@@ -49,7 +49,7 @@ import org.hsqldb.result.Result;
  * as lookup key when a session initially looks for an existing instance of
  * the compiled sql statement.<p>
  *
- * Once a session is linked with a statement, it uses the unique compiled
+ * Once a session is linked with a statement, it uses the uniqe compiled
  * statement id for the sql statement to access the statement.<p>
  *
  * Changes to database structure via DDL statements, will result in all
@@ -62,15 +62,15 @@ import org.hsqldb.result.Result;
  * statement is linked to a session. It unregisters a compiled statement when
  * no session remains linked to it.<p>
  *
- * Modified by fredt@users from the original by campbell-burnet@users to simplify,
+ * Modified by fredt@users from the original by boucherb@users to simplify,
  * support multiple identical prepared statements per session, and avoid
  * memory leaks. Modified further to support schemas. Changed implementation
  * in 1.9 as a session object<p>
  *
- * @author Campbell Burnet (campbell-burnet@users dot sourceforge.net)
+ * @author Campbell Boucher-Burnet (boucherb@users dot sourceforge.net)
  * @author Fred Toussi (fredt@users dot sourceforge.net)
  *
- * @version 2.3.5
+ * @version 2.2.6
  * @since 1.7.2
  */
 public final class StatementManager {
@@ -84,10 +84,10 @@ public final class StatementManager {
     /** Map: Schema id (int) => {Map: SQL String => Compiled Statement id (long)} */
     private IntKeyHashMap schemaMap;
 
-    /** Map: Compiled statement id (int) => CompiledStatement object. */
+    /** Map: Compiled statment id (int) => CompiledStatement object. */
     private LongKeyHashMap csidMap;
 
-    /** Map: Compiled statement id (int) => number of uses of the statement */
+    /** Map: Compiled statment id (int) => number of uses of the statement */
     private LongKeyIntValueHashMap useMap;
 
     /**
@@ -176,28 +176,22 @@ public final class StatementManager {
 
         if (cs.getCompileTimestamp()
                 < database.schemaManager.getSchemaChangeTimestamp()) {
-            Statement newStatement = recompileStatement(session, cs);
+            cs = recompileStatement(session, cs);
 
-            if (newStatement == null) {
+            if (cs == null) {
                 freeStatement(csid);
 
                 return null;
             }
 
-            registerStatement(cs.getID(), newStatement);
-
-            return newStatement;
+            csidMap.put(csid, cs);
         }
 
         return cs;
     }
 
     /**
-     * Recompiles an existing statement
-     *
-     * @param session the session
-     * @param statement the old CompiledStatement object
-     * @return the requested CompiledStatement object
+     * Recompiles a statement
      */
     public synchronized Statement getStatement(Session session,
             Statement statement) {
@@ -209,7 +203,16 @@ public final class StatementManager {
             return getStatement(session, csid);
         }
 
-        cs = recompileStatement(session, statement);
+        if (statement.getCompileTimestamp()
+                < database.schemaManager.getSchemaChangeTimestamp()) {
+            cs = recompileStatement(session, statement);
+
+            if (cs == null) {
+                freeStatement(csid);
+
+                return null;
+            }
+        }
 
         return cs;
     }
@@ -278,23 +281,24 @@ public final class StatementManager {
      */
     private long registerStatement(long csid, Statement cs) {
 
-        cs.setCompileTimestamp(database.txManager.getGlobalChangeTimestamp());
-
-        int              schemaid = cs.getSchemaName().hashCode();
-        LongValueHashMap sqlMap   = (LongValueHashMap) schemaMap.get(schemaid);
-
-        if (sqlMap == null) {
-            sqlMap = new LongValueHashMap();
-
-            schemaMap.put(schemaid, sqlMap);
-        }
-
         if (csid < 0) {
             csid = nextID();
+
+            int schemaid = cs.getSchemaName().hashCode();
+            LongValueHashMap sqlMap =
+                (LongValueHashMap) schemaMap.get(schemaid);
+
+            if (sqlMap == null) {
+                sqlMap = new LongValueHashMap();
+
+                schemaMap.put(schemaid, sqlMap);
+            }
+
+            sqlMap.put(cs.getSQL(), csid);
         }
 
         cs.setID(csid);
-        sqlMap.put(cs.getSQL(), csid);
+        cs.setCompileTimestamp(database.txManager.getGlobalChangeTimestamp());
         csidMap.put(csid, cs);
 
         return csid;
@@ -305,7 +309,9 @@ public final class StatementManager {
      * statement. If the statement is not linked with any other session, it is
      * removed from management.
      *
-     * @param csid the compiled statement identifier
+     * @param csid the compiled statment identifier
+     * @param sessionID the session identifier
+     * @param freeAll if true, remove all links to the session
      */
     synchronized void freeStatement(long csid) {
 
@@ -329,7 +335,7 @@ public final class StatementManager {
             int schemaid = cs.getSchemaName().hashCode();
             LongValueHashMap sqlMap =
                 (LongValueHashMap) schemaMap.get(schemaid);
-            String sql = cs.getSQL();
+            String sql = (String) cs.getSQL();
 
             sqlMap.remove(sql);
         }
@@ -354,12 +360,20 @@ public final class StatementManager {
 
         if (csid >= 0) {
             cs = (Statement) csidMap.get(csid);
+
+            if (cs != null) {
+                if (cs.getCursorPropertiesRequest() != props) {
+                    cs   = null;
+                    csid = -1;
+                }
+
+                // generated result props still overwrite earlier version
+            }
         }
 
-        // generated result props still overwrite earlier version
-        if (cs == null || !cs.isValid() || cs.getCompileTimestamp() < database
-                .schemaManager.getSchemaChangeTimestamp() || cs
-                .getCursorPropertiesRequest() != props) {
+        if (cs == null || !cs.isValid()
+                || cs.getCompileTimestamp()
+                   < database.schemaManager.getSchemaChangeTimestamp()) {
             cs = session.compileStatement(sql, props);
 
             cs.setCursorPropertiesRequest(props);

@@ -1,4 +1,4 @@
-/* Copyright (c) 2001-2016, The HSQL Development Group
+/* Copyright (c) 2001-2011, The HSQL Development Group
  * All rights reserved.
  *
  * Redistribution and use in source and binary forms, with or without
@@ -41,25 +41,22 @@ import org.hsqldb.persist.PersistentStore;
  * Base class for all script readers.
  *
  * @author Fred Toussi (fredt@users dot sourceforge.net)
- * @version 2.3.4
+ * @version 2.3.0
  * @since 1.7.2
  */
 public abstract class ScriptReaderBase {
 
-    public static final int ANY_STATEMENT             = 1;
-    public static final int DELETE_STATEMENT          = 2;
-    public static final int INSERT_STATEMENT          = 3;
-    public static final int COMMIT_STATEMENT          = 4;
-    public static final int SESSION_ID                = 5;
-    public static final int SET_SCHEMA_STATEMENT      = 6;
-    public static final int SET_FILES_CHECK_STATEMENT = 7;
+    public static final int ANY_STATEMENT        = 1;
+    public static final int DELETE_STATEMENT     = 2;
+    public static final int INSERT_STATEMENT     = 3;
+    public static final int COMMIT_STATEMENT     = 4;
+    public static final int SESSION_ID           = 5;
+    public static final int SET_SCHEMA_STATEMENT = 6;
     Database                database;
-    String                  fileNamePath;
-    long                    lineCount;
+    int                     lineCount;
 
-    ScriptReaderBase(Database db, String fileName) {
-        this.database     = db;
-        this.fileNamePath = fileName;
+    ScriptReaderBase(Database db) {
+        this.database = db;
     }
 
     public void readAll(Session session) {
@@ -86,10 +83,6 @@ public abstract class ScriptReaderBase {
     String           currentSchema;
     ScriptWriterText scrwriter;
 
-    public String getFileNamePath() {
-        return fileNamePath;
-    }
-
     public int getStatementType() {
         return statementType;
     }
@@ -106,6 +99,14 @@ public abstract class ScriptReaderBase {
         return statement;
     }
 
+    public NumberSequence getCurrentSequence() {
+        return currentSequence;
+    }
+
+    public long getSequenceValue() {
+        return sequenceValue;
+    }
+
     public Table getCurrentTable() {
         return currentTable;
     }
@@ -114,7 +115,7 @@ public abstract class ScriptReaderBase {
         return currentSchema;
     }
 
-    public long getLineNumber() {
+    public int getLineNumber() {
         return lineCount;
     }
 

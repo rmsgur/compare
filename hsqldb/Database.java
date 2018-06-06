@@ -1,4 +1,4 @@
-/* Copyright (c) 2001-2017, The HSQL Development Group
+/* Copyright (c) 2001-2011, The HSQL Development Group
  * All rights reserved.
  *
  * Redistribution and use in source and binary forms, with or without
@@ -53,7 +53,8 @@ import org.hsqldb.rights.UserManager;
 import org.hsqldb.types.Collation;
 
 // incorporates following contributions
-// campbell-burnet@users - javadoc comments
+// boucherb@users - javadoc comments
+// Ocke Jansen (oj@openoffice dot org) - file access api
 
 /**
  * Database is the root class for HSQL Database Engine database. <p>
@@ -61,14 +62,14 @@ import org.hsqldb.types.Collation;
  * It holds the data structures that form an HSQLDB database instance.
  *
  * @author Fred Toussi (fredt@users dot sourceforge.net)
- * @version 2.3.5
+ * @version 2.3.0
  * @since 1.9.0
  */
 public class Database {
 
     int                        databaseID;
-    HsqlName                   databaseUniqueName;
-    DatabaseType               databaseType;
+    String                     databaseUniqueName;
+    String                     databaseType;
     private final String       canonicalPath;
     public HsqlProperties      urlProperties;
     private final String       path;
@@ -95,27 +96,23 @@ public class Database {
      * Defaults are used in version upgrades, but overridden by
      *  databaseProperties or URL properties for new databases.
      */
-    public int                    sqlAvgScale            = 0;
-    public boolean                sqlRestrictExec          = false;
-    public boolean                sqlCharLiteral         = true;
-    public boolean                sqlConcatNulls         = true;
-    public boolean                sqlConvertTruncate     = true;
-    public boolean                sqlDoubleNaN           = true;
     public boolean                sqlEnforceTypes        = false;
     public boolean                sqlEnforceRefs         = false;
     public boolean                sqlEnforceSize         = true;
     public boolean                sqlEnforceNames        = false;
+    public boolean                sqlRegularNames        = true;
     public boolean                sqlEnforceTDCD         = true;
     public boolean                sqlEnforceTDCU         = true;
-    public boolean                sqlIgnoreCase          = false;
-    public boolean                sqlLiveObject          = false;
-    public boolean                sqlLongvarIsLob        = false;
+    public boolean                sqlTranslateTTI        = true;
+    public boolean                sqlConcatNulls         = true;
+    public boolean                sqlUniqueNulls         = true;
     public boolean                sqlNullsFirst          = true;
     public boolean                sqlNullsOrder          = true;
-    public boolean                sqlSysIndexNames       = false;
-    public boolean                sqlRegularNames        = true;
-    public boolean                sqlTranslateTTI        = true;
-    public boolean                sqlUniqueNulls         = true;
+    public boolean                sqlConvertTruncate     = true;
+    public int                    sqlAvgScale            = 0;
+    public boolean                sqlDoubleNaN           = true;
+    public boolean                sqlLongvarIsLob        = false;
+    public boolean                sqlIgnoreCase          = false;
     public boolean                sqlSyntaxDb2           = false;
     public boolean                sqlSyntaxMss           = false;
     public boolean                sqlSyntaxMys           = false;
@@ -127,7 +124,7 @@ public class Database {
     private final boolean         shutdownOnNoConnection;
     int                           resultMaxMemoryRows;
 
-    // schema invariant objects
+    // schema invarient objects
     public UserManager     userManager;
     public GranteeManager  granteeManager;
     public HsqlNameManager nameManager;
@@ -175,7 +172,7 @@ public class Database {
      *      combination is illegal or unavailable, or the database files the
      *      name and path resolves to are in use by another process
      */
-    Database(DatabaseType type, String path, String canonicalPath,
+    Database(String type, String path, String canonicalPath,
              HsqlProperties props) {
 
         setState(Database.DATABASE_SHUTDOWN);
@@ -185,7 +182,7 @@ public class Database {
         this.canonicalPath = canonicalPath;
         this.urlProperties = props;
 
-        if (databaseType == DatabaseType.DB_RES) {
+        if (databaseType == DatabaseURL.S_RES) {
             filesInJar    = true;
             filesReadOnly = true;
         }
@@ -221,7 +218,24 @@ public class Database {
         setState(DATABASE_OPENING);
 
         try {
-            createObjectStructures();
+            lobManager     = new LobManager(this);
+            nameManager    = new HsqlNameManager(this);
+            granteeManager = new GranteeManager(this);
+            userManager    = new UserManager(this);
+            schemaManager  = new SchemaManager(this);
+            persistentStoreCollection =
+                new PersistentStoreCollectionDatabase(this);
+            isReferentialIntegrity = true;
+            sessionManager         = new SessionManager(this);
+            collation              = collation.newDatabaseInstance();
+            dbInfo = DatabaseInformation.newDatabaseInformation(this);
+            txManager              = new TransactionManager2PL(this);
+
+            lobManager.createSchema();
+            sessionManager.getSysLobSession().setSchema(
+                SqlInvariants.LOBS_SCHEMA);
+            schemaManager.setSchemaChangeTimestamp();
+            schemaManager.createSystemTables();
 
             // completed metadata
             logger.open();
@@ -234,7 +248,7 @@ public class Database {
 
                 userManager.createFirstUser(username, password);
                 schemaManager.createPublicSchema();
-                logger.checkpoint(null, false, false);
+                logger.checkpoint(false);
             }
 
             lobManager.open();
@@ -262,7 +276,7 @@ public class Database {
     }
 
     /**
-     * Clears the data structures, making them elligible for garbage collection.
+     * Clears the data structuress, making them elligible for garbage collection.
      */
     void clearStructures() {
 
@@ -289,29 +303,6 @@ public class Database {
         timeoutRunner    = null;
     }
 
-    public void createObjectStructures() {
-
-        nameManager = new HsqlNameManager(this);
-        databaseUniqueName = nameManager.newHsqlName("", false,
-                SchemaObject.DATABASE);
-        lobManager     = new LobManager(this);
-        granteeManager = new GranteeManager(this);
-        userManager    = new UserManager(this);
-        schemaManager  = new SchemaManager(this);
-        persistentStoreCollection =
-            new PersistentStoreCollectionDatabase(this);
-        isReferentialIntegrity = true;
-        sessionManager         = new SessionManager(this);
-        collation              = Collation.newDatabaseInstance();
-        dbInfo = DatabaseInformation.newDatabaseInformation(this);
-        txManager              = new TransactionManager2PL(this);
-
-        lobManager.createSchema();
-        sessionManager.getSysLobSession().setSchema(SqlInvariants.LOBS_SCHEMA);
-        schemaManager.setSchemaChangeTimestamp();
-        schemaManager.createSystemTables();
-    }
-
     /**
      *  Returns the database ID.
      */
@@ -319,25 +310,21 @@ public class Database {
         return this.databaseID;
     }
 
-    public HsqlName getName() {
-        return databaseUniqueName;
-    }
-
     /**
      * Returns a unique String identifier for the database.
      */
-    public String getNameString() {
-        return databaseUniqueName.name;
+    public String getUniqueName() {
+        return databaseUniqueName;
     }
 
-    public void setDatabaseName(String name) {
-        databaseUniqueName.rename(name, false);
+    public void setUniqueName(String name) {
+        databaseUniqueName = name;
     }
 
     /**
      *  Returns the type of the database: "mem", "file", "res"
      */
-    public DatabaseType getType() {
+    public String getType() {
         return databaseType;
     }
 
@@ -449,10 +436,6 @@ public class Database {
         return granteeManager;
     }
 
-    public void setLiveObject(boolean mode) {
-        sqlLiveObject = mode;
-    }
-
     /**
      *  Sets the isReferentialIntegrity attribute.
      */
@@ -473,10 +456,6 @@ public class Database {
 
     public void setResultMaxMemoryRows(int size) {
         resultMaxMemoryRows = size;
-    }
-
-    public void setRestrictExec(boolean mode) {
-        sqlRestrictExec = mode;
     }
 
     public void setStrictNames(boolean mode) {
@@ -522,10 +501,6 @@ public class Database {
         sqlNullsOrder = mode;
     }
 
-    public void setCharacterLiteral(boolean mode) {
-        sqlCharLiteral = mode;
-    }
-
     public void setConcatNulls(boolean mode) {
         sqlConcatNulls = mode;
     }
@@ -552,10 +527,6 @@ public class Database {
 
     public void setIgnoreCase(boolean mode) {
         sqlIgnoreCase = mode;
-    }
-
-    public void setSysIndexNames(boolean mode) {
-        sqlSysIndexNames = mode;
     }
 
     public void setSyntaxDb2(boolean mode) {
@@ -680,7 +651,7 @@ public class Database {
         DatabaseManager.removeDatabase(this);
 
         // todo - when hsqldb.sql. framework logging is supported, add another call
-        FrameworkLogger.clearLoggers("hsqldb.db." + getNameString());
+        FrameworkLogger.clearLoggers("hsqldb.db." + getUniqueName());
 
         if (he != null) {
             throw he;
@@ -770,62 +741,77 @@ public class Database {
         // properties
         String[] list = logger.getPropertiesSQL(indexRoots);
 
-        r.addRows(list);
+        addRows(r, list);
 
         list = getSettingsSQL();
 
-        r.addRows(list);
+        addRows(r, list);
 
         list = getGranteeManager().getSQL();
 
-        r.addRows(list);
+        addRows(r, list);
 
         // schemas and schema objects such as tables, sequences, etc.
         list = schemaManager.getSQLArray();
 
-        r.addRows(list);
+        addRows(r, list);
 
         // optional comments on tables etc.
         list = schemaManager.getCommentsArray();
 
-        r.addRows(list);
+        addRows(r, list);
 
         list = schemaManager.getTableSpaceSQL();
 
-        r.addRows(list);
+        addRows(r, list);
 
         // index roots
         if (indexRoots) {
             list = schemaManager.getIndexRootsSQL();
 
-            r.addRows(list);
+            addRows(r, list);
         }
 
         // text headers - readonly - clustered
         list = schemaManager.getTablePropsSQL(!indexRoots);
 
-        r.addRows(list);
+        addRows(r, list);
 
         // password complexity
         list = getUserManager().getAuthenticationSQL();
 
-        r.addRows(list);
+        addRows(r, list);
 
         // user session start schema names
         list = getUserManager().getInitialSchemaSQL();
 
-        r.addRows(list);
+        addRows(r, list);
 
         // grantee rights
-        list = getGranteeManager().getRightsSQL();
+        list = getGranteeManager().getRightstSQL();
 
-        r.addRows(list);
+        addRows(r, list);
 
         return r;
     }
 
+    private static void addRows(Result r, String[] sql) {
+
+        if (sql == null) {
+            return;
+        }
+
+        for (int i = 0; i < sql.length; i++) {
+            String[] s = new String[1];
+
+            s[0] = sql[i];
+
+            r.initialiseNavigator().add(s);
+        }
+    }
+
     public String getURI() {
-        return databaseType.value() + canonicalPath;
+        return databaseType + canonicalPath;
     }
 
     public String getCanonicalPath() {
@@ -847,23 +833,22 @@ public class Database {
 
         public void run() {
 
-            Statement checkpoint =
-                ParserCommand.getAutoCheckpointStatement(Database.this);
-            Session sysSession = sessionManager.newSysSession();
-
             try {
+                Session sysSession = sessionManager.newSysSession();
+                Statement checkpoint =
+                    ParserCommand.getAutoCheckpointStatement(Database.this);
+
                 sysSession.executeCompiledStatement(checkpoint,
                                                     ValuePool.emptyObjectArray,
                                                     0);
-            } catch (Throwable e) {
-
-                // ignore exceptions
-                // may be InterruptedException or IOException
-            } finally {
                 sysSession.commit(false);
                 sysSession.close();
 
                 waiting = false;
+            } catch (Throwable e) {
+
+                // ignore exceptions
+                // may be InterruptedException or IOException
             }
         }
 
@@ -913,12 +898,13 @@ public class Database {
                     }
 
                     boolean result = session.timeoutManager.checkTimeout();
-
+/*
                     if (result) {
                         synchronized (this) {
                             sessionList.remove(i);
                         }
                     }
+*/
                 }
             } catch (Throwable e) {
 

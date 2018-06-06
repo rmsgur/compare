@@ -1,4 +1,4 @@
-/* Copyright (c) 2001-2011, The HSQL Development Group
+/* Copyright (c) 2001-2017, The HSQL Development Group
  * All rights reserved.
  *
  * Redistribution and use in source and binary forms, with or without
@@ -31,7 +31,6 @@
 
 package org.hsqldb.types;
 
-import org.hsqldb.HsqlNameManager;
 import org.hsqldb.HsqlNameManager.HsqlName;
 import org.hsqldb.SchemaObject;
 import org.hsqldb.Session;
@@ -50,7 +49,7 @@ import org.hsqldb.rights.Grantee;
  * Base class for type objects.<p>
  *
  * @author Fred Toussi (fredt@users dot sourceforge.net)
- * @version 2.3.0
+ * @version 2.3.5
  * @since 1.9.0
  */
 public abstract class Type implements SchemaObject, Cloneable {
@@ -358,6 +357,10 @@ public abstract class Type implements SchemaObject, Cloneable {
                || typeComparisonGroup == otherType.typeComparisonGroup;
     }
 
+    public boolean canCompareDirect(Type otherType) {
+        return typeComparisonGroup == otherType.typeComparisonGroup;
+    }
+
     public int arrayLimitCardinality() {
         return 0;
     }
@@ -414,11 +417,27 @@ public abstract class Type implements SchemaObject, Cloneable {
         return false;
     }
 
+    public boolean isTimestampType() {
+        return false;
+    }
+
     public boolean isIntervalType() {
         return false;
     }
 
+    public boolean isIntervalYearMonthType() {
+        return false;
+    }
+
+    public boolean isIntervalDaySecondType() {
+        return false;
+    }
+
     public boolean isBinaryType() {
+        return false;
+    }
+
+    public boolean isUUIDType() {
         return false;
     }
 
@@ -450,6 +469,10 @@ public abstract class Type implements SchemaObject, Cloneable {
         return userTypeModifier == null ? false
                                         : userTypeModifier.schemaObjectType
                                           == SchemaObject.DOMAIN;
+    }
+
+    public int getDegree() {
+        return 1;
     }
 
     public boolean acceptsPrecision() {
@@ -495,14 +518,14 @@ public abstract class Type implements SchemaObject, Cloneable {
     }
 
     /**
-     * Common type used in comparison opertions. other must be comparable
+     * Common type used in comparison operations. other must be comparable
      * with this.
      */
     public abstract Type getAggregateType(Type other);
 
     /**
-     * Result type of combining values of two types in different opertions.
-     * other type is not allways comparable with this, but a operation should
+     * Result type of combining values of two types in different operations.
+     * other type is not always comparable with this, but a operation should
      * be valid without any explicit CAST
      */
     public abstract Type getCombinedType(Session session, Type other,
@@ -548,6 +571,10 @@ public abstract class Type implements SchemaObject, Cloneable {
         return 0;
     }
 
+    public boolean isNegative(Object a) {
+        return false;
+    }
+
     int hashCode(Object a) {
 
         if (a == null) {
@@ -564,11 +591,7 @@ public abstract class Type implements SchemaObject, Cloneable {
         }
 
         if (other instanceof Type) {
-            if (((Type) other).typeCode == Types.SQL_ARRAY) {
-                return false;
-            }
-
-            if (((Type) other).typeCode == Types.SQL_ROW) {
+            if (getClass() != other.getClass()) {
                 return false;
             }
 
@@ -582,7 +605,7 @@ public abstract class Type implements SchemaObject, Cloneable {
     }
 
     public int hashCode() {
-        return typeCode + (int) precision << 8 + scale << 16;
+        return typeCode + ((int) precision << 8) + (scale << 16);
     }
 
     public static TypedComparator newComparator(Session session) {
@@ -657,6 +680,7 @@ public abstract class Type implements SchemaObject, Cloneable {
         new BinaryType(Types.SQL_VARBINARY, 32 * 1024);
     public static final BlobType SQL_BLOB =
         new BlobType(BlobType.defaultBlobSize);
+    public static final BinaryType SQL_GUID = new BinaryUUIDType();
 
     // other type
     public static final OtherType OTHER = OtherType.getOtherType();
@@ -776,11 +800,11 @@ public abstract class Type implements SchemaObject, Cloneable {
                                      DTIType.maxIntervalPrecision, 0);
     public static final IntervalType SQL_INTERVAL_SECOND_MAX_PRECISION =
         IntervalType.newIntervalType(Types.SQL_INTERVAL_SECOND,
-                                     DTIType.maxIntervalPrecision,
+                                     DTIType.maxIntervalSecondPrecision,
                                      DTIType.defaultIntervalFractionPrecision);
     public static final IntervalType SQL_INTERVAL_SECOND_MAX_FRACTION_MAX_PRECISION =
         IntervalType.newIntervalType(Types.SQL_INTERVAL_SECOND,
-                                     DTIType.maxIntervalPrecision,
+                                     DTIType.maxIntervalSecondPrecision,
                                      DTIType.maxFractionPrecision);
 
     //
@@ -1030,7 +1054,6 @@ public abstract class Type implements SchemaObject, Cloneable {
             case Types.SQL_ALL_TYPES :
                 return SQL_ALL_TYPES;
 
-//                return SQL_ALL_TYPES; // needs changes to Expression type resolution
             case Types.SQL_CHAR :
             case Types.SQL_VARCHAR :
             case Types.SQL_CLOB :
@@ -1074,6 +1097,9 @@ public abstract class Type implements SchemaObject, Cloneable {
             case Types.SQL_VARBINARY :
             case Types.SQL_BLOB :
                 return BinaryType.getBinaryType(type, precision);
+
+            case Types.SQL_GUID :
+                return SQL_GUID;
 
             case Types.SQL_BIT :
             case Types.SQL_BIT_VARYING :
@@ -1153,6 +1179,7 @@ public abstract class Type implements SchemaObject, Cloneable {
         typeNames.put(Tokens.T_BLOB, Types.SQL_BLOB);
         typeNames.put(Tokens.T_BIT, Types.SQL_BIT);
         typeNames.put(Tokens.T_OTHER, Types.OTHER);
+        typeNames.put(Tokens.T_UUID, Types.SQL_GUID);
 
         //
         typeAliases = new IntValueHashMap(64);

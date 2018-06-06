@@ -1,4 +1,4 @@
-/* Copyright (c) 2001-2011, The HSQL Development Group
+/* Copyright (c) 2001-2016, The HSQL Development Group
  * All rights reserved.
  *
  * Redistribution and use in source and binary forms, with or without
@@ -29,46 +29,74 @@
  */
 
 
-package org.hsqldb.test;
+package org.hsqldb;
 
-public class AllSimpleTests {
+import org.hsqldb.HsqlNameManager.HsqlName;
+import org.hsqldb.rights.Grantee;
+import org.hsqldb.lib.OrderedHashSet;
 
-    public AllSimpleTests() {
+public class ReferenceObject implements SchemaObject {
 
-        try {
-            jbInit();
-        } catch (Exception ex) {
-            ex.printStackTrace();
-        }
+    HsqlName name;
+    HsqlName target;
+
+    public ReferenceObject(HsqlName name, HsqlName target) {
+        this.name   = name;
+        this.target = target;
     }
 
-    String[] args = new String[0];
-
-    void doTests() throws Exception {
-
-        System.out.println("*********** " + HSQLBug.class.getName());
-        HSQLBug.main(args);
-        System.out.println("*********** "
-                           + TestBatchBug.class.getClass().getName());
-        TestBatchBug.main(args);
-        System.out.println("*********** " + TestDima.class.getName());
-        TestDima.main(args);
-        System.out.println("*********** " + TestHSQLDB.class.getName());
-        TestHSQLDB.main(args);
-        System.out.println("*********** " + TestObjectSize.class.getName());
-        TestObjectSize.main(args);
-        System.out.println(
-            "*********** "
-            + TestSubQueriesInPreparedStatements.class.getName());
-        TestSubQueriesInPreparedStatements.main(args);
+    public int getType() {
+        return SchemaObject.REFERENCE;
     }
 
-    public static void main(String[] Args) throws Exception {
-
-        AllSimpleTests ast = new AllSimpleTests();
-
-        ast.doTests();
+    public HsqlName getName() {
+        return name;
     }
 
-    private void jbInit() throws Exception {}
+    public HsqlName getSchemaName() {
+        return name.schema;
+    }
+
+    public HsqlName getCatalogName() {
+        return name.schema.schema;
+    }
+
+    public Grantee getOwner() {
+        return name.schema.owner;
+    }
+
+    public OrderedHashSet getReferences() {
+
+        OrderedHashSet set = new OrderedHashSet();
+
+        set.add(target);
+
+        return set;
+    }
+
+    public OrderedHashSet getComponents() {
+        return null;
+    }
+
+    public void compile(Session session, SchemaObject parentObject) {}
+
+    public String getSQL() {
+
+        StringBuffer sb = new StringBuffer();
+
+        sb.append(Tokens.T_CREATE).append(' ').append(Tokens.T_SYNONYM);
+        sb.append(' ').append(name.getSchemaQualifiedStatementName());
+        sb.append(' ').append(Tokens.T_FOR).append(' ');
+        sb.append(target.getSchemaQualifiedStatementName());
+
+        return sb.toString();
+    }
+
+    public long getChangeTimestamp() {
+        return 0L;
+    }
+
+    public HsqlName getTarget() {
+        return target;
+    }
 }

@@ -1,4 +1,4 @@
-/* Copyright (c) 2001-2011, The HSQL Development Group
+/* Copyright (c) 2001-2017, The HSQL Development Group
  * All rights reserved.
  *
  * Redistribution and use in source and binary forms, with or without
@@ -36,6 +36,7 @@ import java.sql.Connection;
 import java.sql.DriverManager;
 import java.sql.SQLException;
 
+import org.hsqldb.Database;
 import org.hsqldb.server.Server;
 import org.hsqldb.server.WebServer;
 
@@ -68,24 +69,33 @@ import junit.framework.TestResult;
  *      <url-pattern>/test</url-pattern>
  *    </servlet-mapping>
  * }</code>
- * @author  boucherb@users
+ * @author  campbell-burnet@users
  * @version 1.7.2
  * @since 1.7.2
  */
 public abstract class TestBase extends TestCase {
 
-    String  dbPath = "mem:test;sql.enforce_strict_size=true";
+    String  dbPath = "mem:test;sql.enforce_strict_size=true;sql.restrict_exec=true";
     String  serverProps;
     String  url;
     String  user     = "sa";
     String  password = "";
     Server  server;
     boolean isNetwork = true;
-    boolean isHTTP    = true;    // Set false to test HSQL protocol, true to test HTTP, in which case you can use isUseTestServlet to target either HSQL's webserver, or the Servlet server-mode
+    boolean isHTTP    = false;    // Set false to test HSQL protocol, true to test HTTP, in which case you can use isUseTestServlet to target either HSQL's webserver, or the Servlet server-mode
     boolean isServlet = false;
 
     public TestBase(String name) {
         super(name);
+    }
+
+    public TestBase(String name, boolean isNetwork,
+                    boolean isHTTP) {
+
+        super(name);
+
+        this.isNetwork = isNetwork;
+        this.isHTTP    = isHTTP;
     }
 
     public TestBase(String name, String url, boolean isNetwork,
@@ -93,12 +103,15 @@ public abstract class TestBase extends TestCase {
 
         super(name);
 
+        if (url != null) {
+            this.url = url;
+        }
+
         this.isNetwork = isNetwork;
-        this.url       = url;
         this.isHTTP    = isHTTP;
     }
 
-    protected void setUp() {
+    protected void setUp() throws Exception {
 
         if (isNetwork) {
 
@@ -129,7 +142,7 @@ public abstract class TestBase extends TestCase {
             }
         } else {
             if (url == null) {
-                url = "jdbc:hsqldb:file:test;sql.enforce_strict_size=true";
+                url = "jdbc:hsqldb:" + dbPath;
             }
         }
 
@@ -144,13 +157,13 @@ public abstract class TestBase extends TestCase {
     protected void tearDown() {
 
         if (isNetwork && !isServlet) {
-            server.stop();
+            server.shutdownWithCatalogs(Database.CLOSEMODE_IMMEDIATELY);
 
             server = null;
         }
     }
 
-    Connection newConnection() throws SQLException {
+    protected Connection newConnection() throws SQLException {
         return DriverManager.getConnection(url, user, password);
     }
 

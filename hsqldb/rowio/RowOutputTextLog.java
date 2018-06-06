@@ -1,4 +1,4 @@
-/* Copyright (c) 2001-2011, The HSQL Development Group
+/* Copyright (c) 2001-2016, The HSQL Development Group
  * All rights reserved.
  *
  * Redistribution and use in source and binary forms, with or without
@@ -51,8 +51,7 @@ import org.hsqldb.types.Type;
 
 /**
  * @author Fred Toussi (fredt@users dot sourceforge.net)
- * @since 2.0.0
- * @version 1.7.2
+ * @version 2.3.5
  */
 public class RowOutputTextLog extends RowOutputBase {
 
@@ -72,7 +71,7 @@ public class RowOutputTextLog extends RowOutputBase {
             BYTES_IS    = " IS ".getBytes("ISO-8859-1");
             BYTES_ARRAY = " ARRAY[".getBytes("ISO-8859-1");
         } catch (UnsupportedEncodingException e) {
-            Error.runtimeError(ErrorCode.U_S0500, "RowOutputTextLog");
+            throw Error.runtimeError(ErrorCode.U_S0500, "RowOutputTextLog");
         }
     }
 
@@ -110,6 +109,12 @@ public class RowOutputTextLog extends RowOutputBase {
         this.writeBytes(o.toString());
     }
 
+    public long scalePosition(long position) {
+        return position;
+    }
+
+    public void setStorageSize(int size) {}
+
     public void writeEnd() {}
 
     protected void writeBit(BinaryData o) {
@@ -124,13 +129,24 @@ public class RowOutputTextLog extends RowOutputBase {
         write('\'');
     }
 
+    protected void writeUUID(BinaryData o) {
+
+        ensureRoom(40);
+        write('\'');
+
+        count += StringConverter.writeUUIDHexBytes(getBuffer(), count,
+                o.getBytes());
+
+        write('\'');
+    }
+
     protected void writeBinary(BinaryData o) {
 
         ensureRoom((int) (o.length(null) * 2 + 2));
         write('\'');
-        StringConverter.writeHexBytes(getBuffer(), count, o.getBytes());
 
-        count += (o.length(null) * 2);
+        count += StringConverter.writeHexBytes(getBuffer(), count,
+                                               o.getBytes());
 
         write('\'');
     }
@@ -145,9 +161,9 @@ public class RowOutputTextLog extends RowOutputBase {
 
     protected void writeArray(Object[] o, Type type) {
 
-        type = type.collectionBaseType();
-
+        type         = type.collectionBaseType();
         noSeparators = true;
+
         write(BYTES_ARRAY);
 
         for (int i = 0; i < o.length; i++) {
@@ -155,10 +171,11 @@ public class RowOutputTextLog extends RowOutputBase {
                 write(',');
             }
 
-            writeData(type, o[i]);
+            writeData(o[i], type);
         }
 
         write(']');
+
         noSeparators = false;
     }
 
@@ -238,8 +255,6 @@ public class RowOutputTextLog extends RowOutputBase {
     public void writeLong(long value) {
         this.writeBytes(Long.toString(value));
     }
-
-    public void writeIntData(int i, int position) {}
 
     protected void writeTime(TimeData o, Type type) {
 

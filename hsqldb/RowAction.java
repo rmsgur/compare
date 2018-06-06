@@ -1,4 +1,4 @@
-/* Copyright (c) 2001-2011, The HSQL Development Group
+/* Copyright (c) 2001-2017, The HSQL Development Group
  * All rights reserved.
  *
  * Redistribution and use in source and binary forms, with or without
@@ -41,7 +41,7 @@ import org.hsqldb.persist.PersistentStore;
  * Represents the chain of insert / delete / rollback / commit actions on a row.
  *
  * @author Fred Toussi (fredt@users dot sourceforge dot net)
- * @version 2.2.9
+ * @version 2.3.3
  * @since 2.0.0
  */
 public class RowAction extends RowActionBase {
@@ -49,8 +49,8 @@ public class RowAction extends RowActionBase {
     //
     final TableBase       table;
     final PersistentStore store;
-    Row                   memoryRow;
-    long                  rowId;
+    final Row             memoryRow;
+    final long            rowId;
     boolean               isMemory;
     RowAction             updatedAction;
 
@@ -162,11 +162,11 @@ public class RowAction extends RowActionBase {
                     case ACTION_DELETE : {
                         if (session != action.session) {
                             if (action.commitTimestamp == 0) {
-                                if (!session.tempSet.isEmpty()) {
-                                    session.tempSet.clear();
+                                if (!session.actionSet.isEmpty()) {
+                                    session.actionSet.clear();
                                 }
 
-                                session.tempSet.add(action);
+                                session.actionSet.add(action);
                             }
 
                             return null;
@@ -180,11 +180,11 @@ public class RowAction extends RowActionBase {
                             if (colMap == null
                                     || ArrayUtil.haveCommonElement(
                                         colMap, action.changeColumnMap)) {
-                                if (!session.tempSet.isEmpty()) {
-                                    session.tempSet.clear();
+                                if (!session.actionSet.isEmpty()) {
+                                    session.actionSet.clear();
                                 }
 
-                                session.tempSet.add(action);
+                                session.actionSet.add(action);
 
                                 return null;
                             }
@@ -242,11 +242,11 @@ public class RowAction extends RowActionBase {
                     if (action.changeColumnMap == null
                             || ArrayUtil.haveCommonElement(
                                 colMap, action.changeColumnMap)) {
-                        if (!session.tempSet.isEmpty()) {
-                            session.tempSet.clear();
+                        if (!session.actionSet.isEmpty()) {
+                            session.actionSet.clear();
                         }
 
-                        session.tempSet.add(action);
+                        session.actionSet.add(action);
 
                         return false;
                     }
@@ -377,6 +377,14 @@ public class RowAction extends RowActionBase {
         } while (action != null);
 
         return false;
+    }
+
+    public boolean isDeleteComplete() {
+        return deleteComplete;
+    }
+
+    public void setDeleteComplete() {
+        deleteComplete = true;
     }
 
     /**
@@ -548,36 +556,12 @@ public class RowAction extends RowActionBase {
         return result;
     }
 
-    synchronized int getActionType(long timestamp) {
-
-        int           actionType = ACTION_NONE;
-        RowActionBase action     = this;
-
-        do {
-            if (action.actionTimestamp == timestamp) {
-                if (action.type == ACTION_DELETE) {
-                    if (actionType == ACTION_INSERT) {
-                        actionType = ACTION_INSERT_DELETE;
-                    } else {
-                        actionType = action.type;
-                    }
-                } else if (action.type == ACTION_INSERT) {
-                    actionType = action.type;
-                }
-            }
-
-            action = action.next;
-        } while (action != null);
-
-        return actionType;
-    }
-
-    public synchronized long getPos() {
+    public long getPos() {
         return rowId;
     }
 
-    synchronized void setPos(long pos) {
-        rowId = pos;
+    public Row getRow() {
+        return memoryRow;
     }
 
     private int getRollbackType(Session session) {
@@ -671,8 +655,6 @@ public class RowAction extends RowActionBase {
             }
         }
 
-        commitRollbackType = (byte) rollbackAction;
-
         return rollbackAction;
     }
 
@@ -701,7 +683,7 @@ public class RowAction extends RowActionBase {
         }
 
         do {
-            boolean expired = false;;
+            boolean expired = false;
 
             if (action.commitTimestamp != 0) {
                 if (action.commitTimestamp <= timestamp) {
@@ -816,12 +798,12 @@ public class RowAction extends RowActionBase {
                     throw Error.runtimeError(ErrorCode.U_S0500, "RowAction");
                 } else if (action.type == ACTION_INSERT) {
                     if (mode == TransactionManager.ACTION_READ) {
-                        actionType = action.ACTION_DELETE;
+                        actionType = ACTION_DELETE;
                     } else if (mode == TransactionManager.ACTION_DUP) {
                         actionType = ACTION_INSERT;
 
-                        session.tempSet.clear();
-                        session.tempSet.add(action);
+                        session.actionSet.clear();
+                        session.actionSet.add(action);
                     } else if (mode == TransactionManager.ACTION_REF) {
                         actionType = ACTION_DELETE;
                     }
@@ -848,12 +830,12 @@ public class RowAction extends RowActionBase {
             } else {
                 if (action.type == ACTION_INSERT) {
                     if (mode == TransactionManager.ACTION_READ) {
-                        actionType = action.ACTION_DELETE;
+                        actionType = ACTION_DELETE;
                     } else if (mode == TransactionManager.ACTION_DUP) {
                         actionType = ACTION_INSERT;
 
-                        session.tempSet.clear();
-                        session.tempSet.add(action);
+                        session.actionSet.clear();
+                        session.actionSet.add(action);
                     } else if (mode == TransactionManager.ACTION_REF) {
                         actionType = ACTION_DELETE;
                     }

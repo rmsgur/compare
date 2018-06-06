@@ -1,4 +1,4 @@
-/* Copyright (c) 2001-2011, The HSQL Development Group
+/* Copyright (c) 2001-2017, The HSQL Development Group
  * All rights reserved.
  *
  * Redistribution and use in source and binary forms, with or without
@@ -42,14 +42,14 @@ import org.hsqldb.types.DateTimeType;
 import org.hsqldb.types.IntervalType;
 import org.hsqldb.types.Type;
 
-/* $Id: JDBCParameterMetaData.java 5160 2013-02-02 20:10:25Z fredt $ */
+/* $Id: JDBCParameterMetaData.java 5721 2017-03-14 11:31:10Z fredt $ */
 
 /** @todo 1.9.0 - implement internal support for INOUT, OUT return parameter */
 
 // fredt@users 20040412 - removed DITypeInfo dependencies
-// fredt@usres 1.9.0 - utilise the new type support
-// boucherb@users 20051207 - patch 1.8.0.x initial JDBC 4.0 support work
-// boucherb@users 20060522 - doc   1.9.0 full synch up to Mustang Build 84
+// fredt@users 1.9.0 - utilise the new type support
+// campbell-burnet@users 20051207 - patch 1.8.0.x initial JDBC 4.0 support work
+// campbell-burnet@users 20060522 - doc   1.9.0 full synch up to Mustang Build 84
 // Revision 1.14  2006/07/12 12:20:49  boucherb
 // - remove unused imports
 // - full synch up to Mustang b90
@@ -66,8 +66,8 @@ import org.hsqldb.types.Type;
  * types and properties for each parameter marker in a <code>CallableStatement</code>
  * object.
  *
- * @author Campbell Boucher-Burnet (boucherb@users dot sourceforge.net)
- * @version 2.0.1
+ * @author Campbell Burnet (campbell-burnet@users dot sourceforge.net)
+ * @version 2.3.4
  * @since JDK 1.4, HSQLDB 1.7.2
  * @revised JDK 1.6, HSQLDB 2.0
  */
@@ -282,7 +282,7 @@ public class JDBCParameterMetaData
      */
 //#ifdef JAVA6
     @SuppressWarnings("unchecked")
-    public <T>T unwrap(java.lang.Class<T> iface) throws java.sql.SQLException {
+    public <T>T unwrap(Class<T> iface) throws java.sql.SQLException {
 
         if (isWrapperFor(iface)) {
             return (T) this;
@@ -310,7 +310,7 @@ public class JDBCParameterMetaData
      */
 //#ifdef JAVA6
     public boolean isWrapperFor(
-            java.lang.Class<?> iface) throws java.sql.SQLException {
+            Class<?> iface) throws java.sql.SQLException {
         return (iface != null && iface.isAssignableFrom(this.getClass()));
     }
 
@@ -319,20 +319,6 @@ public class JDBCParameterMetaData
 
     /** The metadata object with which this object is constructed */
     ResultMetaData rmd;
-
-    /**
-     * The fully-qualified name of the Java class whose instances should
-     * be passed to the method PreparedStatement.setObject. <p>
-     *
-     * Note that changes to Function.java and Types.java allow passing
-     * objects of any class implementing java.io.Serializable and that,
-     * as such, the parameter expression resolution mechanism has been
-     * upgraded to provide the precise FQN for SQL function and stored
-     * procedure arguments, rather than the more generic
-     * org.hsqldb.JavaObject class that is used internally to represent
-     * and transport objects whose class is not in the standard mapping.
-     */
-    String[] classNames;
 
     /** The number of parameters in the described statement */
     int             parameterCount;
@@ -347,13 +333,9 @@ public class JDBCParameterMetaData
     JDBCParameterMetaData(JDBCConnection conn,
                           ResultMetaData metaData) throws SQLException {
 
-        rmd            = metaData;
-        parameterCount = rmd.getColumnCount();
-
-        if (conn.clientProperties != null) {
-            translateTTIType = conn.clientProperties.isPropertyTrue(
-                HsqlDatabaseProperties.jdbc_translate_tti_types);
-        }
+        rmd              = metaData;
+        parameterCount   = rmd.getColumnCount();
+        translateTTIType = conn.isTranslateTTIType;
     }
 
     /**
@@ -366,8 +348,6 @@ public class JDBCParameterMetaData
         if (this.translateTTIType) {
             if (type.isIntervalType()) {
                 type = ((IntervalType) type).getCharacterType();
-            } else if (type.isDateTimeTypeWithZone()) {
-                type = ((DateTimeType) type).getDateTimeTypeWithoutZone();
             }
         }
 
@@ -392,9 +372,9 @@ public class JDBCParameterMetaData
     }
 
     /**
-     * Retrieves a String repsentation of this object. <p>
+     * Retrieves a String representation of this object. <p>
      *
-     * @return a String repsentation of this object
+     * @return a String representation of this object
      */
     public String toString() {
 
@@ -455,7 +435,7 @@ public class JDBCParameterMetaData
                 sb.append(method.getName());
                 sb.append('=');
                 sb.append(method.invoke(this,
-                                        new Object[] { new Integer(i + 1) }));
+                                        new Object[] { Integer.valueOf(i + 1) }));
 
                 if (j + 1 < len) {
                     sb.append(',');

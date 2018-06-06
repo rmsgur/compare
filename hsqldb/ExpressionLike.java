@@ -1,4 +1,4 @@
-/* Copyright (c) 2001-2011, The HSQL Development Group
+/* Copyright (c) 2001-2017, The HSQL Development Group
  * All rights reserved.
  *
  * Redistribution and use in source and binary forms, with or without
@@ -41,9 +41,9 @@ import org.hsqldb.types.Types;
 /**
  * Implementation of LIKE operations
  *
- * @author Campbell Boucher-Burnet (boucherb@users dot sourceforge.net)
+ * @author Campbell Burnet (campbell-burnet@users dot sourceforge.net)
  * @author Fred Toussi (fredt@users dot sourceforge.net)
- * @version 2.2.9
+ * @version 2.3.3
  * @since 1.9.0
  */
 public final class ExpressionLike extends ExpressionLogical {
@@ -126,53 +126,6 @@ public final class ExpressionLike extends ExpressionLogical {
             }
         }
 
-        boolean isEscapeFixedConstant = true;
-
-        if (nodes[ESCAPE] != null) {
-            if (nodes[ESCAPE].isUnresolvedParam()) {
-                throw Error.error(ErrorCode.X_42567);
-            }
-
-            nodes[ESCAPE].resolveTypes(session, this);
-
-            isEscapeFixedConstant = nodes[ESCAPE].opType == OpTypes.VALUE;
-
-            if (isEscapeFixedConstant) {
-                nodes[ESCAPE].setAsConstantValue(session, parent);
-
-                if (nodes[ESCAPE].dataType == null) {
-                    throw Error.error(ErrorCode.X_42567);
-                }
-
-                if (nodes[ESCAPE].valueData != null) {
-                    long length;
-
-                    switch (nodes[ESCAPE].dataType.typeCode) {
-
-                        case Types.SQL_CHAR :
-                        case Types.SQL_VARCHAR :
-                            length =
-                                ((String) nodes[ESCAPE].valueData).length();
-                            break;
-
-                        case Types.SQL_BINARY :
-                        case Types.SQL_VARBINARY :
-                            length =
-                                ((BinaryData) nodes[ESCAPE].valueData).length(
-                                    session);
-                            break;
-
-                        default :
-                            throw Error.error(ErrorCode.X_42563);
-                    }
-
-                    if (length != 1) {
-                        throw Error.error(ErrorCode.X_22019);
-                    }
-                }
-            }
-        }
-
         if (nodes[LEFT].isUnresolvedParam()
                 && nodes[RIGHT].isUnresolvedParam()) {
             nodes[LEFT].dataType = Type.SQL_VARCHAR_DEFAULT;
@@ -217,9 +170,7 @@ public final class ExpressionLike extends ExpressionLogical {
             group = Types.SQL_VARCHAR;
         }
 
-        if (nodes[RIGHT].dataType.typeComparisonGroup != group
-                || (nodes[ESCAPE] != null
-                    && nodes[ESCAPE].dataType.typeComparisonGroup != group)) {
+        if (nodes[RIGHT].dataType.typeComparisonGroup != group) {
             throw Error.error(ErrorCode.X_42563);
         }
 
@@ -232,6 +183,59 @@ public final class ExpressionLike extends ExpressionLogical {
         }
 
         likeObject.dataType = nodes[LEFT].dataType;
+
+        boolean isEscapeFixedConstant = true;
+
+        if (nodes[ESCAPE] != null) {
+            if (nodes[ESCAPE].isUnresolvedParam()) {
+                nodes[ESCAPE].dataType = likeObject.isBinary
+                                         ? Type.SQL_VARBINARY
+                                         : Type.SQL_VARCHAR;
+            }
+
+            if (nodes[ESCAPE].dataType.typeComparisonGroup != group) {
+                throw Error.error(ErrorCode.X_42563);
+            }
+
+            nodes[ESCAPE].resolveTypes(session, this);
+
+            isEscapeFixedConstant = nodes[ESCAPE].opType == OpTypes.VALUE;
+
+            if (isEscapeFixedConstant) {
+                nodes[ESCAPE].setAsConstantValue(session, parent);
+
+                if (nodes[ESCAPE].dataType == null) {
+                    throw Error.error(ErrorCode.X_42567);
+                }
+
+                if (nodes[ESCAPE].valueData != null) {
+                    long length;
+
+                    switch (nodes[ESCAPE].dataType.typeCode) {
+
+                        case Types.SQL_CHAR :
+                        case Types.SQL_VARCHAR :
+                            length =
+                                ((String) nodes[ESCAPE].valueData).length();
+                            break;
+
+                        case Types.SQL_BINARY :
+                        case Types.SQL_VARBINARY :
+                            length =
+                                ((BinaryData) nodes[ESCAPE].valueData).length(
+                                    session);
+                            break;
+
+                        default :
+                            throw Error.error(ErrorCode.X_42563);
+                    }
+
+                    if (length != 1) {
+                        throw Error.error(ErrorCode.X_22019);
+                    }
+                }
+            }
+        }
 
         boolean isRightArgFixedConstant = nodes[RIGHT].opType == OpTypes.VALUE;
 
@@ -263,7 +267,7 @@ public final class ExpressionLike extends ExpressionLogical {
         }
 
         if (likeObject.isEquivalentToUnknownPredicate()) {
-            this.setAsConstantValue(session, parent);
+            setAsConstantValue(session, parent);
 
             likeObject = null;
 

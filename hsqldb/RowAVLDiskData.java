@@ -1,4 +1,4 @@
-/* Copyright (c) 2001-2011, The HSQL Development Group
+/* Copyright (c) 2001-2016, The HSQL Development Group
  * All rights reserved.
  *
  * Redistribution and use in source and binary forms, with or without
@@ -37,6 +37,7 @@ import org.hsqldb.index.NodeAVL;
 import org.hsqldb.persist.PersistentStore;
 import org.hsqldb.rowio.RowInputInterface;
 import org.hsqldb.rowio.RowOutputInterface;
+import org.hsqldb.persist.RowStoreAVLDiskData;
 
 // fredt@users 20021205 - path 1.7.2 - enhancements
 // fredt@users 20021215 - doc 1.7.2 - javadoc comments
@@ -47,15 +48,15 @@ import org.hsqldb.rowio.RowOutputInterface;
  *
  * @author Bob Preston (sqlbob@users dot sourceforge.net)
  * @author Fred Toussi (fredt@users dot sourceforge.net)
- * @version 2.2.9
+ * @version 2.3.4
  * @version 1.7.0
  */
 public class RowAVLDiskData extends RowAVL {
 
-    PersistentStore store;
-    int             accessCount;
-    boolean         hasDataChanged;
-    int             storageSize;
+    RowStoreAVLDiskData store;
+    int                 accessCount;
+    boolean             hasDataChanged;
+    int                 storageSize;
 
     /**
      *  Constructor for new rows.
@@ -66,7 +67,7 @@ public class RowAVLDiskData extends RowAVL {
 
         setNewNodes(store);
 
-        this.store     = store;
+        this.store     = (RowStoreAVLDiskData) store;
         hasDataChanged = true;
     }
 
@@ -74,24 +75,18 @@ public class RowAVLDiskData extends RowAVL {
      *  Constructor when read from the disk into the Cache. The link with
      *  the Nodes is made separetly.
      */
-    public RowAVLDiskData(PersistentStore store, TableBase t,
+    public RowAVLDiskData(RowStoreAVLDiskData store, TableBase t,
                           RowInputInterface in) throws IOException {
 
         super(t, (Object[]) null);
 
         setNewNodes(store);
 
-        position       = in.getPos();
+        position       = in.getFilePosition();
         storageSize    = in.getSize();
         rowData        = in.readData(table.getColumnTypes());
         hasDataChanged = false;
         this.store     = store;
-    }
-
-    public void getRowData(TableBase t,
-                                      RowInputInterface in)
-                                      throws IOException {
-        rowData = in.readData(t.getColumnTypes());
     }
 
     public void setData(Object[] data) {
@@ -103,21 +98,10 @@ public class RowAVLDiskData extends RowAVL {
         Object[] data = rowData;
 
         if (data == null) {
-            store.writeLock();
+            data = store.getData(this);
+            data = rowData;
 
-            try {
-                store.get(this, false);
-
-                data = rowData;
-
-                if (data == null) {
-                    store.get(this, false);
-
-                    data = rowData;
-                }
-            } finally {
-                store.writeUnlock();
-            }
+            this.keepInMemory(false);
         } else {
             accessCount++;
         }
@@ -168,12 +152,6 @@ public class RowAVLDiskData extends RowAVL {
         out.writeSize(storageSize);
         out.writeData(this, table.colTypes);
         out.writeEnd();
-
-        hasDataChanged = false;
-    }
-
-    public synchronized void setChanged(boolean changed) {
-        hasDataChanged = changed;
     }
 
     public boolean isNew() {
@@ -182,6 +160,10 @@ public class RowAVLDiskData extends RowAVL {
 
     public boolean hasChanged() {
         return hasDataChanged;
+    }
+
+    public synchronized void setChanged(boolean flag) {
+        hasDataChanged = flag;
     }
 
     public void updateAccessCount(int count) {

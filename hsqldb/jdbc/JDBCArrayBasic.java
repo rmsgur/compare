@@ -1,4 +1,4 @@
-/* Copyright (c) 2001-2011, The HSQL Development Group
+/* Copyright (c) 2001-2017, The HSQL Development Group
  * All rights reserved.
  *
  * Redistribution and use in source and binary forms, with or without
@@ -99,8 +99,6 @@ public class JDBCArrayBasic implements Array {
      * name for a base type that is a UDT
      * @exception SQLException if an error occurs while attempting
      * to access the type name
-     * @exception SQLFeatureNotSupportedException if the JDBC driver does not support
-     * this method
      * @since JDK 1.2
      */
     public String getBaseTypeName() throws SQLException {
@@ -119,8 +117,6 @@ public class JDBCArrayBasic implements Array {
      * <code>Array</code> object
      * @exception SQLException if an error occurs while attempting
      * to access the base type
-     * @exception SQLFeatureNotSupportedException if the JDBC driver does not support
-     * this method
      * @since JDK 1.2
      */
     public int getBaseType() throws SQLException {
@@ -157,10 +153,6 @@ public class JDBCArrayBasic implements Array {
      * @return an array in the Java programming language that contains
      * the ordered elements of the SQL <code>ARRAY</code> value
      * designated by this <code>Array</code> object
-     * @exception SQLException if an error occurs while attempting to
-     * access the array
-     * @exception SQLFeatureNotSupportedException if the JDBC driver does not support
-     * this method
      * @since JDK 1.2
      */
     public Object getArray() {
@@ -200,8 +192,6 @@ public class JDBCArrayBasic implements Array {
      *         elements of the SQL array designated by this object
      * @exception SQLException if an error occurs while attempting to
      *                         access the array
-     * @exception SQLFeatureNotSupportedException if the JDBC driver does not support
-     * this method
      * @since JDK 1.2
      */
     public Object getArray(java.util.Map<String,
@@ -239,8 +229,6 @@ public class JDBCArrayBasic implements Array {
      * of the SQL array, beginning with element <code>index</code>
      * @exception SQLException if an error occurs while attempting to
      * access the array
-     * @exception SQLFeatureNotSupportedException if the JDBC driver does not support
-     * this method
      * @since JDK 1.2
      */
     public Object getArray(long index, int count) throws SQLException {
@@ -262,7 +250,7 @@ public class JDBCArrayBasic implements Array {
 
     /**
      * <!-- start generic documentation -->
-     * Retreives a slice of the SQL <code>ARRAY</code> value
+     * Retrieves a slice of the SQL <code>ARRAY</code> value
      * designated by this <code>Array</code> object, beginning with the specified
      * <code>index</code> and containing up to <code>count</code>
      * successive elements of the SQL array.
@@ -303,8 +291,6 @@ public class JDBCArrayBasic implements Array {
      * <code>index</code>
      * @exception SQLException if an error occurs while attempting to
      * access the array
-     * @exception SQLFeatureNotSupportedException if the JDBC driver does not support
-     * this method
      * @since JDK 1.2
      */
     public Object getArray(long index, int count,
@@ -332,8 +318,6 @@ public class JDBCArrayBasic implements Array {
      * object, with the rows in ascending order based on the indices.
      * @exception SQLException if an error occurs while attempting to
      * access the array
-     * @exception SQLFeatureNotSupportedException if the JDBC driver does not support
-     * this method
      * @since JDK 1.2
      */
     public ResultSet getResultSet() throws SQLException {
@@ -370,8 +354,6 @@ public class JDBCArrayBasic implements Array {
      * object, with the rows in ascending order based on the indices.
      * @exception SQLException if an error occurs while attempting to
      * access the array
-     * @exception SQLFeatureNotSupportedException if the JDBC driver does not support
-     * this method
      * @since JDK 1.2
      */
     public ResultSet getResultSet(java.util.Map<String,
@@ -404,8 +386,6 @@ public class JDBCArrayBasic implements Array {
      * index <code>index</code>.
      * @exception SQLException if an error occurs while attempting to
      * access the array
-     * @exception SQLFeatureNotSupportedException if the JDBC driver does not support
-     * this method
      * @since JDK 1.2
      */
     public ResultSet getResultSet(long index, int count) throws SQLException {
@@ -448,8 +428,6 @@ public class JDBCArrayBasic implements Array {
      * index <code>index</code>.
      * @exception SQLException if an error occurs while attempting to
      * access the array
-     * @exception SQLFeatureNotSupportedException if the JDBC driver does not support
-     * this method
      * @since JDK 1.2
      */
     public ResultSet getResultSet(long index, int count,
@@ -483,8 +461,6 @@ public class JDBCArrayBasic implements Array {
      *
      * @throws SQLException if an error occurs releasing
      * the Array's resources
-     * @exception SQLFeatureNotSupportedException if the JDBC driver does not support
-     * this method
      * @since JDK 1.6
      */
     public void free() throws SQLException {
@@ -497,6 +473,13 @@ public class JDBCArrayBasic implements Array {
     Type     elementType;
     Object[] data;
 
+    /**
+     * Public constructor to create an Array object from an Object[] and an
+     * HSQLDB org.hsqldb.types.Type object.
+     *
+     * @param data the Object[]
+     * @param type the HSQLDB org.hsqldb.types.Type object
+     */
     public JDBCArrayBasic(Object[] data, Type type) {
         this.data        = data;
         this.elementType = type;

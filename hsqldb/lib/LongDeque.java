@@ -1,4 +1,4 @@
-/* Copyright (c) 2001-2011, The HSQL Development Group
+/* Copyright (c) 2001-2016, The HSQL Development Group
  * All rights reserved.
  *
  * Redistribution and use in source and binary forms, with or without
@@ -34,10 +34,10 @@ package org.hsqldb.lib;
 import java.util.NoSuchElementException;
 
 /**
- * A deque of long value. Implementation based on HsqlDeque class.
+ * A deque of long values. Implementation based on HsqlDeque class.
  *
  * @author Fred Toussi (fredt@users dot sourceforge.net)
- * @version 1.9.0
+ * @version 2.3.4
  * @since 1.9.0
  */
 public class LongDeque {
@@ -45,14 +45,18 @@ public class LongDeque {
     private long[] list;
     private int    firstindex = 0;    // index of first list element
     private int    endindex   = 0;    // index of last list element + 1
-    protected int  elementCount;
+    private int    elementCount;
 
     // can grow to fill list
     // if elementCount == 0 then firstindex == endindex
-    private static final int DEFAULT_INITIAL_CAPACITY = 10;
+    private static final int DEFAULT_INITIAL_CAPACITY = 8;
 
     public LongDeque() {
-        list = new long[DEFAULT_INITIAL_CAPACITY];
+        this(DEFAULT_INITIAL_CAPACITY);
+    }
+
+    public LongDeque(int capacity) {
+        list = new long[capacity];
     }
 
     public int size() {
@@ -296,6 +300,17 @@ public class LongDeque {
         for (int i = 0; i < elementCount; i++) {
             array[i] = get(i);
         }
+    }
+
+    public long[] toArray() {
+
+        long[] array = new long[elementCount];
+
+        for (int i = 0; i < elementCount; i++) {
+            array[i] = get(i);
+        }
+
+        return array;
     }
 
     private int getInternalIndex(int i) throws IndexOutOfBoundsException {

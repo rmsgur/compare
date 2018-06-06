@@ -1,4 +1,4 @@
-/* Copyright (c) 2001-2011, The HSQL Development Group
+/* Copyright (c) 2001-2017, The HSQL Development Group
  * All rights reserved.
  *
  * Redistribution and use in source and binary forms, with or without
@@ -31,12 +31,18 @@
 
 package org.hsqldb.test;
 
+import java.io.Reader;
+import java.sql.Blob;
+import java.sql.Clob;
 import java.sql.Connection;
+import java.sql.DriverManager;
 import java.sql.PreparedStatement;
 import java.sql.ResultSet;
 import java.sql.SQLException;
 import java.sql.Statement;
-import java.sql.DriverManager;
+
+import org.hsqldb.jdbc.JDBCBlob;
+import org.hsqldb.jdbc.JDBCClob;
 
 public class TestUpdatableResultSets extends TestBase {
 
@@ -45,31 +51,28 @@ public class TestUpdatableResultSets extends TestBase {
     Statement  statement;
 
     public TestUpdatableResultSets(String name) {
-        super(name);
+        super(name, true, false);
     }
 
-    protected void setUp() {
+    protected void setUp() throws Exception {
 
         super.setUp();
 
-        try {
-            connection = super.newConnection();
-            statement = connection.createStatement(ResultSet.TYPE_FORWARD_ONLY,
-                                                   ResultSet.CONCUR_UPDATABLE);
-        } catch (Exception e) {
-            System.out.println(e);
-        }
+        connection = super.newConnection();
+        statement = connection.createStatement(ResultSet.TYPE_FORWARD_ONLY,
+                                               ResultSet.CONCUR_UPDATABLE);
     }
 
     public void testUpdatable() {
 
         try {
+            statement.execute("SET DATABASE EVENT LOG SQL LEVEL 3");
             statement.execute("drop table t1 if exists");
             statement.execute(
-                "create table t1 (i int primary key, c varchar(10), t varbinary(3))");
+                "create table t1 (i int primary key, v varchar(10), t varbinary(3), b blob(16), c clob(16))");
 
-            String            insert = "insert into t1 values(?,?,?)";
-            String            select = "select i, c, t from t1";
+            String            insert = "insert into t1 values(?,?,?,?,?)";
+            String select = "select i, v, t, b, c from t1 where i > ?";
             PreparedStatement ps     = connection.prepareStatement(insert);
 
             for (int i = 0; i < 10; i++) {
@@ -78,12 +81,23 @@ public class TestUpdatableResultSets extends TestBase {
                 ps.setBytes(3, new byte[] {
                     (byte) i, ' ', (byte) i
                 });
+                ps.setBytes(4, new byte[] {
+                    1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16
+                });
+                ps.setString(5, "123");
                 ps.execute();
             }
 
+            ps.close();
             connection.setAutoCommit(false);
 
-            ResultSet rs = statement.executeQuery(select);
+            ps = connection.prepareStatement(select,
+                                             ResultSet.TYPE_SCROLL_INSENSITIVE,
+                                             ResultSet.CONCUR_UPDATABLE);
+
+            ps.setInt(1, -1);
+
+            ResultSet rs = ps.executeQuery();
 
             while (rs.next()) {
                 String s = rs.getString(2);
@@ -94,7 +108,7 @@ public class TestUpdatableResultSets extends TestBase {
 
             rs.close();
 
-            rs = statement.executeQuery(select);
+            rs = ps.executeQuery();
 
             while (rs.next()) {
                 String s = rs.getString(2);
@@ -104,7 +118,7 @@ public class TestUpdatableResultSets extends TestBase {
 
             connection.rollback();
 
-            rs = statement.executeQuery(select);
+            rs = ps.executeQuery();
 
             while (rs.next()) {
                 String s = rs.getString(2);
@@ -113,6 +127,53 @@ public class TestUpdatableResultSets extends TestBase {
             }
 
             connection.commit();
+
+            rs = ps.executeQuery();
+
+            Clob c = new JDBCClob("123456789abcdef");
+
+            if (rs.next()) {
+                rs.updateClob(5, c);
+                rs.updateRow();
+            }
+
+            connection.rollback();
+
+            rs = ps.executeQuery();
+
+            Blob b = new JDBCBlob(new byte[] {
+                1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16
+            });
+
+            if (rs.next()) {
+                rs.updateBlob(4, b);
+                rs.updateRow();
+            }
+
+            connection.rollback();
+
+            rs = ps.executeQuery();
+
+            if (rs.next()) {
+                rs.updateClob(5, c);
+                rs.updateClob(5, c);
+                rs.updateRow();
+            }
+
+            connection.rollback();
+
+            rs = ps.executeQuery();
+
+            Reader r =
+                new java.io.CharArrayReader("123456789abcdef".toCharArray());
+
+            if (rs.next()) {
+                rs.updateClob(5, c);
+                rs.updateClob(5, r, 5);
+                rs.updateRow();
+            }
+
+            connection.rollback();
         } catch (SQLException e) {
             e.printStackTrace();
         }
@@ -172,46 +233,54 @@ public class TestUpdatableResultSets extends TestBase {
         }
     }
 
-
     public void testDeletable2() {
 
         try {
-            Connection c = DriverManager.getConnection("jdbc:hsqldb:mem:mytestdb",
-                "SA", "");
+            Connection c =
+                DriverManager.getConnection("jdbc:hsqldb:mem:mytestdb", "SA",
+                                            "");
             String createSQL =
                 "create table test (num INTEGER PRIMARY KEY, str VARCHAR(25))";
             Statement createStmt = c.createStatement();
+
             createStmt.execute(createSQL);
             createStmt.close();
-            String ins = "insert into test (num,str) values (?,?)";
+
+            String            ins = "insert into test (num,str) values (?,?)";
             PreparedStatement pStmt = c.prepareStatement(ins);
+
             for (int i = 0; i < 100; i++) {
                 pStmt.setInt(1, i);
                 pStmt.setString(2, "String" + i);
                 pStmt.execute();
             }
+
             // there should now be 100 rows in the table
             String select = "SELECT * FROM test";
             PreparedStatement stmt = c.prepareStatement(select,
-                ResultSet.
-                TYPE_SCROLL_INSENSITIVE,
-                ResultSet.CONCUR_UPDATABLE);
+                ResultSet.TYPE_SCROLL_INSENSITIVE, ResultSet.CONCUR_UPDATABLE);
             ResultSet rs = stmt.executeQuery();
+
             rs.beforeFirst();
+
             while (rs.next()) {
                 int num = rs.getInt("num");
-                if ( (num % 7) == 0) {
+
+                if ((num % 7) == 0) {
                     System.out.println("Deleting row:" + num);
                     rs.deleteRow();
                 }
             }
+
             Statement dropStmt = c.createStatement();
+
             dropStmt.execute("drop table test;");
             dropStmt.close();
-    } catch (SQLException e) {
-        e.printStackTrace();
+        } catch (SQLException e) {
+            e.printStackTrace();
+        }
     }
-    }
+
     public void testScrollable() {
 
         try {

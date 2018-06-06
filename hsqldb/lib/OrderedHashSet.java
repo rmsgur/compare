@@ -1,4 +1,4 @@
-/* Copyright (c) 2001-2011, The HSQL Development Group
+/* Copyright (c) 2001-2015, The HSQL Development Group
  * All rights reserved.
  *
  * Redistribution and use in source and binary forms, with or without
@@ -39,7 +39,7 @@ package org.hsqldb.lib;
  * This class does not store null elements.
  *
  * @author Fred Toussi (fredt@users dot sourceforge.net)
- * @version 2.2.9
+ * @version 2.3.3
  * @since 1.9.0
  */
 public class OrderedHashSet extends HashSet implements HsqlList, Set {
@@ -112,6 +112,13 @@ public class OrderedHashSet extends HashSet implements HsqlList, Set {
 
     public void toArray(Object[] array) {
         System.arraycopy(super.objectKeyTable, 0, array, 0, array.length);
+    }
+
+    public void addAll(OrderedHashSet other) {
+
+        for (int i = 0, size = other.size(); i < size; i++) {
+            add(other.get(i));
+        }
     }
 
     public int getIndex(Object key) {

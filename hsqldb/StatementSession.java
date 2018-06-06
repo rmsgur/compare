@@ -1,4 +1,4 @@
-/* Copyright (c) 2001-2011, The HSQL Development Group
+/* Copyright (c) 2001-2017, The HSQL Development Group
  * All rights reserved.
  *
  * Redistribution and use in source and binary forms, with or without
@@ -32,21 +32,24 @@
 package org.hsqldb;
 
 import org.hsqldb.HsqlNameManager.HsqlName;
+import org.hsqldb.ParserDQL.CompileContext;
 import org.hsqldb.error.Error;
 import org.hsqldb.error.ErrorCode;
 import org.hsqldb.lib.HsqlArrayList;
+import org.hsqldb.lib.HsqlList;
 import org.hsqldb.result.Result;
 import org.hsqldb.rights.Grantee;
 import org.hsqldb.rights.User;
 import org.hsqldb.types.DTIType;
 import org.hsqldb.types.IntervalSecondData;
 import org.hsqldb.types.Type;
+import org.hsqldb.types.Types;
 
 /**
  * Implementation of Statement for SQL session statements.<p>
  *
  * @author Fred Toussi (fredt@users dot sourceforge.net)
- * @version 2.2.6
+ * @version 2.3.5
  * @since 1.9.0
  */
 public class StatementSession extends Statement {
@@ -77,20 +80,46 @@ public class StatementSession extends Statement {
     }
 
     Expression[] expressions;
-    Object[]     parameters;
+    Object[]     arguments;
 
-    StatementSession(int type, Expression[] args) {
+    StatementSession(Session session, CompileContext context, int type,
+                     Expression[] args) {
 
         super(type);
 
-        this.expressions       = args;
+        expressions            = args;
         isTransactionStatement = false;
         isLogged               = false;
 
+        Expression e = expressions[0];
+
         switch (type) {
 
-            case StatementTypes.SET_PATH :
             case StatementTypes.SET_TIME_ZONE :
+                HsqlList unresolved = e.resolveColumnReferences(session,
+                    RangeGroup.emptyGroup, RangeGroup.emptyArray, null);
+
+                ExpressionColumn.checkColumnsResolved(unresolved);
+                e.resolveTypes(session, null);
+
+                if (e.dataType == null) {
+                    e.setDataType(session, Type.SQL_INTERVAL_HOUR_TO_MINUTE);
+                }
+
+                if (e.dataType.isCharacterType()) {
+                    e = new ExpressionOp(e, Type.SQL_INTERVAL_HOUR_TO_MINUTE);
+                    expressions[0] = e;
+                }
+
+                if (e.dataType.typeCode != Types.SQL_INTERVAL_HOUR_TO_MINUTE) {
+                    throw Error.error(ErrorCode.X_42563);
+                }
+
+                group = StatementTypes.X_SQL_SESSION;
+
+                return;
+
+            case StatementTypes.SET_PATH :
             case StatementTypes.SET_NAMES :
             case StatementTypes.SET_ROLE :
             case StatementTypes.SET_SCHEMA :
@@ -102,15 +131,40 @@ public class StatementSession extends Statement {
 
             default :
                 throw Error.runtimeError(ErrorCode.U_S0500,
-                                         "StateemntSession");
+                                         "StatementSession");
         }
+
+        e.resolveTypes(session, null);
+
+        switch (e.getType()) {
+
+            case OpTypes.VALUE :
+                break;
+
+            case OpTypes.DYNAMIC_PARAM :
+                e.setDataType(session, Type.SQL_VARCHAR_DEFAULT);
+                break;
+
+            case OpTypes.SQL_FUNCTION :
+                if (((FunctionSQL) e).isValueFunction()) {
+                    break;
+                }
+            default :
+                throw Error.error(ErrorCode.X_0P000);
+        }
+
+        if (!e.getDataType().isCharacterType()) {
+            throw Error.error(ErrorCode.X_0P000);
+        }
+
+        setDatabaseObjects(session, context);
     }
 
     StatementSession(int type, Object[] args) {
 
         super(type);
 
-        this.parameters        = args;
+        this.arguments         = args;
         isTransactionStatement = false;
         isLogged               = false;
 
@@ -175,11 +229,12 @@ public class StatementSession extends Statement {
             case StatementTypes.SET_CONNECTION :
             case StatementTypes.SET_CONSTRAINT :
             case StatementTypes.SET_DESCRIPTOR :
+            case StatementTypes.SET_SESSION_AUTOCOMMIT :
             case StatementTypes.SET_SESSION_CHARACTERISTICS :
-            case StatementTypes.SET_TRANSFORM_GROUP :
+            case StatementTypes.SET_SESSION_FEATURE :
             case StatementTypes.SET_SESSION_RESULT_MAX_ROWS :
             case StatementTypes.SET_SESSION_RESULT_MEMORY_ROWS :
-            case StatementTypes.SET_SESSION_AUTOCOMMIT :
+            case StatementTypes.SET_TRANSFORM_GROUP :
                 group = StatementTypes.X_HSQLDB_SESSION;
                 break;
 
@@ -221,6 +276,8 @@ public class StatementSession extends Statement {
 
         switch (type) {
 
+            case StatementTypes.TRANSACTION_LOCK_CATALOG :
+            case StatementTypes.TRANSACTION_UNLOCK_CATALOG :
             case StatementTypes.TRANSACTION_LOCK_TABLE :
                 group = StatementTypes.X_HSQLDB_TRANSACTION;
                 break;
@@ -277,7 +334,7 @@ public class StatementSession extends Statement {
             //
             case StatementTypes.COMMIT_WORK : {
                 try {
-                    boolean chain = ((Boolean) parameters[0]).booleanValue();
+                    boolean chain = ((Boolean) arguments[0]).booleanValue();
 
                     session.commit(chain);
 
@@ -314,11 +371,13 @@ public class StatementSession extends Statement {
             case StatementTypes.PREPARE :
                 return Result.updateZeroResult;
 
+            case StatementTypes.TRANSACTION_LOCK_CATALOG :
+            case StatementTypes.TRANSACTION_UNLOCK_CATALOG :
             case StatementTypes.TRANSACTION_LOCK_TABLE : {
                 return Result.updateZeroResult;
             }
             case StatementTypes.RELEASE_SAVEPOINT : {
-                String savepoint = (String) parameters[0];
+                String savepoint = (String) arguments[0];
 
                 try {
                     session.releaseSavepoint(savepoint);
@@ -329,14 +388,14 @@ public class StatementSession extends Statement {
                 }
             }
             case StatementTypes.ROLLBACK_WORK : {
-                boolean chain = ((Boolean) parameters[0]).booleanValue();
+                boolean chain = ((Boolean) arguments[0]).booleanValue();
 
                 session.rollback(chain);
 
                 return Result.updateZeroResult;
             }
             case StatementTypes.ROLLBACK_SAVEPOINT : {
-                String savepoint = (String) parameters[0];
+                String savepoint = (String) arguments[0];
 
                 try {
                     session.rollbackToSavepoint(savepoint);
@@ -347,7 +406,7 @@ public class StatementSession extends Statement {
                 }
             }
             case StatementTypes.SAVEPOINT : {
-                String savepoint = (String) parameters[0];
+                String savepoint = (String) arguments[0];
 
                 session.savepoint(savepoint);
 
@@ -395,9 +454,13 @@ public class StatementSession extends Statement {
                     Result result = (Result) value;
 
                     if (result.isData()) {
-                        Object[] data =
-                            (Object[]) result.getNavigator().getNext();
-                        boolean single = !result.getNavigator().next();
+                        Object[] data   = null;
+                        boolean  single = false;
+
+                        if (result.getNavigator().next()) {
+                            data   = result.getNavigator().getCurrent();
+                            single = !result.getNavigator().next();
+                        }
 
                         if (single && data != null && data[0] != null) {
                             value = data[0];
@@ -479,7 +542,7 @@ public class StatementSession extends Statement {
 
                 try {
                     if (expressions == null) {
-                        name = ((HsqlName) parameters[0]).name;
+                        name = ((HsqlName) arguments[0]).name;
                     } else {
                         name = (String) expressions[0].getValue(session);
                     }
@@ -542,7 +605,7 @@ public class StatementSession extends Statement {
                     }
 
                     if (session.getGrantee().canChangeAuthorisation()) {
-                        session.setUser((User) userObject);
+                        session.setUser(userObject);
                         session.setRole(null);
                         session.resetSchema();
 
@@ -557,15 +620,15 @@ public class StatementSession extends Statement {
             }
             case StatementTypes.SET_SESSION_CHARACTERISTICS : {
                 try {
-                    if (parameters[0] != null) {
+                    if (arguments[0] != null) {
                         boolean readonly =
-                            ((Boolean) parameters[0]).booleanValue();
+                            ((Boolean) arguments[0]).booleanValue();
 
                         session.setReadOnlyDefault(readonly);
                     }
 
-                    if (parameters[1] != null) {
-                        int level = ((Integer) parameters[1]).intValue();
+                    if (arguments[1] != null) {
+                        int level = ((Integer) arguments[1]).intValue();
 
                         session.setIsolationDefault(level);
                     }
@@ -587,15 +650,15 @@ public class StatementSession extends Statement {
             // fall through
             case StatementTypes.SET_TRANSACTION : {
                 try {
-                    if (parameters[0] != null) {
+                    if (arguments[0] != null) {
                         boolean readonly =
-                            ((Boolean) parameters[0]).booleanValue();
+                            ((Boolean) arguments[0]).booleanValue();
 
                         session.setReadOnly(readonly);
                     }
 
-                    if (parameters[1] != null) {
-                        int level = ((Integer) parameters[1]).intValue();
+                    if (arguments[1] != null) {
+                        int level = ((Integer) arguments[1]).intValue();
 
                         session.setIsolation(level);
                     }
@@ -612,7 +675,7 @@ public class StatementSession extends Statement {
 
             //
             case StatementTypes.SET_SESSION_AUTOCOMMIT : {
-                boolean mode = ((Boolean) parameters[0]).booleanValue();
+                boolean mode = ((Boolean) arguments[0]).booleanValue();
 
                 try {
                     session.setAutoCommit(mode);
@@ -623,7 +686,7 @@ public class StatementSession extends Statement {
                 }
             }
             case StatementTypes.DECLARE_VARIABLE : {
-                ColumnSchema[] variables = (ColumnSchema[]) parameters[0];
+                ColumnSchema[] variables = (ColumnSchema[]) arguments[0];
 
                 try {
                     for (int i = 0; i < variables.length; i++) {
@@ -636,15 +699,23 @@ public class StatementSession extends Statement {
                     return Result.newErrorResult(e, sql);
                 }
             }
+            case StatementTypes.SET_SESSION_FEATURE : {
+                String  feature = (String) arguments[0];
+                Boolean value   = (Boolean) arguments[1];
+
+                session.setFeature(feature, value.booleanValue());
+
+                return Result.updateZeroResult;
+            }
             case StatementTypes.SET_SESSION_RESULT_MAX_ROWS : {
-                int size = ((Integer) parameters[0]).intValue();
+                int size = ((Integer) arguments[0]).intValue();
 
                 session.setSQLMaxRows(size);
 
                 return Result.updateZeroResult;
             }
             case StatementTypes.SET_SESSION_RESULT_MEMORY_ROWS : {
-                int size = ((Integer) parameters[0]).intValue();
+                int size = ((Integer) arguments[0]).intValue();
 
                 session.setResultMemoryRowCount(size);
 
@@ -652,7 +723,7 @@ public class StatementSession extends Statement {
             }
             case StatementTypes.SET_SESSION_SQL_IGNORECASE : {
                 try {
-                    boolean mode = ((Boolean) parameters[0]).booleanValue();
+                    boolean mode = ((Boolean) arguments[0]).booleanValue();
 
                     session.setIgnoreCase(mode);
 
@@ -662,9 +733,10 @@ public class StatementSession extends Statement {
                 }
             }
             case StatementTypes.DECLARE_SESSION_TABLE : {
-                Table         table           = (Table) parameters[0];
-                HsqlArrayList tempConstraints = (HsqlArrayList) parameters[1];
-                StatementDMQL statement       = (StatementDMQL) parameters[2];
+                Table         table           = (Table) arguments[0];
+                HsqlArrayList tempConstraints = (HsqlArrayList) arguments[1];
+                StatementDMQL statement       = (StatementDMQL) arguments[3];
+                Boolean       ifNotExists     = (Boolean) arguments[4];
 
                 try {
                     if (tempConstraints.size() != 0) {
@@ -674,7 +746,17 @@ public class StatementSession extends Statement {
                     }
 
                     table.compile(session, null);
-                    session.sessionContext.addSessionTable(table);
+
+                    try {
+                        session.sessionContext.addSessionTable(table);
+                    } catch (HsqlException e) {
+                        if (ifNotExists != null
+                                && ifNotExists.booleanValue()) {
+                            return Result.updateZeroResult;
+                        } else {
+                            return Result.newErrorResult(e, sql);
+                        }
+                    }
 
                     if (table.hasLobColumn) {
                         throw Error.error(ErrorCode.X_42534);
@@ -692,8 +774,8 @@ public class StatementSession extends Statement {
                 }
             }
             case StatementTypes.DROP_TABLE : {
-                HsqlName name     = (HsqlName) parameters[0];
-                Boolean  ifExists = (Boolean) parameters[1];
+                HsqlName name     = (HsqlName) arguments[0];
+                Boolean  ifExists = (Boolean) arguments[1];
                 Table table =
                     session.sessionContext.findSessionTable(name.name);
 
@@ -705,6 +787,8 @@ public class StatementSession extends Statement {
                     }
                 }
 
+                session.sessionData.persistentStoreCollection.removeStore(
+                    table);
                 session.sessionContext.dropSessionTable(name.name);
 
                 return Result.updateZeroResult;
@@ -723,7 +807,7 @@ public class StatementSession extends Statement {
         return sql;
     }
 
-    public boolean isCatalogLock() {
+    public boolean isCatalogLock(int model) {
         return false;
     }
 

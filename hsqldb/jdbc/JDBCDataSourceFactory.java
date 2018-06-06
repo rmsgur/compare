@@ -1,4 +1,4 @@
-/* Copyright (c) 2001-2011, The HSQL Development Group
+/* Copyright (c) 2001-2017, The HSQL Development Group
  * All rights reserved.
  *
  * Redistribution and use in source and binary forms, with or without
@@ -41,8 +41,6 @@ import javax.naming.RefAddr;
 import javax.naming.spi.ObjectFactory;
 import javax.sql.DataSource;
 
-import org.hsqldb.persist.HsqlDatabaseProperties;
-
 /**
  * A JNDI ObjectFactory for creating data sources supported by HyperSQL
  *  {@link org.hsqldb.jdbc.JDBCDataSource JDBCDataSource} for plain
@@ -65,6 +63,10 @@ public class JDBCDataSourceFactory implements ObjectFactory {
     /**
      * Static method to create a JDBCDataSource instance using the
      * given properties for url, user, password, etc.
+     *
+     * @param props properties
+     * @return the data source instance
+     * @throws Exception on any error
      */
     public static DataSource createDataSource(Properties props)
     throws Exception {
@@ -112,7 +114,7 @@ public class JDBCDataSourceFactory implements ObjectFactory {
      *
      * The Reference object's class name should be one of the four supported
      * data source class names and it must support the properties, database,
-     * user and password. It may optionally support the logingTimeout property.
+     * user and password. It may optionally support the loginTimeout property.
      *
      * HyperSQL's JDBCPooledDataSource and JDBCXADataSource object are intended
      * as factories used by a connection pooling DataSource.<p>

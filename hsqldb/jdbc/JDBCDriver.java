@@ -1,4 +1,4 @@
-/* Copyright (c) 2001-2011, The HSQL Development Group
+/* Copyright (c) 2001-2017, The HSQL Development Group
  * All rights reserved.
  *
  * Redistribution and use in source and binary forms, with or without
@@ -38,6 +38,18 @@ import java.sql.DriverPropertyInfo;
 import java.sql.SQLException;
 import java.util.Properties;
 
+//#ifdef JAVA6
+import java.sql.SQLFeatureNotSupportedException;
+
+//#endif JAVA6
+
+//#ifdef JAVA8
+/*
+import java.sql.DriverAction;
+*/
+
+//#endif JAVA8
+
 import org.hsqldb.DatabaseURL;
 import org.hsqldb.error.ErrorCode;
 import org.hsqldb.persist.HsqlDatabaseProperties;
@@ -46,9 +58,8 @@ import org.hsqldb.persist.HsqlProperties;
 // fredt@users 20011220 - patch 1.7.0 by fredt
 // new version numbering scheme
 // fredt@users 20020320 - patch 1.7.0 - JDBC 2 support and error trapping
-// JDBC 2 methods can now be called from jdk 1.1.x - see javadoc comments
 // fredt@users 20030528 - patch 1.7.2 suggested by Gerhard Hiller - support for properties in URL
-// boucherb@users 20051207 - patch 1.8.x initial JDBC 4.0 support work
+// campbell-burnet@users 20051207 - patch 1.8.x initial JDBC 4.0 support work
 
 /**
  * Provides the java.sql.Driver interface implementation required by
@@ -61,7 +72,7 @@ import org.hsqldb.persist.HsqlProperties;
  *  to try to connect to the target URL. <p>
  *
  *  The application developer will normally not need to call any function of
- *  the Driver directly. All required calls are made by the DriverManager. <p>
+ *  the Driver directly. All required calls are made by the DriverManager.
  *
  * <!-- start release-specific documentation -->
  * <div class="ReleaseSpecificDocumentation">
@@ -76,48 +87,8 @@ import org.hsqldb.persist.HsqlProperties;
  *  </pre>
  *
  *  For detailed information about how to obtain HSQLDB JDBC Connections,
- *  please see {@link org.hsqldb.jdbc.JDBCConnection JDBCConnection}.<p>
+ *  please see {@link org.hsqldb.jdbc.JDBCConnection JDBCConnection}.
  *
- * <hr>
- *
- * <b>JRE 1.1.x Notes:</b> <p>
- *
- * In general, JDBC 2 support requires Java 1.2 and above, and JDBC3 requires
- * Java 1.4 and above. In HSQLDB, support for methods introduced in different
- * versions of JDBC depends on the JDK version used for compiling and building
- * HSQLDB.<p>
- *
- * Since 1.7.0, it is possible to build the product so that
- * all JDBC 2 methods can be called while executing under the version 1.1.x
- * <em>Java Runtime Environment</em><sup><font size="-2">TM</font></sup>.
- * However, in addition to this technique requiring explicit casts to the
- * org.hsqldb.jdbc.* classes, some of the method calls also require
- * <code>int</code> values that are defined only in the JDBC 2 or greater
- * version of the {@link java.sql.ResultSet ResultSet} interface.  For this
- * reason, when the product is compiled under JDK 1.1.x, these values are
- * defined in {@link org.hsqldb.jdbc.JDBCResultSet JDBCResultSet}. <p>
- *
- * In a JRE 1.1.x environment, calling JDBC 2 methods that take or return the
- * JDBC2-only <code>ResultSet</code> values can be achieved by referring
- * to them in parameter specifications and return value comparisons,
- * respectively, as follows: <p>
- *
- * <pre class="JavaCodeExample">
- * JDBCResultSet.FETCH_FORWARD
- * JDBCResultSet.TYPE_FORWARD_ONLY
- * JDBCResultSet.TYPE_SCROLL_INSENSITIVE
- * JDBCResultSet.CONCUR_READ_ONLY
- * // etc.
- * </pre>
- *
- * However, please note that code written to use HSQLDB JDBC 2 features under
- * JDK 1.1.x will not be compatible for use with other JDBC 2 drivers. Please
- * also note that this feature is offered solely as a convenience to developers
- * who must work under JDK 1.1.x due to operating constraints, yet wish to
- * use some of the more advanced features available under the JDBC 2
- * specification. <p>
- *
- * </div> <!-- end release-specific documentation -->
  * <hr>
  *
  * <b>JDBC 4.0 notes:</b><p>
@@ -131,16 +102,18 @@ import org.hsqldb.persist.HsqlProperties;
  * qualified class name ('org.hsqldb.jdbc.JDBCDriver') of the HSQLDB implementation
  * of <code>java.sql.Driver</code>. <p>
  *
- * Hence, under JDBC 4.0 or greater, applications no longer need to explictly
+ * Hence, under JDBC 4.0 or greater, applications no longer need to explicitly
  * load the HSQLDB JDBC driver using <code>Class.forName()</code>. Of course,
  * existing programs which do load JDBC drivers using
  * <code>Class.forName()</code> will continue to work without modification. <p>
  *
+ * JDBC 4.2 methods added in Java 8 are generally supported when the HSQLDB jar
+ * is compiled with JDK 8
  * <hr>
- * @author Campbell Boucher-Burnet (boucherb@users dot sourceforge.net)
+ * @author Campbell Burnet (campbell-burnet@users dot sourceforge.net)
  * @author Fred Toussi (fredt@users dot sourceforge.net)
- * @version 2.2.9
- * @revised JDK 1.7, HLSQLDB 2.0.1
+ * @version 2.4.0
+ * @since HSQLDB 1.9.0
  * </div> <!-- end release-specific documentation -->
  *
  * @see org.hsqldb.jdbc.JDBCConnection
@@ -159,16 +132,16 @@ public class JDBCDriver implements Driver {
      * Returns "null" if this is the wrong kind of driver to connect to the
      * given URL.  This will be common, as when the JDBC driver manager is asked
      * to connect to a given URL it passes the URL to each loaded driver in
-     * turn. <p>
+     * turn.
      *
      * <P>The driver throws an <code>SQLException</code> if it is the right
      * driver to connect to the given URL but has trouble connecting to
-     * the database. <p>
+     * the database.
      *
      * <P>The <code>java.util.Properties</code> argument can be used to pass
      * arbitrary string tag/value pairs as connection arguments.
      * Normally at least "user" and "password" properties should be
-     * included in the <code>Properties</code> object. <p>
+     * included in the <code>Properties</code> object.
      *
      * <!-- start release-specific documentation -->
      * <div class="ReleaseSpecificDocumentation">
@@ -177,13 +150,13 @@ public class JDBCDriver implements Driver {
      *  For the HSQL Database Engine, at least "user" and
      *  "password" properties should be included in the Properties.<p>
      *
-     *  From version 1.7.1, two optional properties are supported:<p>
+     *  From version 1.7.1, two optional properties are supported:
      *
      *  <ul>
      *      <li><code>get_column_name</code> (default true) -  if set to false,
      *          a ResultSetMetaData.getColumnName() call will return the user
      *          defined label (getColumnLabel()) instead of the column
-     *          name.<br/>
+     *          name.<br>
      *
      *          This property is available in order to achieve
      *          compatibility with certain non-HSQLDB JDBC driver
@@ -196,7 +169,7 @@ public class JDBCDriver implements Driver {
      *
      *  From version 1.8.0.x, <code>strict_md</code> is deprecated (ignored)
      *  because metadata reporting is always strict (JDBC-compliant), and
-     *  three new optional properties are supported: <p>
+     *  three new optional properties are supported:
      *
      *  <ul>
      *      <li><code>ifexits</code> (default false) - when true, an exception
@@ -213,7 +186,7 @@ public class JDBCDriver implements Driver {
      *          the database is automatically shut down. The property takes
      *          effect only when the first connection is made to the database.
      *          This means the connection that opens the database. It has no
-     *          effect if used with subsequent, simultaneous connections. <br/>
+     *          effect if used with subsequent, simultaneous connections. <br>
      *
      *          This command has two uses. One is for test suites, where
      *          connections to the database are made from one JVM context,
@@ -304,7 +277,7 @@ public class JDBCDriver implements Driver {
         }
 
         // @todo:  maybe impose some sort of sane restriction
-        //         on network connections regarless of user
+        //         on network connections regardless of user
         //         specification?
         if (timeout == 0) {
 
@@ -334,8 +307,6 @@ public class JDBCDriver implements Driver {
         };
 
         t.start();
-
-        final long start = System.currentTimeMillis();
 
         try {
             t.join(1000 * timeout);
@@ -408,7 +379,7 @@ public class JDBCDriver implements Driver {
      *  get enough information to connect to a database. Note that depending
      *  on the values the human has supplied so far, additional values may
      *  become necessary, so it may be necessary to iterate though several
-     *  calls to getPropertyInfo.<p>
+     *  calls to getPropertyInfo.
      *
      * <!-- start release-specific documentation -->
      * <div class="ReleaseSpecificDocumentation">
@@ -493,19 +464,19 @@ public class JDBCDriver implements Driver {
     }
 
     /**
-     * Reports whether this driver is a genuine JDBC Compliant<sup><font
-     * size=-2>TM</font></sup> driver. A driver may only report
+     * Reports whether this driver is a genuine JDBC Compliant&trade; driver.
+     * A driver may only report
      * <code>true</code> here if it passes the JDBC compliance tests; otherwise
      * it is required to return <code>false</code>. <p>
      *
      * JDBC compliance requires full support for the JDBC API and full support
-     * for SQL 92 Entry Level. <p>
+     * for SQL 92 Entry Level.
      *
      * <!-- start release-specific documentation -->
      * <div class="ReleaseSpecificDocumentation">
      * <h3>HSQLDB-Specific Information:</h3> <p>
      *
-     *  HSQLDB 2.0 is aimed to be compliant with JDBC 4.0 specification.
+     *  HSQLDB 2.0 is aimed to be compliant with JDBC 4.2 specification.
      *  It supports SQL 92 Entry Level and beyond.
      * </div> <!-- end release-specific documentation -->
      *
@@ -533,7 +504,7 @@ public class JDBCDriver implements Driver {
      * In the worst case, this may be the root Logger.
      *
      * @return the parent Logger for this driver
-     * @throws SQLFeatureNotSupportedException if the driver does not use <code>java.util.logging<code>.
+     * @throws SQLFeatureNotSupportedException if the driver does not use <code>java.util.logging</code>.
      * @since JDK 1.7 M11 2010/09/10 (b123), HSQLDB 2.0.1
      */
 //#ifdef JAVA6
@@ -544,12 +515,10 @@ public class JDBCDriver implements Driver {
     }
 
 //#endif
-    public static JDBCDriver driverInstance;
+    public static final JDBCDriver driverInstance = new JDBCDriver();
 
     static {
         try {
-            driverInstance = new JDBCDriver();
-
             DriverManager.registerDriver(driverInstance);
         } catch (Exception e) {
         }

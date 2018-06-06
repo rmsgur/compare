@@ -1,4 +1,4 @@
-/* Copyright (c) 2001-2011, The HSQL Development Group
+/* Copyright (c) 2001-2016, The HSQL Development Group
  * All rights reserved.
  *
  * Redistribution and use in source and binary forms, with or without
@@ -62,11 +62,11 @@ import org.hsqldb.types.ClobData;
 import org.hsqldb.types.ClobDataID;
 import org.hsqldb.types.LobData;
 
-/*
- * Session semi-persistent data structures
+/**
+ * Session semi-persistent data structures.
  *
  * @author Fred Toussi (fredt@users dot sourceforge.net)
- * @version 2.3.0
+ * @version 2.3.5
  * @since 1.9.0
  */
 public class SessionData {
@@ -106,8 +106,7 @@ public class SessionData {
             boolean isCached) {
 
         try {
-            PersistentStore store = session.database.logger.newStore(session,
-                persistentStoreCollection, table);
+            PersistentStore store = persistentStoreCollection.getStore(table);
 
             if (!isCached) {
                 store.setMemory(true);
@@ -123,21 +122,11 @@ public class SessionData {
     void setResultSetProperties(Result command, Result result) {
 
         int required = command.rsProperties;
-        int returned = result.rsProperties;
+        int returned = result.getStatement().getResultProperties();
 
         if (required != returned) {
-            if (ResultProperties.isReadOnly(required)) {
-                returned = ResultProperties.addHoldable(returned,
-                        ResultProperties.isHoldable(required));
-            } else {
-                if (ResultProperties.isUpdatable(returned)) {
-                    if (ResultProperties.isHoldable(required)) {
-                        session.addWarning(Error.error(ErrorCode.W_36503));
-                    }
-                } else {
-                    returned = ResultProperties.addHoldable(returned,
-                            ResultProperties.isHoldable(required));
-
+            if (ResultProperties.isUpdatable(required)) {
+                if (ResultProperties.isReadOnly(returned)) {
                     session.addWarning(Error.error(ErrorCode.W_36502));
                 }
             }
@@ -148,6 +137,8 @@ public class SessionData {
 
             returned = ResultProperties.addScrollable(returned,
                     ResultProperties.isScrollable(required));
+            returned = ResultProperties.addHoldable(returned,
+                    ResultProperties.isHoldable(required));
             result.rsProperties = returned;
         }
     }
@@ -326,7 +317,7 @@ public class SessionData {
     LongKeyLongValueHashMap resultLobs = new LongKeyLongValueHashMap();
 
     // lobs in transaction
-    public void adjustLobUsageCount(Object value, int adjust) {
+    public void adjustLobUsageCount(LobData value, int adjust) {
 
         if (session.isProcessingLog() || session.isProcessingScript()) {
             return;
@@ -336,9 +327,7 @@ public class SessionData {
             return;
         }
 
-        database.lobManager.adjustUsageCount(session,
-                                             ((LobData) value).getId(),
-                                             adjust);
+        database.lobManager.adjustUsageCount(session, value.getId(), adjust);
 
         hasLobOps = true;
     }
@@ -470,6 +459,7 @@ public class SessionData {
                     Result actionResult = database.lobManager.setBytes(blobId,
                         result.getOffset(), byteArray, (int) dataLength);
 
+                    // FIXME: actionResult not used anymore!?
                     break;
                 }
                 case ResultLob.LobResultTypes.REQUEST_SET_CHARS : {
@@ -481,6 +471,7 @@ public class SessionData {
                     Result actionResult = database.lobManager.setChars(clobId,
                         result.getOffset(), charArray, (int) dataLength);
 
+                    // FIXME: actionResult not used anymore!?
                     break;
                 }
             }
@@ -513,6 +504,7 @@ public class SessionData {
                 database.lobManager.setBytes(result.getLobID(), currentOffset,
                                              byteArray, byteArrayOS.size());
 
+            // FIXME: actionResult not used anymore!?
             currentOffset += byteArrayOS.size();
 
             if (byteArrayOS.size() < bufferLength) {
@@ -546,6 +538,7 @@ public class SessionData {
             Result actionResult = database.lobManager.setChars(lobID,
                 currentOffset, charArray, charWriter.size());
 
+            // FIXME: actionResult not used anymore!?
             currentOffset += charWriter.size();
 
             if (charWriter.size() < bufferLength) {
@@ -622,7 +615,9 @@ public class SessionData {
             throw Error.error(ErrorCode.FILE_IO_ERROR, e.toString());
         } finally {
             try {
-                is.close();
+                if (is != null) {
+                    is.close();
+                }
             } catch (Exception e) {}
         }
     }
@@ -646,22 +641,24 @@ public class SessionData {
             throw Error.error(ErrorCode.FILE_IO_ERROR);
         } finally {
             try {
-                is.close();
+                if (is != null) {
+                    is.close();
+                }
             } catch (Exception e) {}
         }
     }
 
-    private File getFile(String filename) {
+    private File getFile(String name) {
 
         session.checkAdmin();
 
-        filename = database.logger.getSecurePath(filename, false, false);
+        String fileName = database.logger.getSecurePath(name, false, false);
 
-        if (filename == null) {
-            throw (Error.error(ErrorCode.ACCESS_IS_DENIED, filename));
+        if (fileName == null) {
+            throw Error.error(ErrorCode.ACCESS_IS_DENIED, name);
         }
 
-        File    file   = new File(filename);
+        File    file   = new File(fileName);
         boolean exists = file.exists();
 
         if (!exists) {

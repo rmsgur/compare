@@ -7,7 +7,7 @@ PROCEDURAL LANGUAGE ASSIGNMENT COMMANDS
 * VARNAME ~                     Set variable value to the value of the very
                                 next SQL value or count fetched (see details
                                 at the bottom of this listing).
-* VARNAME _                     Same as * VARNAME _, except the query is
+* VARNAME _                     Same as * VARNAME ~, except the query is
                                 done silently (i.e, no rows to screen).
 * VARNAME :[appendage]          Set variable value to the previous edit
                                 buffer contents.
@@ -33,6 +33,7 @@ Auto. variable ? is set to the very latest SQL datum fetched (or update count).
     other:  Return status of the command
             (for updates this will be the number of rows updated).
     null/unset:  If the last SQL command failed, ? will be unset (aka null).
+Auto. variable # is set to rowcount of the last completed query.
 Inside of * forrows blocks only, *ROW will be set just like ? except if
  multiple columns, they will all be concatenated into *ROW.
 

@@ -1,4 +1,4 @@
-/* Copyright (c) 2001-2011, The HSQL Development Group
+/* Copyright (c) 2001-2015, The HSQL Development Group
  * All rights reserved.
  *
  * Redistribution and use in source and binary forms, with or without
@@ -78,8 +78,9 @@ public class TestJDBCSavepoints extends TestCase {
         super(name);
     }
 
-    protected void setUp() {
+    protected void setUp() throws Exception {
 
+        super.setUp();
         user     = "sa";
         password = "";
         stmt     = null;
@@ -101,6 +102,7 @@ public class TestJDBCSavepoints extends TestCase {
 
             //e.printStackTrace();
             System.out.println(this + ".setUp() error: " + e.getMessage());
+            throw e;
         }
     }
 

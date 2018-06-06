@@ -1,4 +1,4 @@
-/* Copyright (c) 2001-2011, The HSQL Development Group
+/* Copyright (c) 2001-2017, The HSQL Development Group
  * All rights reserved.
  *
  * Redistribution and use in source and binary forms, with or without
@@ -32,29 +32,24 @@
 package org.hsqldb.auth;
 
 import java.io.IOException;
-import java.io.File;
-import java.io.FileInputStream;
-import java.util.List;
 import java.util.ArrayList;
-import java.util.Arrays;
-import java.util.regex.Pattern;
-import java.util.regex.Matcher;
 import java.util.Hashtable;
-import java.util.Properties;
+import java.util.List;
+import java.util.regex.Matcher;
+import java.util.regex.Pattern;
 import javax.naming.AuthenticationException;
-import javax.naming.NamingException;
 import javax.naming.Context;
 import javax.naming.NamingEnumeration;
-import javax.naming.directory.SearchResult;
-import javax.naming.directory.BasicAttributes;
-import javax.naming.directory.Attributes;
+import javax.naming.NamingException;
 import javax.naming.directory.Attribute;
+import javax.naming.directory.Attributes;
+import javax.naming.directory.BasicAttributes;
+import javax.naming.directory.SearchResult;
+import javax.naming.ldap.InitialLdapContext;
+import javax.naming.ldap.LdapContext;
 import javax.naming.ldap.StartTlsRequest;
 import javax.naming.ldap.StartTlsResponse;
-import javax.naming.ldap.LdapContext;
-import javax.naming.ldap.InitialLdapContext;
-import javax.naming.ldap.ExtendedRequest;
-import javax.naming.ldap.ExtendedResponse;
+
 import org.hsqldb.lib.FrameworkLogger;
 
 /**
@@ -80,12 +75,12 @@ import org.hsqldb.lib.FrameworkLogger;
  * Another AuthFunctionBean would have to be written if SASL/External is needed.
  * </P> <P>
  * To use instances of this class, you must use at least the methods
- * setLdapHost, setParentDn, initialize, plus 
+ * setLdapHost, setParentDn, initialize, plus
  * rolesSchemaAttribute and/or accessAttribute.
  * </P> <P>
  * For a user to be given HyperSQL catalog access, that user must either have
  * a value for accessAttribute if that property is set (optionally requiring
- * a match with accessValuePattern); or, if the accessAttribute is not set then 
+ * a match with accessValuePattern); or, if the accessAttribute is not set then
  * must have some (any) value for rolesSchemaAttribute (optionally requiring a
  * match with roleSchemaValuePattern).
  * Consequently, if you have set both accessAttribute and rolesSchemaAttribute,
@@ -128,16 +123,18 @@ public class LdapAuthBean implements AuthFunctionBean {
     private String rolesSchemaAttribute, accessAttribute;
     protected String[] attributeUnion;
 
+    public LdapAuthBean() {
+        // Intentionally empty
+    }
+
     /**
      * If this is set, then the entire (brief) transaction with the LDAP server
      * will be encrypted.
+     *
+     * @param isTls boolean
      */
     public void setStartTls(boolean isTls) {
         this.tls = isTls;
-    }
-
-    public LdapAuthBean() {
-        // Intentionally empty
     }
 
     public void setLdapPort(int ldapPort) {
@@ -177,13 +174,13 @@ public class LdapAuthBean implements AuthFunctionBean {
             throw new IllegalStateException(
                     "If property 'roleSchemaValuePattern' is set, then you "
                     + "must also set property 'rolesSchemaAttribute' to "
-                    + "indicate which attribute to evalueate");
+                    + "indicate which attribute to evaluate");
         }
         if (accessValuePattern != null && accessAttribute == null) {
             throw new IllegalStateException(
                     "If property 'accessValuePattern' is set, then you "
                     + "must also set property 'accessAttribute' to "
-                    + "indicate which attribute to evalueate");
+                    + "indicate which attribute to evaluate");
         }
         if (rolesSchemaAttribute != null && accessAttribute != null) {
             attributeUnion = new String[]
@@ -197,41 +194,40 @@ public class LdapAuthBean implements AuthFunctionBean {
     }
 
     /**
-     * Assign a pattern to detect honored accessAttribute values.
-     * If you set accessAttribute but not accessValuePattern, then all that will
-     * be checked for access is if the RDN + parentDN entry has the
-     * accessAttribute attribute.  (I.e. the specific value will not matter
-     * whatsoever).
-     * </P><P>
-     * You may only use this property if you have set property accessAttribute.
-     * If you have set accessAttribute but not this property, then access will
-     * be decided based solely upon existence of this attribute.
-     * </P><P>
-     * Capture groups in the pattern will be ignored and serve no purpose.
-     * </P><P>
-     * N.b. this Pattern will be used for the matches() operation, therefore it
-     * must match the entire candidate value strings (this is different than
+     * Assign a pattern to detect honored accessAttribute values. If you set
+     * accessAttribute but not accessValuePattern, then all that will be checked
+     * for access is if the RDN + parentDN entry has the accessAttribute
+     * attribute. (I.e. the specific value will not matter whatsoever).
+     *
+     * <P> You may only use this property if you have set property
+     * accessAttribute. If you have set accessAttribute but not this property,
+     * then access will be decided based solely upon existence of this
+     * attribute.
+     *
+     * <P> Capture groups in the pattern will be ignored and serve no purpose.
+     *
+     *
+     * <P> N.b. this Pattern will be used for the matches() operation, therefore
+     * it must match the entire candidate value strings (this is different than
      * the find operation which does not need to satisfy the entire candidate
      * value).
-     * </P><P>Example1 :<CODE><PRE>
-     *     TRUE
-     * </PRE></CODE>
-     * This will match true values per OpenLDAP's boolean OID.
-     * </P>
+     *
+     * <P>Example1 :<PRE><CODE> TRUE </CODE></PRE> This will match true values
+     * per OpenLDAP's boolean OID.
      *
      * @see Matcher#matches()
+     * @param accessValuePattern Pattern
      */
     public void setAccessValuePattern(Pattern accessValuePattern) {
         this.accessValuePattern = accessValuePattern;
     }
 
     /**
-     * String wrapper for method setAccessValuePattern(Pattern)
+     * String wrapper for method setAccessValuePattern(Pattern) Use the (x?)
+     * Pattern constructs to set options.
      *
-     * Use the (x?) Pattern constructs to set options.
-     *
-     * @throws java.util.regex.PatternSyntaxException
      * @see #setAccessValuePattern(Pattern)
+     * @param patternString String
      */
     public void setAccessValuePatternString(String patternString) {
         setAccessValuePattern(Pattern.compile(patternString));
@@ -243,17 +239,17 @@ public class LdapAuthBean implements AuthFunctionBean {
      * If your rolesSchemaAttribute holds only the String values precisely as
      * HyperSQL needs them, then don't use this method at all and all matching
      * attribute values will be passed directly.
-     * </P><P>
+     * <P>
      * You may only use this property if you have set property
      * rolesSchemaAttribute.
      * If rolesSchemaAttribute is set but this property is not set, then
      * the value will directly determine the user's roles and schema.
-     * </P><P>
+     * <P>
      * <B>Unlike the rolesSchemaAttribute, the property at-hand uses the
      * singular for "role", because whereas rolesSchemaAttribute is the
      * attribute for listing multiple roles, roleSchemaValuePattern is used
      * to evaluate single role values.</B>
-     * </P><P>
+     * <P>
      * These are two distinct and important purposes for the specified Pattern.
      * <OL>
      *   <LI>
@@ -268,27 +264,31 @@ public class LdapAuthBean implements AuthFunctionBean {
      *      acceptance decision, and the LDAP-provided value will be returned
      *      verbatim.
      * </OL>
-     * </P><P>
+     *
+     * <P>
      * Together, these two features work great to extract just the needed role
      * and schema names from 'memberof' DNs, and will have no problem if you
      * also use 'memberof' for unrelated purposes.
-     * </P><P>
+     *
+     * <P>
      * N.b. this Pattern will be used for the matches() operation, therefore it
      * must match the entire candidate value strings (this is different than
      * the find operation which does not need to satisfy the entire candidate
      * value).
-     * </P><P>Example1 :<CODE><PRE>
+     *
+     * <P>Example1 :<PRE><CODE>
      *     cn=([^,]+),ou=dbRole,dc=admc,dc=com
-     * </PRE></CODE>
+     * </CODE></PRE>
      *     will extract the CN value from matching attribute values.
-     * </P><P>Example1 :<CODE><PRE>
+     *
+     * <P>Example1 :<PRE><CODE>
      *     cn=[^,]+,ou=dbRole,dc=admc,dc=com
-     * </PRE></CODE>
+     * </CODE></PRE>
      *     will return the entire <CODE>cn...com</CODE> string for matching
      *     attribute values.
-     * </P>
      *
      * @see Matcher#matches()
+     * @param roleSchemaValuePattern pattern
      */
     public void setRoleSchemaValuePattern(Pattern roleSchemaValuePattern) {
         this.roleSchemaValuePattern = roleSchemaValuePattern;
@@ -299,8 +299,10 @@ public class LdapAuthBean implements AuthFunctionBean {
      *
      * Use the (x?) Pattern constructs to set options.
      *
-     * @throws java.util.regex.PatternSyntaxException
+     * @throws java.util.regex.PatternSyntaxException exception
      * @see #setRoleSchemaValuePattern(Pattern)
+     *
+     * @param patternString pattern
      */
     public void setRoleSchemaValuePatternString(String patternString) {
         setRoleSchemaValuePattern(Pattern.compile(patternString));
@@ -310,7 +312,7 @@ public class LdapAuthBean implements AuthFunctionBean {
      * Defaults to "SIMPLE".
      *
      * @param mechanism  Either 'SIMPLE' (the default) for LDAP Simple, or
-     *                    one of the LDAP SASL mechamisms, such as 'DIGEST-MD5'.
+     *                    one of the LDAP SASL mechanisms, such as 'DIGEST-MD5'.
      */
     public void setSecurityMechanism(String mechanism) {
         this.mechanism = mechanism;
@@ -329,6 +331,7 @@ public class LdapAuthBean implements AuthFunctionBean {
      * </P>
      *
      * @see JaasAuthBean
+     * @param ldapHost host
      */
     public void setLdapHost(String ldapHost) {
         this.ldapHost = ldapHost;
@@ -341,20 +344,21 @@ public class LdapAuthBean implements AuthFunctionBean {
      * <P>
      * If you supply a principalTemplate that does not contain '${username}',
      * then authentication will be user-independent.
-     * </P> <P>
+     * <P>
      * It is common to authenticate to LDAP servers with the DN of the user's
      * LDAP entry.  In this situation, set principalTemplate to
      * <CODE>&lt;RDN_ATTR=&gt;${username},&lt;PARENT_DN&gt;</CODE>.
      * For example if you use parentDn of
      * <CODE>"ou=people,dc=admc,dc=com"</CODE> and rdnAttribute of
-     * <CODE>uid</CODE>, then you would set <CODE><PRE>
+     * <CODE>uid</CODE>, then you would set <PRE><CODE>
      *     "uid=${username},ou=people,dc=admc,dc=com"
-     * </PRE></CODE>
-     * </P> <P>
+     * </CODE></PRE>
+     * <P>
      * By default the user name will be passed exactly as it is, so don't use
      * this setter if that is what you want.  (This works great for OpenLDAP
      * with DIGEST-MD5 SASL, for example).
-     * </P>
+     *
+     * @param principalTemplate template
      */
     public void setPrincipalTemplate(String principalTemplate) {
         this.principalTemplate = principalTemplate;
@@ -365,6 +369,8 @@ public class LdapAuthBean implements AuthFunctionBean {
      * "com.sun.jndi.ldap.LdapCtxFactory".
      * Use this method if you prefer to use a context factory provided by your
      * framework or container, for example, or if you are using a non-Sun JRE.
+     *
+     * @param initialContextFactory factory
      */
     public void setInitialContextFactory(String initialContextFactory) {
         this.initialContextFactory = initialContextFactory;
@@ -378,6 +384,8 @@ public class LdapAuthBean implements AuthFunctionBean {
      * <P>
      * Don't use this setter if you are not setting a SASL mechanism.
      * </P>
+     *
+     * @param saslRealm realm
      */
     public void setSaslRealm(String saslRealm) {
         this.saslRealm = saslRealm;
@@ -386,6 +394,8 @@ public class LdapAuthBean implements AuthFunctionBean {
     /**
      * Set DN which is parent of the user DNs.
      * E.g.  "ou=people,dc=admc,dc=com"
+     *
+     * @param parentDn parent DN
      */
     public void setParentDn(String parentDn) {
         this.parentDn = parentDn;
@@ -400,6 +410,8 @@ public class LdapAuthBean implements AuthFunctionBean {
      * </P>
      *
      * @see #setParentDn(String)
+     *
+     * @param rdnAttribute RDN attribute
      */
     public void setRdnAttribute(String rdnAttribute) {
         this.rdnAttribute = rdnAttribute;
@@ -424,6 +436,8 @@ public class LdapAuthBean implements AuthFunctionBean {
      * attribute set here will only be consulted if the accessAttribute check
      * succeeds.
      * </P>
+     *
+     * @param attribute attribute
      */
     public void setRolesSchemaAttribute(String attribute) {
         rolesSchemaAttribute = attribute;
@@ -438,18 +452,25 @@ public class LdapAuthBean implements AuthFunctionBean {
      * of whether the rolesSchemaAttribute attribute is set.
      * </P> <P>
      * If you set just this property, then the local HyperSQL database will
-     * decide all roles for the user.  If you set this property and propety
+     * decide all roles for the user.  If you set this property and property
      * rolesSchemaAttribute then this attribute will determine access, and if
      * this attribute grants access then the rolesSchemaAttribute value will
      * determine the user's roles.
      * </P>
+     *
+     * @param attribute attribute
      */
     public void setAccessAttribute(String attribute) {
         accessAttribute = attribute;
     }
 
     /**
+     *
      * @see AuthFunctionBean#authenticate(String, String)
+     * @param userName String
+     * @param password String
+     * @throws DenyException on access denial
+     * @return String[]
      */
     public String[] authenticate(String userName, String password)
             throws DenyException {
@@ -478,7 +499,7 @@ public class LdapAuthBean implements AuthFunctionBean {
             }
 
             // A TLS/SSL secure channel has been established if you reach here.
-          
+
             // Assertion of client's authorization Identity -- Explicit way
             ctx.addToEnvironment(Context.SECURITY_AUTHENTICATION, mechanism);
             ctx.addToEnvironment(Context.SECURITY_PRINCIPAL,
@@ -489,7 +510,7 @@ public class LdapAuthBean implements AuthFunctionBean {
             if (saslRealm != null) {
                 env.put("java.naming.security.sasl.realm", saslRealm);
             }
-          
+
             // The Context.SECURITY_* authorizations are only applied when the
             // following statement executes.  (Or any other remote operations done
             // while the TLS connection is still open).
@@ -602,148 +623,6 @@ public class LdapAuthBean implements AuthFunctionBean {
             } catch (NamingException ne) {
                 logger.error("Failed to close LDAP Context", ne);
             }
-        }
-    }
-
-    /**
-     * Run this method to try and test configuration settings for LdapAuthBeans,
-     * or to troubleshoot.
-     * It purposefully does not test the Java Function or the JDBC layer at all.
-     * This program will attempt to retrieve and display the schema/roles list
-     * for the specified user and with the specified password from the LDAP
-     * server according to the specified properties.
-     * <P>
-     * Passwords typed on the command line are inherently not secure, so only
-     * use this program when the computer it is run on is secured and where
-     * your command line may not be observed, directly or indirectly, by others.
-     * </P> <P>
-     * Set the properties in a properties file to match your LDAP security and
-     * Directory Information Tree structure and use this program to check
-     * everything between the LdapAuthBean and your LDAP server.
-     * You then know the exact settings to use for an LdapAuthBean that you can
-     * plug into AuthBeanMultiplexer.
-     * </P> <P>
-     * Run with no arguments to see required syntax.
-     * </P> <P>
-     *   The property file may contain any of the following properties, which
-     *   exactly match the corresponding setter methods in this class.
-     *   <UL>
-     *     <LI>trustStore.  This is the only property without a corresponding
-     *         setter method.  Setting this property has the same effect as
-     *         setting Java system property 
-     *         <CODE>'javax.net.ssl.trustStore'<CODE>.
-     *     <LI>startTls.  Takes a boolean value according to
-     *         method java.util.Boolean.parseBoolean.
-     *     <LI>roleSchemaValuePattern.  Correponds to method
-     *         setRoleSchemaValuePatternString
-     *     <LI>accessValuePattern.  Correponds to method
-     *         setAccessValuePatternString
-     *     <LI>ldapPort
-     *     <LI>securityMechanism
-     *     <LI>ldapHost
-     *     <LI>principalTemplate
-     *     <LI>initialContextFactory
-     *     <LI>saslRealm
-     *     <LI>parentDn
-     *     <LI>rdnAttribute
-     *     <LI>rolesSchemaAttribute
-     *     <LI>accessAttribute
-     *   </UL>
-     *   Tokens like ${this} will not be expanded to system property values,
-     *   and your bean will get the values exactly as you type them in.
-     * </P> <P>
-     * The file sample/ldap-exerciser.properties in the HyperSQL distribution
-     * may be used as a template or example.
-     * </P>
-     */
-    public static void main(String[] sa) throws IOException {
-        if (sa.length != 3) {
-            throw new IllegalArgumentException(
-                    "SYNTAX:  java " + AuthBeanMultiplexer.class.getName()
-                    + " path/to/file.properties <USERNAME> <PASSWORD>");
-        }
-        File file = new File(sa[0]);
-        if (!file.isFile()) {
-            throw new IllegalArgumentException(
-                    "Not a file: " + file.getAbsolutePath());
-        }
-        Properties p = new Properties();
-        p.load(new FileInputStream(file));
-        String trustStore = p.getProperty("trustStore");
-        String startTlsString = p.getProperty("startTls");
-        String ldapPortString = p.getProperty("ldapPort");
-        String roleSchemaValuePatternString =
-                p.getProperty("roleSchemaValuePattern");
-        String accessValuePatternString = p.getProperty("accessValuePattern");
-        String securityMechanism = p.getProperty("securityMechanism");
-        String ldapHost = p.getProperty("ldapHost");
-        String principalTemplate = p.getProperty("principalTemplate");
-        String initialContextFactory = p.getProperty("initialContextFactory");
-        String saslRealm = p.getProperty("saslRealm");
-        String parentDn = p.getProperty("parentDn");
-        String rdnAttribute = p.getProperty("rdnAttribute");
-        String rolesSchemaAttribute = p.getProperty("rolesSchemaAttribute");
-        String accessAttribute = p.getProperty("accessAttribute");
-        if (trustStore != null) {
-            if (!(new File(trustStore)).isFile()) {
-                throw new IllegalArgumentException(
-                        "Specified trust store is not a file: " + trustStore);
-            }
-            System.setProperty("javax.net.ssl.trustStore", trustStore);
-        }
-        LdapAuthBean bean = new LdapAuthBean();
-        if (startTlsString != null) {
-            bean.setStartTls(Boolean.parseBoolean(startTlsString));
-        }
-        if (ldapPortString != null) {
-            bean.setLdapPort(Integer.parseInt(ldapPortString));
-        }
-        if (roleSchemaValuePatternString != null) {
-            bean.setRoleSchemaValuePatternString(roleSchemaValuePatternString);
-        }
-        if (accessValuePatternString != null) {
-            bean.setAccessValuePatternString(accessValuePatternString);
-        }
-        if (securityMechanism != null) {
-            bean.setSecurityMechanism(securityMechanism);
-        }
-        if (ldapHost != null) {
-            bean.setLdapHost(ldapHost);
-        }
-        if (principalTemplate != null) {
-            bean.setPrincipalTemplate(principalTemplate);
-        }
-        if (initialContextFactory != null) {
-            bean.setInitialContextFactory(initialContextFactory);
-        }
-        if (saslRealm != null) {
-            bean.setSaslRealm(saslRealm);
-        }
-        if (parentDn != null) {
-            bean.setParentDn(parentDn);
-        }
-        if (rdnAttribute != null) {
-            bean.setRdnAttribute(rdnAttribute);
-        }
-        if (rolesSchemaAttribute != null) {
-            bean.setRolesSchemaAttribute(rolesSchemaAttribute);
-        }
-        if (accessAttribute != null) {
-            bean.setAccessAttribute(accessAttribute);
-        }
-        bean.init();
-        String[] res = null;
-        try {
-            res = bean.authenticate(sa[1], sa[2]);
-        } catch (DenyException de) {
-            System.out.println("<DENY ACCESS>");
-            return;
-        }
-        if (res == null) {
-            System.out.println("<ALLOW ACCESS w/ local Roles+Schema>");
-        } else {
-            System.out.println(Integer.toString(res.length)
-                    + " Roles/Schema: " + Arrays.toString(res));
         }
     }
 }

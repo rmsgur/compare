@@ -1,4 +1,4 @@
-/* Copyright (c) 2001-2011, The HSQL Development Group
+/* Copyright (c) 2001-2014, The HSQL Development Group
  * All rights reserved.
  *
  * Redistribution and use in source and binary forms, with or without
@@ -45,12 +45,14 @@ import org.hsqldb.lib.ArrayUtil;
 public class TestTriggers extends TestBase {
 
     Connection conn;
+    private static String dbPath = "/hsql/testtrig/trigs";
 
     public TestTriggers(String testName) {
-        super(testName, "jdbc:hsqldb:file:/hsql/testtrig/trigs", false, false);
+        super(testName, "jdbc:hsqldb:file:" + dbPath, false, false);
+        TestUtil.deleteDatabase(dbPath);
     }
 
-    public void setUp() {
+    public void setUp() throws Exception {
 
         super.setUp();
 

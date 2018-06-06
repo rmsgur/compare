@@ -1,4 +1,4 @@
-/* Copyright (c) 2001-2011, The HSQL Development Group
+/* Copyright (c) 2001-2016, The HSQL Development Group
  * All rights reserved.
  *
  * Redistribution and use in source and binary forms, with or without
@@ -32,14 +32,13 @@
 package org.hsqldb.persist;
 
 import org.hsqldb.Database;
-import org.hsqldb.Table;
 import org.hsqldb.TableBase;
 import org.hsqldb.lib.Iterator;
 import org.hsqldb.lib.LongKeyHashMap;
 
 /**
  * @author Fred Toussi (fredt@users dot sourceforge.net)
- * @version 2.3.0
+ * @version 2.3.3
  * @since 1.9.0
  */
 public class PersistentStoreCollectionDatabase
@@ -53,26 +52,18 @@ implements PersistentStoreCollection {
         this.database = db;
     }
 
-    public void setStore(Object key, PersistentStore store) {
+    synchronized public PersistentStore getStore(TableBase table) {
 
-        long persistenceId = ((TableBase) key).getPersistenceId();
-
-        if (store == null) {
-            rowStoreMap.remove(persistenceId);
-        } else {
-            rowStoreMap.put(persistenceId, store);
-        }
-    }
-
-    synchronized public PersistentStore getStore(Object key) {
-
-        long persistenceId = ((TableBase) key).getPersistenceId();
+        long persistenceId = table.getPersistenceId();
         PersistentStore store =
             (PersistentStore) rowStoreMap.get(persistenceId);
 
         if (store == null) {
-            store = database.logger.newStore(null, this, (TableBase) key);
-            ((TableBase) key).store = store;
+            store = database.logger.newStore(null, this, table);
+
+            rowStoreMap.put(persistenceId, store);
+
+            table.store = store;
         }
 
         return store;
@@ -95,7 +86,7 @@ implements PersistentStoreCollection {
         rowStoreMap.clear();
     }
 
-    public void releaseStore(Table table) {
+    synchronized public void removeStore(TableBase table) {
 
         PersistentStore store =
             (PersistentStore) rowStoreMap.get(table.getPersistenceId());

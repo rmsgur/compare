@@ -1,4 +1,4 @@
-/* Copyright (c) 2001-2011, The HSQL Development Group
+/* Copyright (c) 2001-2016, The HSQL Development Group
  * All rights reserved.
  *
  * Redistribution and use in source and binary forms, with or without
@@ -41,7 +41,7 @@ import org.hsqldb.rowio.RowOutputInterface;
  * Base class for a database row object.
  *
  * @author Fred Toussi (fredt@users dot sourceforge dot net)
- * @version 2.3.0
+ * @version 2.3.3
  */
 public class Row implements CachedObject {
 
@@ -60,6 +60,10 @@ public class Row implements CachedObject {
     public Row(TableBase table, Object[] data) {
         this.table   = table;
         this.rowData = data;
+    }
+
+    public Object getField(int col) {
+        return rowData[col];
     }
 
     /**
@@ -87,12 +91,14 @@ public class Row implements CachedObject {
         return !action.canRead(session, TransactionManager.ACTION_READ);
     }
 
-    public void setChanged(boolean changed) {}
-
     public void setStorageSize(int size) {}
 
     public int getStorageSize() {
         return 0;
+    }
+
+    final public boolean isInvariable() {
+        return false;
     }
 
     final public boolean isBlock() {
@@ -128,6 +134,8 @@ public class Row implements CachedObject {
     public boolean hasChanged() {
         return false;
     }
+
+    public void setChanged(boolean flag) {}
 
     public boolean isKeepInMemory() {
         return true;

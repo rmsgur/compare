@@ -1,4 +1,4 @@
-/* Copyright (c) 2001-2011, The HSQL Development Group
+/* Copyright (c) 2001-2016, The HSQL Development Group
  * All rights reserved.
  *
  * Redistribution and use in source and binary forms, with or without
@@ -31,7 +31,6 @@
 
 package org.hsqldb.rowio;
 
-import java.io.IOException;
 import java.math.BigDecimal;
 
 import org.hsqldb.Scanner;
@@ -39,6 +38,7 @@ import org.hsqldb.Tokens;
 import org.hsqldb.error.Error;
 import org.hsqldb.error.ErrorCode;
 import org.hsqldb.map.ValuePool;
+import org.hsqldb.persist.TextFileSettings;
 import org.hsqldb.types.BinaryData;
 import org.hsqldb.types.BlobData;
 import org.hsqldb.types.BlobDataID;
@@ -57,28 +57,28 @@ import org.hsqldb.types.Types;
  * Class for reading the data for a database row in text table format.
  *
  * @author Bob Preston (sqlbob@users dot sourceforge.net)
- * @version 2.0.1
+ * @version 2.3.5
  * @since 1.7.0
  */
 public class RowInputText extends RowInputBase implements RowInputInterface {
 
     // text table specific
-    private String    fieldSep;
-    private String    varSep;
-    private String    longvarSep;
-    private int       fieldSepLen;
-    private int       varSepLen;
-    private int       longvarSepLen;
-    private boolean   fieldSepEnd;
-    private boolean   varSepEnd;
-    private boolean   longvarSepEnd;
-    private int       textLen;
-    protected String  text;
-    protected int     line;
-    protected int     field;
-    protected int     next = 0;
-    protected boolean allQuoted;
-    protected Scanner scanner;
+    protected TextFileSettings textFileSettings;
+    private String             fieldSep;
+    private String             varSep;
+    private String             longvarSep;
+    private int                fieldSepLen;
+    private int                varSepLen;
+    private int                longvarSepLen;
+    private boolean            fieldSepEnd;
+    private boolean            varSepEnd;
+    private boolean            longvarSepEnd;
+    private int                textLen;
+    protected String           text;
+    protected long             line;
+    protected int              field;
+    protected int              next = 0;
+    protected Scanner          scanner;
 
     //
     private int maxPooledStringLength = ValuePool.getMaxStringLength();
@@ -87,12 +87,15 @@ public class RowInputText extends RowInputBase implements RowInputInterface {
      * fredt@users - comment - in future may use a custom subclasse of
      * InputStream to read the data.
      */
-    public RowInputText(String fieldSep, String varSep, String longvarSep,
-                        boolean allQuoted) {
+    public RowInputText(TextFileSettings textFileSettings) {
 
         super(new byte[0]);
 
-        scanner = new Scanner();
+        scanner               = new Scanner();
+        this.textFileSettings = textFileSettings;
+        this.fieldSep         = textFileSettings.fs;
+        this.varSep           = textFileSettings.vs;
+        this.longvarSep       = textFileSettings.lvs;
 
         //-- Newline indicates that field should match to end of line.
         if (fieldSep.endsWith("\n")) {
@@ -110,13 +113,9 @@ public class RowInputText extends RowInputBase implements RowInputInterface {
             longvarSep    = longvarSep.substring(0, longvarSep.length() - 1);
         }
 
-        this.allQuoted  = allQuoted;
-        this.fieldSep   = fieldSep;
-        this.varSep     = varSep;
-        this.longvarSep = longvarSep;
-        fieldSepLen     = fieldSep.length();
-        varSepLen       = varSep.length();
-        longvarSepLen   = longvarSep.length();
+        fieldSepLen   = fieldSep.length();
+        varSepLen     = varSep.length();
+        longvarSepLen = longvarSep.length();
     }
 
     public void setSource(String text, long pos, int byteSize) {
@@ -132,8 +131,7 @@ public class RowInputText extends RowInputBase implements RowInputInterface {
         field = 0;
     }
 
-    protected String getField(String sep, int sepLen,
-                              boolean isEnd) throws IOException {
+    protected String getField(String sep, int sepLen, boolean isEnd) {
 
         String s = null;
 
@@ -179,59 +177,50 @@ public class RowInputText extends RowInputBase implements RowInputInterface {
                 s = s.substring(0, trimLength + 1);
             }
         } catch (Exception e) {
-            Object[] messages = new Object[] {
-                new Integer(field), e.toString()
-            };
+            String message = e.toString();
 
-            throw new IOException(
-                Error.getMessage(
-                    ErrorCode.M_TEXT_SOURCE_FIELD_ERROR, 0, messages));
+            throw Error.error(e, ErrorCode.M_TEXT_SOURCE_FIELD_ERROR, message);
         }
 
         return s;
     }
 
-    public String readString() throws IOException {
+    public String readString() {
         return getField(fieldSep, fieldSepLen, fieldSepEnd);
     }
 
-    private String readVarString() throws IOException {
+    private String readVarString() {
         return getField(varSep, varSepLen, varSepEnd);
     }
 
     /**
      * Obsoleted in 1.9.0
      */
-    private String readLongVarString() throws IOException {
+    private String readLongVarString() {
         return getField(longvarSep, longvarSepLen, longvarSepEnd);
     }
 
-    public short readShort() throws IOException {
-        return (short) readInt();
-    }
-
-    public int readInt() throws IOException {
-
-        String s = readString();
-
-        if (s == null) {
-            return 0;
-        }
-
-        s = s.trim();
-
-        if (s.length() == 0) {
-            return 0;
-        }
-
-        return Integer.parseInt(s);
-    }
-
-    public long readLong() throws IOException {
+    public char readChar() {
         throw Error.runtimeError(ErrorCode.U_S0500, "RowInputText");
     }
 
-    public int readType() throws IOException {
+    public byte readByte() {
+        throw Error.runtimeError(ErrorCode.U_S0500, "RowInputText");
+    }
+
+    public short readShort() {
+        throw Error.runtimeError(ErrorCode.U_S0500, "RowInputText");
+    }
+
+    public int readInt() {
+        throw Error.runtimeError(ErrorCode.U_S0500, "RowInputText");
+    }
+
+    public long readLong() {
+        throw Error.runtimeError(ErrorCode.U_S0500, "RowInputText");
+    }
+
+    public int readType() {
         return 0;
     }
 
@@ -241,9 +230,14 @@ public class RowInputText extends RowInputBase implements RowInputInterface {
         return false;
     }
 
-    protected String readChar(Type type) throws IOException {
+    /**
+     * This does not check the length of the character string.
+     * The text file may contain strings that are longer than allowed by
+     * the declared type.
+     */
+    protected String readChar(Type type) {
 
-        String s = null;;
+        String s = null;
 
         switch (type.typeCode) {
 
@@ -265,13 +259,13 @@ public class RowInputText extends RowInputBase implements RowInputInterface {
         }
 
         if (s.length() > this.maxPooledStringLength) {
-            return new String(s);
+            return s;
         } else {
             return ValuePool.getString(s);
         }
     }
 
-    protected Integer readSmallint() throws IOException {
+    protected Integer readSmallint() {
 
         String s = readString();
 
@@ -285,10 +279,16 @@ public class RowInputText extends RowInputBase implements RowInputInterface {
             return null;
         }
 
-        return ValuePool.getInt(Integer.parseInt(s));
+        try {
+            int val = Integer.parseInt(s);
+
+            return ValuePool.getInt(val);
+        } catch (NumberFormatException e) {
+            throw Error.error(e, ErrorCode.X_22501, s);
+        }
     }
 
-    protected Integer readInteger() throws IOException {
+    protected Integer readInteger() {
 
         String s = readString();
 
@@ -302,10 +302,16 @@ public class RowInputText extends RowInputBase implements RowInputInterface {
             return null;
         }
 
-        return ValuePool.getInt(Integer.parseInt(s));
+        try {
+            int val = Integer.parseInt(s);
+
+            return ValuePool.getInt(val);
+        } catch (NumberFormatException e) {
+            throw Error.error(e, ErrorCode.X_22501, s);
+        }
     }
 
-    protected Long readBigint() throws IOException {
+    protected Long readBigint() {
 
         String s = readString();
 
@@ -319,10 +325,16 @@ public class RowInputText extends RowInputBase implements RowInputInterface {
             return null;
         }
 
-        return ValuePool.getLong(Long.parseLong(s));
+        try {
+            long val = Long.parseLong(s);
+
+            return ValuePool.getLong(val);
+        } catch (NumberFormatException e) {
+            throw Error.error(e, ErrorCode.X_22501, s);
+        }
     }
 
-    protected Double readReal() throws IOException {
+    protected Double readReal() {
 
         String s = readString();
 
@@ -336,10 +348,14 @@ public class RowInputText extends RowInputBase implements RowInputInterface {
             return null;
         }
 
-        return Double.valueOf(s);
+        try {
+            return Double.valueOf(s);
+        } catch (NumberFormatException e) {
+            throw Error.error(e, ErrorCode.X_22501, s);
+        }
     }
 
-    protected BigDecimal readDecimal(Type type) throws IOException {
+    protected BigDecimal readDecimal(Type type) {
 
         String s = readString();
 
@@ -353,10 +369,14 @@ public class RowInputText extends RowInputBase implements RowInputInterface {
             return null;
         }
 
-        return new BigDecimal(s);
+        try {
+            return new BigDecimal(s);
+        } catch (NumberFormatException e) {
+            throw Error.error(e, ErrorCode.X_22501, s);
+        }
     }
 
-    protected TimeData readTime(Type type) throws IOException {
+    protected TimeData readTime(Type type) {
 
         String s = readString();
 
@@ -373,7 +393,7 @@ public class RowInputText extends RowInputBase implements RowInputInterface {
         return scanner.newTime(s);
     }
 
-    protected TimestampData readDate(Type type) throws IOException {
+    protected TimestampData readDate(Type type) {
 
         String s = readString();
 
@@ -390,7 +410,7 @@ public class RowInputText extends RowInputBase implements RowInputInterface {
         return scanner.newDate(s);
     }
 
-    protected TimestampData readTimestamp(Type type) throws IOException {
+    protected TimestampData readTimestamp(Type type) {
 
         String s = readString();
 
@@ -407,8 +427,7 @@ public class RowInputText extends RowInputBase implements RowInputInterface {
         return scanner.newTimestamp(s);
     }
 
-    protected IntervalMonthData readYearMonthInterval(Type type)
-    throws IOException {
+    protected IntervalMonthData readYearMonthInterval(Type type) {
 
         String s = readString();
 
@@ -425,8 +444,7 @@ public class RowInputText extends RowInputBase implements RowInputInterface {
         return (IntervalMonthData) scanner.newInterval(s, (IntervalType) type);
     }
 
-    protected IntervalSecondData readDaySecondInterval(Type type)
-    throws IOException {
+    protected IntervalSecondData readDaySecondInterval(Type type) {
 
         String s = readString();
 
@@ -444,7 +462,7 @@ public class RowInputText extends RowInputBase implements RowInputInterface {
                 (IntervalType) type);
     }
 
-    protected Boolean readBoole() throws IOException {
+    protected Boolean readBoole() {
 
         String s = readString();
 
@@ -462,7 +480,7 @@ public class RowInputText extends RowInputBase implements RowInputInterface {
                                                  : Boolean.FALSE;
     }
 
-    protected Object readOther() throws IOException {
+    protected Object readOther() {
 
         String s = readString();
 
@@ -470,7 +488,7 @@ public class RowInputText extends RowInputBase implements RowInputInterface {
             return null;
         }
 
-        BinaryData data = scanner.convertToBinary(s);
+        BinaryData data = scanner.convertToBinary(s, false);
 
         if (data.length(null) == 0) {
             return null;
@@ -479,7 +497,7 @@ public class RowInputText extends RowInputBase implements RowInputInterface {
         return new JavaObjectData(data.getBytes());
     }
 
-    protected BinaryData readBit() throws IOException {
+    protected BinaryData readBit() {
 
         String s = readString();
 
@@ -492,7 +510,7 @@ public class RowInputText extends RowInputBase implements RowInputInterface {
         return data;
     }
 
-    protected BinaryData readBinary() throws IOException {
+    protected BinaryData readUUID() {
 
         String s = readString();
 
@@ -500,12 +518,25 @@ public class RowInputText extends RowInputBase implements RowInputInterface {
             return null;
         }
 
-        BinaryData data = scanner.convertToBinary(s);
+        BinaryData data = scanner.convertToBinary(s, true);
 
         return data;
     }
 
-    protected ClobData readClob() throws IOException {
+    protected BinaryData readBinary() {
+
+        String s = readString();
+
+        if (s == null) {
+            return null;
+        }
+
+        BinaryData data = scanner.convertToBinary(s, false);
+
+        return data;
+    }
+
+    protected ClobData readClob() {
 
         String s = readString();
 
@@ -524,7 +555,7 @@ public class RowInputText extends RowInputBase implements RowInputInterface {
         return new ClobDataID(id);
     }
 
-    protected BlobData readBlob() throws IOException {
+    protected BlobData readBlob() {
 
         String s = readString();
 
@@ -547,7 +578,7 @@ public class RowInputText extends RowInputBase implements RowInputInterface {
         throw Error.runtimeError(ErrorCode.U_S0500, "RowInputText");
     }
 
-    public int getLineNumber() {
+    public long getLineNumber() {
         return line;
     }
 

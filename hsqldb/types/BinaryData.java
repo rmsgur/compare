@@ -1,4 +1,4 @@
-/* Copyright (c) 2001-2011, The HSQL Development Group
+/* Copyright (c) 2001-2016, The HSQL Development Group
  * All rights reserved.
  *
  * Redistribution and use in source and binary forms, with or without
@@ -88,14 +88,16 @@ public class BinaryData implements BlobData {
         }
 
         this.data      = data;
-        this.bitLength = data.length * 8;
+        this.bitLength = data.length * 8L;
     }
 
     public BinaryData(SessionInterface session, BlobData b1, BlobData b2) {
 
         long length = (b1.length(session) + b2.length(session));
 
-        if (length > Integer.MAX_VALUE) {
+        if (length > Integer.MAX_VALUE
+                || b1.length(session) > Integer.MAX_VALUE
+                || b2.length(session) > Integer.MAX_VALUE) {
             throw Error.error(ErrorCode.X_22001);
         }
 
@@ -107,7 +109,7 @@ public class BinaryData implements BlobData {
                          data, (int) b1.length(session),
                          (int) b2.length(session));
 
-        this.bitLength = (int) length * 8;
+        this.bitLength = (int) length * 8L;
     }
 
     public BinaryData(byte[] data, long bitLength) {
@@ -120,7 +122,7 @@ public class BinaryData implements BlobData {
     public BinaryData(long length, DataInput stream) {
 
         data      = new byte[(int) length];
-        bitLength = data.length * 8;
+        bitLength = data.length * 8L;
 
         try {
             stream.readFully(data);
@@ -189,7 +191,7 @@ public class BinaryData implements BlobData {
 
         System.arraycopy(bytes, offset, data, (int) pos, length);
 
-        bitLength = data.length * 8;
+        bitLength = data.length * 8L;
     }
 
     public void setBytes(SessionInterface session, long pos, byte[] bytes) {
@@ -218,7 +220,7 @@ public class BinaryData implements BlobData {
 
         if (data.length > len) {
             data      = (byte[]) ArrayUtil.resizeArray(data, (int) len);
-            bitLength = data.length * 8;
+            bitLength = data.length * 8L;
         }
     }
 

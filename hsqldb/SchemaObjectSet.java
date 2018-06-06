@@ -1,4 +1,4 @@
-/* Copyright (c) 2001-2011, The HSQL Development Group
+/* Copyright (c) 2001-2016, The HSQL Development Group
  * All rights reserved.
  *
  * Redistribution and use in source and binary forms, with or without
@@ -45,7 +45,7 @@ import org.hsqldb.map.ValuePool;
  * Collection of SQL schema objects of a specific type in a schema
  *
  * @author Fred Toussi (fredt@users dot sourceforge.net)
- * @version 2.0.1
+ * @version 2.3.4
  * @since 1.9.0
  */
 public class SchemaObjectSet {
@@ -71,6 +71,7 @@ public class SchemaObjectSet {
             case SchemaObject.SPECIFIC_ROUTINE :
             case SchemaObject.ASSERTION :
             case SchemaObject.TRIGGER :
+            case SchemaObject.REFERENCE :
                 map = new HashMappedList();
                 break;
 
@@ -79,6 +80,9 @@ public class SchemaObjectSet {
             case SchemaObject.INDEX :
                 map = new HashMap();
                 break;
+
+            default :
+                throw Error.runtimeError(ErrorCode.U_S0500, "SchemaObjectSet");
         }
     }
 
@@ -98,6 +102,7 @@ public class SchemaObjectSet {
             case SchemaObject.FUNCTION :
             case SchemaObject.ASSERTION :
             case SchemaObject.TRIGGER :
+            case SchemaObject.REFERENCE :
                 SchemaObject object = ((SchemaObject) map.get(name));
 
                 return object == null ? null
@@ -129,7 +134,7 @@ public class SchemaObjectSet {
             case SchemaObject.FUNCTION :
             case SchemaObject.ASSERTION :
             case SchemaObject.TRIGGER :
-            case SchemaObject.COLUMN :
+            case SchemaObject.REFERENCE :
                 return (SchemaObject) map.get(name);
 
             default :
@@ -163,7 +168,7 @@ public class SchemaObjectSet {
         }
     }
 
-    public void add(SchemaObject object) {
+    public void add(SchemaObject object, boolean replace) {
 
         HsqlName name = object.getName();
 
@@ -171,7 +176,7 @@ public class SchemaObjectSet {
             name = ((Routine) object).getSpecificName();
         }
 
-        if (map.containsKey(name.name)) {
+        if (!replace && map.containsKey(name.name)) {
             int code = getAddErrorCode(name.type);
 
             throw Error.error(code, name.name);
@@ -181,9 +186,13 @@ public class SchemaObjectSet {
 
         switch (name.type) {
 
+            case SchemaObject.COLUMN :
             case SchemaObject.CONSTRAINT :
             case SchemaObject.INDEX :
                 value = name;
+                break;
+
+            default :
         }
 
         map.put(name.name, value);
@@ -235,7 +244,9 @@ public class SchemaObjectSet {
             case SchemaObject.DOMAIN :
             case SchemaObject.TYPE :
             case SchemaObject.ASSERTION :
-            case SchemaObject.TRIGGER : {
+            case SchemaObject.TRIGGER :
+            case SchemaObject.ROUTINE :
+            case SchemaObject.REFERENCE : {
                 int i = ((HashMappedList) map).getIndex(name.name);
 
                 if (i == -1) {
@@ -261,6 +272,7 @@ public class SchemaObjectSet {
 
                 break;
             }
+            default :
         }
     }
 
@@ -272,7 +284,6 @@ public class SchemaObjectSet {
 
             case SchemaObject.VIEW :
             case SchemaObject.TABLE :
-            case SchemaObject.COLUMN :
             case SchemaObject.SEQUENCE :
             case SchemaObject.CHARSET :
             case SchemaObject.DOMAIN :
@@ -281,10 +292,12 @@ public class SchemaObjectSet {
             case SchemaObject.PROCEDURE :
             case SchemaObject.FUNCTION :
             case SchemaObject.SPECIFIC_ROUTINE :
-            case SchemaObject.CONSTRAINT :
             case SchemaObject.ASSERTION :
-            case SchemaObject.INDEX :
             case SchemaObject.TRIGGER :
+            case SchemaObject.REFERENCE :
+            case SchemaObject.COLUMN :
+            case SchemaObject.CONSTRAINT :
+            case SchemaObject.INDEX :
                 code = ErrorCode.X_42504;
                 break;
 
@@ -303,19 +316,20 @@ public class SchemaObjectSet {
 
             case SchemaObject.VIEW :
             case SchemaObject.TABLE :
-            case SchemaObject.COLUMN :
             case SchemaObject.SEQUENCE :
             case SchemaObject.CHARSET :
             case SchemaObject.DOMAIN :
             case SchemaObject.TYPE :
-            case SchemaObject.CONSTRAINT :
             case SchemaObject.COLLATION :
             case SchemaObject.PROCEDURE :
             case SchemaObject.FUNCTION :
             case SchemaObject.SPECIFIC_ROUTINE :
             case SchemaObject.ASSERTION :
-            case SchemaObject.INDEX :
             case SchemaObject.TRIGGER :
+            case SchemaObject.REFERENCE :
+            case SchemaObject.COLUMN :
+            case SchemaObject.CONSTRAINT :
+            case SchemaObject.INDEX :
                 code = ErrorCode.X_42501;
                 break;
 
@@ -333,9 +347,6 @@ public class SchemaObjectSet {
             case SchemaObject.VIEW :
                 return Tokens.T_VIEW;
 
-            case SchemaObject.COLUMN :
-                return Tokens.T_COLUMN;
-
             case SchemaObject.TABLE :
                 return Tokens.T_TABLE;
 
@@ -351,9 +362,6 @@ public class SchemaObjectSet {
             case SchemaObject.TYPE :
                 return Tokens.T_TYPE;
 
-            case SchemaObject.CONSTRAINT :
-                return Tokens.T_CONSTRAINT;
-
             case SchemaObject.COLLATION :
                 return Tokens.T_COLLATION;
 
@@ -366,27 +374,36 @@ public class SchemaObjectSet {
             case SchemaObject.ASSERTION :
                 return Tokens.T_ASSERTION;
 
-            case SchemaObject.INDEX :
-                return Tokens.T_INDEX;
-
             case SchemaObject.TRIGGER :
                 return Tokens.T_TRIGGER;
+
+            case SchemaObject.REFERENCE :
+                return Tokens.T_SYNONYM;
+
+            case SchemaObject.COLUMN :
+                return Tokens.T_COLUMN;
+
+            case SchemaObject.CONSTRAINT :
+                return Tokens.T_CONSTRAINT;
+
+            case SchemaObject.INDEX :
+                return Tokens.T_INDEX;
 
             default :
                 throw Error.runtimeError(ErrorCode.U_S0500, "SchemaObjectSet");
         }
     }
 
-    String[] getSQL(OrderedHashSet resolved, OrderedHashSet unresolved) {
+    void getSQL(HsqlArrayList list, OrderedHashSet resolved,
+                OrderedHashSet unresolved) {
 
-        HsqlArrayList list = new HsqlArrayList();
-
+        // HashMap lists are not persisted with this method
         if (!(map instanceof HashMappedList)) {
-            return null;
+            return;
         }
 
         if (map.isEmpty()) {
-            return ValuePool.emptyStringArray;
+            return;
         }
 
         Iterator it = map.values().iterator();
@@ -412,12 +429,6 @@ public class SchemaObjectSet {
         }
 
         addAllSQL(resolved, unresolved, list, it, null);
-
-        String[] array = new String[list.size()];
-
-        list.toArray(array);
-
-        return array;
     }
 
     static void addAllSQL(OrderedHashSet resolved, OrderedHashSet unresolved,
@@ -484,6 +495,8 @@ public class SchemaObjectSet {
                         if (name.schema == null) {
                             continue;
                         }
+
+                    // fall through
                     case SchemaObject.TYPE :
                     case SchemaObject.DOMAIN :
                     case SchemaObject.FUNCTION :
@@ -492,6 +505,8 @@ public class SchemaObjectSet {
                         if (!resolved.contains(name)) {
                             isResolved = false;
                         }
+                        break;
+
                     default :
                 }
             }
@@ -524,12 +539,16 @@ public class SchemaObjectSet {
 
                     case SchemaObject.FUNCTION :
                     case SchemaObject.PROCEDURE :
-                        if (((Routine) object).isRecursive) {
+                        Routine routine = ((Routine) object);
+
+                        if (routine.isRecursive) {
                             list.add(((Routine) object).getSQLDeclaration());
                             list.add(((Routine) object).getSQLAlter());
-
-                            break;
+                        } else {
+                            list.add(object.getSQL());
                         }
+                        break;
+
                     default :
                         list.add(object.getSQL());
                 }

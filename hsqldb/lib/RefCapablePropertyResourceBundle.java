@@ -1,4 +1,4 @@
-/* Copyright (c) 2001-2011, The HSQL Development Group
+/* Copyright (c) 2001-2016, The HSQL Development Group
  * All rights reserved.
  *
  * Redistribution and use in source and binary forms, with or without
@@ -47,7 +47,7 @@ import java.util.regex.Matcher;
 import java.util.regex.Pattern;
 
 
-/* $Id: RefCapablePropertyResourceBundle.java 5221 2013-03-30 10:57:58Z fredt $ */
+/* $Id: RefCapablePropertyResourceBundle.java 5553 2016-03-16 23:17:40Z fredt $ */
 
 /**
  * Just like PropertyResourceBundle, except keys mapped to nothing in the
@@ -162,7 +162,7 @@ public class RefCapablePropertyResourceBundle {
     static private Map<ResourceBundle, RefCapablePropertyResourceBundle>
             allBundles =
             new HashMap<ResourceBundle, RefCapablePropertyResourceBundle>();
-    public static String LS = System.getProperty("line.separator");
+    public static final String LS = System.getProperty("line.separator");
     private Pattern sysPropVarPattern = Pattern.compile(
             "(?s)\\Q${\\E([^}]+?)(?:\\Q:+\\E([^}]+))?\\Q}");
     private Pattern posPattern = Pattern.compile(

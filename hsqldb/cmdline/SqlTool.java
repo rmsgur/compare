@@ -1,4 +1,4 @@
-/* Copyright (c) 2001-2011, The HSQL Development Group
+/* Copyright (c) 2001-2017, The HSQL Development Group
  * All rights reserved.
  *
  * Redistribution and use in source and binary forms, with or without
@@ -45,7 +45,7 @@ import org.hsqldb.lib.FrameworkLogger;
 import org.hsqldb.lib.RCData;
 import org.hsqldb.cmdline.sqltool.Token;
 
-/* $Id: SqlTool.java 4720 2011-11-08 00:10:09Z unsaved $ */
+/* $Id: SqlTool.java 5736 2017-04-02 10:13:36Z fredt $ */
 
 /**
  * A command-line JDBC SQL tool supporting both interactive and
@@ -53,14 +53,13 @@ import org.hsqldb.cmdline.sqltool.Token;
  * <P>
  * See JavaDocs for the main method for syntax of how to run from the
  * command-line.
- * <P/> <P>
+ * <P>
  * Programmatic users will usually want to use the objectMain(String[]) method
  * if they want arguments and behavior exactly like command-line SqlTool.
  * But in many cases, you will have better control and efficiency by using
  * the SqlFile class directly.  The file
  * <CODE>src/org/hsqldb/sample/SqlFileEmbedder.java</CODE>
  * in the HSQLDB distribution provides an example for this latter strategy.
- * <P/>
  *
  * @see <a href="../../../../util-guide/sqltool-chapt.html" target="guide">
  *     The SqlTool chapter of the
@@ -69,7 +68,7 @@ import org.hsqldb.cmdline.sqltool.Token;
  * @see #objectMain(String[])
  * @see SqlFile
  * @see org.hsqldb.sample.SqlFileEmbedder
- * @version $Revision: 4720 $, $Date: 2011-11-08 00:10:09 +0000 (Tue, 08 Nov 2011) $
+ * @version $Revision: 5736 $, $Date: 2017-04-02 06:13:36 -0400 (Sun, 02 Apr 2017) $
  * @author Blaine Simpson (blaine dot simpson at admc dot com)
  */
 public class SqlTool {
@@ -78,7 +77,7 @@ public class SqlTool {
     public static final String DEFAULT_RCFILE =
         System.getProperty("user.home") + "/sqltool.rc";
     // N.b. the following are static!
-    private static final String revString = "$Revision: 4720 $";
+    private static final String revString = "$Revision: 5736 $";
     private static final int revStringLength = revString.length();
     private static final String  revnum =
             (revStringLength - " $".length() > "$Revision: ".length())
@@ -102,7 +101,7 @@ public class SqlTool {
     private static String CMDLINE_ID = "cmdline";
 
     /** Platform-specific line separator */
-    public static String LS = System.getProperty("line.separator");
+    public static final String LS = System.getProperty("line.separator");
 
     /** Utility nested class for internal use. */
     private static class BadCmdline extends Exception {
@@ -252,11 +251,11 @@ public class SqlTool {
      * Throws only RuntimeExceptions or Errors, because this method is intended
      * to System.exit() for all but disastrous system problems, for which
      * the inconvenience of a stack trace would be the least of your worries.
-     * <P/> <P>
+     * <P>
      * If you don't want SqlTool to System.exit(), then use the method
      * objectMain() instead of this method.
-     * <P/>
      *
+     * @param args arguments
      * @see #objectMain(String[])
      */
     public static void main(String[] args) {
@@ -277,7 +276,6 @@ public class SqlTool {
      * This method is changed for HSQLDB 1.8.0.8 and later to never
      * System.exit().
      * Developers may catch Throwables to handle all fatal situations.
-     * </P>
      *
      * @param arg  Run "java... org.hsqldb.cmdline.SqlTool --help" for syntax.
      * @throws SqlToolException  Upon any fatal error, with useful

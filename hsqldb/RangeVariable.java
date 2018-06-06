@@ -1,4 +1,4 @@
-/* Copyright (c) 2001-2011, The HSQL Development Group
+/* Copyright (c) 2001-2017, The HSQL Development Group
  * All rights reserved.
  *
  * Redistribution and use in source and binary forms, with or without
@@ -45,7 +45,6 @@ import org.hsqldb.lib.HsqlList;
 import org.hsqldb.lib.OrderedHashSet;
 import org.hsqldb.lib.OrderedIntHashSet;
 import org.hsqldb.lib.OrderedLongHashSet;
-import org.hsqldb.map.ValuePool;
 import org.hsqldb.navigator.RangeIterator;
 import org.hsqldb.navigator.RowIterator;
 import org.hsqldb.persist.PersistentStore;
@@ -55,10 +54,10 @@ import org.hsqldb.types.Type;
  * Metadata for range variables, including conditions.
  *
  * @author Fred Toussi (fredt@users dot sourceforge.net)
- * @version 2.2.9
+ * @version 2.3.5
  * @since 1.9.0
  */
-public class RangeVariable implements Cloneable {
+public class RangeVariable {
 
     static final RangeVariable[] emptyArray = new RangeVariable[]{};
 
@@ -69,6 +68,9 @@ public class RangeVariable implements Cloneable {
     public static final int VARIALBE_RANGE   = 4;
 
     //
+    private static final RowIterator emptyIterator = new RangeIteratorEmpty();
+
+    //
     Table                  rangeTable;
     final SimpleName       tableAlias;
     private OrderedHashSet columnAliases;
@@ -76,11 +78,11 @@ public class RangeVariable implements Cloneable {
     private OrderedHashSet columnNames;
     OrderedHashSet         namedJoinColumns;
     HashMap                namedJoinColumnExpressions;
-    private Object[]       emptyData;
     boolean[]              columnsInGroupBy;
     boolean                hasKeyedColumnInGroupBy;
     boolean[]              usedColumns;
     boolean[]              updatedColumns;
+    boolean[]              namedJoinColumnCheck;
 
     //
     RangeVariableConditions[] joinConditions;
@@ -94,7 +96,7 @@ public class RangeVariable implements Cloneable {
     boolean isLateral;
     boolean isLeftJoin;     // table joined with LEFT / FULL OUTER JOIN
     boolean isRightJoin;    // table joined with RIGHT / FULL OUTER JOIN
-    boolean isBoundary;
+    boolean isJoin;
 
     //
     boolean hasLateral;
@@ -113,9 +115,6 @@ public class RangeVariable implements Cloneable {
     //
     int rangePosition;
 
-    //
-    int parsePosition;
-
     // for variable and parameter lists
     HashMappedList variables;
 
@@ -132,7 +131,6 @@ public class RangeVariable implements Cloneable {
         this.rangeType   = rangeType;
         rangeTable       = null;
         tableAlias       = rangeName;
-        emptyData        = null;
         columnsInGroupBy = null;
         usedColumns      = null;
         joinConditions = new RangeVariableConditions[]{
@@ -143,6 +141,7 @@ public class RangeVariable implements Cloneable {
         switch (rangeType) {
 
             case TRANSITION_RANGE :
+                usedColumns = new boolean[variables.size()];
             case PARAMETER_RANGE :
             case VARIALBE_RANGE :
                 break;
@@ -179,7 +178,6 @@ public class RangeVariable implements Cloneable {
         rangeType        = TABLE_RANGE;
         rangeTable       = table;
         tableAlias       = null;
-        emptyData        = rangeTable.getEmptyRowData();
         columnsInGroupBy = rangeTable.getNewColumnCheckList();
         usedColumns      = rangeTable.getNewColumnCheckList();
         rangePosition    = position;
@@ -196,7 +194,6 @@ public class RangeVariable implements Cloneable {
             throw Error.error(ErrorCode.X_42593);
         }
 
-        emptyData                     = rangeTable.getEmptyRowData();
         columnsInGroupBy              = rangeTable.getNewColumnCheckList();
         usedColumns                   = rangeTable.getNewColumnCheckList();
         joinConditions[0].rangeIndex  = rangeTable.getPrimaryIndex();
@@ -205,6 +202,7 @@ public class RangeVariable implements Cloneable {
 
     public void setJoinType(boolean isLeft, boolean isRight) {
 
+        isJoin      = true;
         isLeftJoin  = isLeft;
         isRightJoin = isRight;
 
@@ -231,13 +229,20 @@ public class RangeVariable implements Cloneable {
         }
     }
 
-    public void addNamedJoinColumnExpression(String name, Expression e) {
+    public void addNamedJoinColumnExpression(String name, Expression e,
+            int position) {
 
         if (namedJoinColumnExpressions == null) {
             namedJoinColumnExpressions = new HashMap();
         }
 
         namedJoinColumnExpressions.put(name, e);
+
+        if (namedJoinColumnCheck == null) {
+            namedJoinColumnCheck = rangeTable.getNewColumnCheckList();
+        }
+
+        namedJoinColumnCheck[position] = true;
     }
 
     public ExpressionColumn getColumnExpression(String name) {
@@ -249,6 +254,23 @@ public class RangeVariable implements Cloneable {
 
     public Table getTable() {
         return rangeTable;
+    }
+
+    public boolean hasAnyTerminalCondition() {
+
+        for (int i = 0; i < joinConditions.length; i++) {
+            if (joinConditions[0].terminalCondition != null) {
+                return true;
+            }
+        }
+
+        for (int i = 0; i < whereConditions.length; i++) {
+            if (whereConditions[0].terminalCondition != null) {
+                return true;
+            }
+        }
+
+        return false;
     }
 
     public boolean hasAnyIndexCondition() {
@@ -380,7 +402,7 @@ public class RangeVariable implements Cloneable {
 
         if (namedJoinColumnExpressions != null
                 && namedJoinColumnExpressions.containsKey(columnName)) {
-            if (tableName != null) {
+            if (tableName != null && !resolvesTableName(tableName)) {
                 return -1;
             }
         }
@@ -393,7 +415,7 @@ public class RangeVariable implements Cloneable {
     }
 
     /**
-     * Retruns index for column
+     * Returns index for column
      *
      * @param columnName name of column
      * @return int index or -1 if not found
@@ -737,6 +759,38 @@ public class RangeVariable implements Cloneable {
         }
     }
 
+    public void replaceExpressions(OrderedHashSet expressions,
+                                   int resultRangePosition) {
+
+        QueryExpression queryExpression = rangeTable.getQueryExpression();
+        Expression      dataExpression  = rangeTable.getDataExpression();
+
+        if (dataExpression != null) {
+            dataExpression = dataExpression.replaceExpressions(expressions,
+                    resultRangePosition);
+        }
+
+        if (queryExpression != null) {
+            queryExpression.replaceExpressions(expressions,
+                                               resultRangePosition);
+        }
+
+        if (joinCondition != null) {
+            joinCondition = joinCondition.replaceExpressions(expressions,
+                    resultRangePosition);
+        }
+
+        for (int i = 0; i < joinConditions.length; i++) {
+            joinConditions[i].replaceExpressions(expressions,
+                                                 resultRangePosition);
+        }
+
+        for (int i = 0; i < whereConditions.length; i++) {
+            whereConditions[i].replaceExpressions(expressions,
+                                                  resultRangePosition);
+        }
+    }
+
     public void resolveRangeTable(Session session, RangeGroup rangeGroup,
                                   RangeGroup[] rangeGroups) {
 
@@ -776,7 +830,7 @@ public class RangeVariable implements Cloneable {
             ExpressionColumn.checkColumnsResolved(unresolved);
             queryExpression.resolveTypesPartOne(session);
             queryExpression.resolveTypesPartTwo(session);
-            rangeTable.prepareTable();
+            rangeTable.prepareTable(session);
             setRangeTableVariables();
         }
     }
@@ -846,8 +900,6 @@ public class RangeVariable implements Cloneable {
 
             if (e == null || e.isTrue() || e.hasReference(ranges, exclude)) {
                 conditionsList.remove(i);
-
-                continue;
             }
         }
 
@@ -859,6 +911,18 @@ public class RangeVariable implements Cloneable {
             return;
         }
 
+        OrderedHashSet subquerySet = null;
+
+        for (int i = 0; i < conditionsList.size(); i++) {
+            Expression e = (Expression) conditionsList.get(i);
+
+            subquerySet = e.collectAllSubqueries(subquerySet);
+
+            if (subquerySet != null) {
+                return;
+            }
+        }
+
         QueryExpression queryExpression = rangeTable.getQueryExpression();
 
         colExpr = ((QuerySpecification) queryExpression).exprColumns;
@@ -866,16 +930,25 @@ public class RangeVariable implements Cloneable {
         for (int i = 0; i < conditionsList.size(); i++) {
             Expression e = (Expression) conditionsList.get(i);
 
-            if (!e.hasReference(ranges, exclude)) {
-                e = e.duplicate();
-                e = e.replaceColumnReferences(this, colExpr);
+            e = e.duplicate();
+            e = e.replaceColumnReferences(this, colExpr);
 
-                if (e.collectAllSubqueries(null) != null) {
-                    return;
+            OrderedHashSet set = e.collectRangeVariables(null);
+
+            if (set != null) {
+                for (int j = 0; j < set.size(); j++) {
+                    RangeVariable range = (RangeVariable) set.get(j);
+
+                    if (this != range
+                            && range.rangeType == RangeVariable.TABLE_RANGE) {
+                        queryExpression.setCorrelated();
+
+                        break;
+                    }
                 }
-
-                condition = ExpressionLogical.andExpressions(condition, e);
             }
+
+            condition = ExpressionLogical.andExpressions(condition, e);
         }
 
         queryExpression.addExtraConditions(condition);
@@ -900,7 +973,7 @@ public class RangeVariable implements Cloneable {
     }
 
     /**
-     * Retreives a String representation of this obejct. <p>
+     * Retrieves a String representation of this obejct. <p>
      *
      * The returned String describes this object's table, alias
      * access mode, index, join mode, Start, End and And conditions.
@@ -945,8 +1018,7 @@ public class RangeVariable implements Cloneable {
         }
 
         sb.append(b).append("cardinality=");
-        sb.append(conditions[0].rangeIndex.size(session,
-                rangeTable.getRowStore(session))).append("\n");
+        sb.append(rangeTable.getRowStore(session).elementCount()).append("\n");
 
         boolean fullScan = !conditions[0].hasIndexCondition();
 
@@ -1034,10 +1106,8 @@ public class RangeVariable implements Cloneable {
 
         Session         session;
         int             rangePosition;
-        RowIterator     it;
+        RowIterator     it = emptyIterator;
         PersistentStore store;
-        Object[]        currentData;
-        Row             currentRow;
         boolean         isBeforeFirst;
         RangeVariable   rangeVar;
 
@@ -1052,49 +1122,44 @@ public class RangeVariable implements Cloneable {
             if (isBeforeFirst) {
                 isBeforeFirst = false;
             } else {
-                if (it == null) {
+                if (it == emptyIterator) {
                     return false;
                 }
             }
 
-            currentRow = it.getNextRow();
+            if (session.abortTransaction) {
+                throw Error.error(ErrorCode.X_40000);
+            }
 
-            if (currentRow == null) {
-                return false;
-            } else {
-                currentData = currentRow.getData();
+            if (session.abortAction) {
+                throw Error.error(ErrorCode.X_40502);
+            }
 
+            if (it.next()) {
                 return true;
+            } else {
+                return false;
             }
         }
 
         public Row getCurrentRow() {
-            return currentRow;
+            return it.getCurrentRow();
         }
 
         public Object[] getCurrent() {
-            return currentData;
+            return it.getCurrent();
         }
 
-        public Object getCurrent(int i) {
-            return currentData == null ? null
-                                       : currentData[i];
+        public Object getField(int i) {
+            return it.getField(i);
         }
 
         public void setCurrent(Object[] data) {
-            currentData = data;
+            throw Error.runtimeError(ErrorCode.U_S0500, "RangeVariable");
         }
 
         public long getRowId() {
-
-            return currentRow == null ? 0
-                                      : ((long) rangeVar.rangeTable.getId() << 32)
-                                        + ((long) currentRow.getPos());
-        }
-
-        public Object getRowidObject() {
-            return currentRow == null ? null
-                                      : ValuePool.getLong(getRowId());
+            return ((long) rangeVar.rangeTable.getId() << 32) + it.getRowId();
         }
 
         public void removeCurrent() {}
@@ -1105,8 +1170,7 @@ public class RangeVariable implements Cloneable {
                 it.release();
             }
 
-            it            = null;
-            currentRow    = null;
+            it            = emptyIterator;
             isBeforeFirst = true;
         }
 
@@ -1114,19 +1178,7 @@ public class RangeVariable implements Cloneable {
             return rangePosition;
         }
 
-        public Row getNextRow() {
-            throw Error.runtimeError(ErrorCode.U_S0500, "RangeVariable");
-        }
-
         public boolean hasNext() {
-            throw Error.runtimeError(ErrorCode.U_S0500, "RangeVariable");
-        }
-
-        public Object[] getNext() {
-            throw Error.runtimeError(ErrorCode.U_S0500, "RangeVariable");
-        }
-
-        public boolean setRowColumns(boolean[] columns) {
             throw Error.runtimeError(ErrorCode.U_S0500, "RangeVariable");
         }
 
@@ -1163,7 +1215,6 @@ public class RangeVariable implements Cloneable {
             this.store         = rangeVar.rangeTable.getRowStore(session);
             this.session       = session;
             this.rangeVar      = rangeVar;
-            currentData        = rangeVar.emptyData;
             isBeforeFirst      = true;
             whereConditions    = rangeVar.whereConditions;
             joinConditions     = rangeVar.joinConditions;
@@ -1184,6 +1235,14 @@ public class RangeVariable implements Cloneable {
         }
 
         public boolean next() {
+
+            if (session.abortTransaction) {
+                throw Error.error(ErrorCode.X_40000);
+            }
+
+            if (session.abortAction) {
+                throw Error.error(ErrorCode.X_40502);
+            }
 
             while (condIndex < conditions.length) {
                 if (isBeforeFirst) {
@@ -1216,9 +1275,7 @@ public class RangeVariable implements Cloneable {
                 it.release();
             }
 
-            it            = null;
-            currentData   = rangeVar.emptyData;
-            currentRow    = null;
+            it            = emptyIterator;
             isBeforeFirst = true;
         }
 
@@ -1245,10 +1302,10 @@ public class RangeVariable implements Cloneable {
             if (conditions[condIndex].indexCond == null) {
                 if (conditions[condIndex].reversed) {
                     it = conditions[condIndex].rangeIndex.lastRow(session,
-                            store, rangeVar.indexDistinctCount);
+                            store, rangeVar.indexDistinctCount, null);
                 } else {
                     it = conditions[condIndex].rangeIndex.firstRow(session,
-                            store, rangeVar.indexDistinctCount);
+                            store, rangeVar.indexDistinctCount, null);
                 }
             } else {
                 getFirstRow();
@@ -1268,15 +1325,15 @@ public class RangeVariable implements Cloneable {
                     new Object[conditions[condIndex].indexedColumnCount];
             }
 
+            int opType = conditions[condIndex].opType;
+
             for (int i = 0; i < conditions[condIndex].indexedColumnCount;
                     i++) {
-                int range = 0;
-                int opType = i == conditions[condIndex].indexedColumnCount - 1
-                             ? conditions[condIndex].opType
-                             : conditions[condIndex].indexCond[i].getType();
+                int range    = 0;
+                int tempType = conditions[condIndex].opTypes[i];
 
-                if (opType == OpTypes.IS_NULL || opType == OpTypes.NOT
-                        || opType == OpTypes.MAX) {
+                if (tempType == OpTypes.IS_NULL || tempType == OpTypes.NOT
+                        || tempType == OpTypes.MAX) {
                     currentJoinData[i] = null;
 
                     continue;
@@ -1291,6 +1348,12 @@ public class RangeVariable implements Cloneable {
                 Type targetType =
                     conditions[condIndex].indexCond[i].getLeftNode()
                         .getDataType();
+
+                if (i == 0 && value == null) {
+                    it = conditions[condIndex].rangeIndex.emptyIterator();
+
+                    return;
+                }
 
                 if (targetType != valueType) {
                     range = targetType.compareToTypeRange(value);
@@ -1314,7 +1377,8 @@ public class RangeVariable implements Cloneable {
                             case OpTypes.GREATER :
                             case OpTypes.GREATER_EQUAL :
                             case OpTypes.GREATER_EQUAL_PRE :
-                                value = null;
+                                opType = OpTypes.NOT;
+                                value  = null;
                                 break;
 
                             default :
@@ -1330,6 +1394,14 @@ public class RangeVariable implements Cloneable {
                                 value = null;
                                 break;
 
+                            case OpTypes.SMALLER :
+                            case OpTypes.SMALLER_EQUAL :
+                                if (conditions[condIndex].reversed) {
+                                    opType = OpTypes.MAX;
+                                    value  = null;
+
+                                    break;
+                                }
                             default :
                                 it = conditions[condIndex].rangeIndex
                                     .emptyIterator();
@@ -1344,7 +1416,7 @@ public class RangeVariable implements Cloneable {
 
             it = conditions[condIndex].rangeIndex.findFirstRow(session, store,
                     currentJoinData, conditions[condIndex].indexedColumnCount,
-                    rangeVar.indexDistinctCount, conditions[condIndex].opType,
+                    rangeVar.indexDistinctCount, opType,
                     conditions[condIndex].reversed, null);
         }
 
@@ -1358,44 +1430,55 @@ public class RangeVariable implements Cloneable {
             boolean result = false;
 
             while (true) {
-                currentRow = it.getNextRow();
+                if (session.abortTransaction) {
+                    throw Error.error(ErrorCode.X_40000);
+                }
 
-                if (currentRow == null) {
+                if (session.abortAction) {
+                    throw Error.error(ErrorCode.X_40502);
+                }
+
+                if (it.next()) {}
+                else {
+                    it = emptyIterator;
+
                     break;
                 }
 
-                currentData = currentRow.getData();
-
-                if (conditions[condIndex].terminalCondition != null
-                        && !conditions[condIndex].terminalCondition
-                            .testCondition(session)) {
-                    break;
-                }
-
-                if (conditions[condIndex].indexEndCondition != null
-                        && !conditions[condIndex].indexEndCondition
-                            .testCondition(session)) {
-                    if (!conditions[condIndex].isJoin) {
-                        hasLeftOuterRow = false;
+                if (conditions[condIndex].terminalCondition != null) {
+                    if (!conditions[condIndex].terminalCondition.testCondition(
+                            session)) {
+                        break;
                     }
-
-                    break;
                 }
 
-                if (joinConditions[condIndex].nonIndexCondition != null
-                        && !joinConditions[condIndex].nonIndexCondition
-                            .testCondition(session)) {
-                    continue;
+                if (conditions[condIndex].indexEndCondition != null) {
+                    if (!conditions[condIndex].indexEndCondition.testCondition(
+                            session)) {
+                        if (!conditions[condIndex].isJoin) {
+                            hasLeftOuterRow = false;
+                        }
+
+                        break;
+                    }
                 }
 
-                if (whereConditions[condIndex].nonIndexCondition != null
-                        && !whereConditions[condIndex].nonIndexCondition
+                if (joinConditions[condIndex].nonIndexCondition != null) {
+                    if (!joinConditions[condIndex].nonIndexCondition
                             .testCondition(session)) {
-                    hasLeftOuterRow = false;
+                        continue;
+                    }
+                }
 
-                    addFoundRow();
+                if (whereConditions[condIndex].nonIndexCondition != null) {
+                    if (!whereConditions[condIndex].nonIndexCondition
+                            .testCondition(session)) {
+                        hasLeftOuterRow = false;
 
-                    continue;
+                        addFoundRow();
+
+                        continue;
+                    }
                 }
 
                 Expression e = conditions[condIndex].excludeConditions;
@@ -1413,8 +1496,7 @@ public class RangeVariable implements Cloneable {
 
             it.release();
 
-            currentRow  = null;
-            currentData = rangeVar.emptyData;
+            it = emptyIterator;
 
             if (hasLeftOuterRow && condIndex == conditions.length - 1) {
                 result =
@@ -1430,7 +1512,9 @@ public class RangeVariable implements Cloneable {
         private void addFoundRow() {
 
             if (rangeVar.isRightJoin) {
-                lookup.add(currentRow.getPos());
+                long position = it.getRowId();
+
+                lookup.add(position);
             }
         }
     }
@@ -1460,7 +1544,7 @@ public class RangeVariable implements Cloneable {
         public boolean next() {
 
             if (isOnRightOuterRows) {
-                if (it == null) {
+                if (it == emptyIterator) {
                     return false;
                 }
 
@@ -1475,13 +1559,12 @@ public class RangeVariable implements Cloneable {
             boolean result = false;
 
             while (true) {
-                currentRow = it.getNextRow();
+                if (it.next()) {}
+                else {
+                    it = emptyIterator;
 
-                if (currentRow == null) {
                     break;
                 }
-
-                currentData = currentRow.getData();
 
                 if (conditions[condIndex].indexEndCondition != null
                         && !conditions[condIndex].indexEndCondition
@@ -1510,19 +1593,15 @@ public class RangeVariable implements Cloneable {
 
             it.release();
 
-            currentRow  = null;
-            currentData = rangeVar.emptyData;
-
             return result;
         }
 
         private boolean lookupAndTest() {
 
-            boolean result = !lookup.contains(currentRow.getPos());
+            long    position = it.getRowId();
+            boolean result   = !lookup.contains(position);
 
             if (result) {
-                currentData = currentRow.getData();
-
                 if (conditions[condIndex].nonIndexCondition != null
                         && !conditions[condIndex].nonIndexCondition
                             .testCondition(session)) {
@@ -1538,10 +1617,19 @@ public class RangeVariable implements Cloneable {
 
         RangeIteratorMain[] rangeIterators;
         int                 currentIndex = 0;
+        RangeIterator       currentRange = null;
 
         public RangeIteratorJoined(RangeIteratorMain[] rangeIterators) {
             this.rangeIterators = rangeIterators;
             isBeforeFirst       = true;
+        }
+
+        public Row getCurrentRow() {
+            return currentRange.getCurrentRow();
+        }
+
+        public Object[] getCurrent() {
+            return currentRange.getCurrent();
         }
 
         public boolean isBeforeFirst() {
@@ -1551,21 +1639,18 @@ public class RangeVariable implements Cloneable {
         public boolean next() {
 
             while (currentIndex >= 0) {
-                RangeIteratorMain it = rangeIterators[currentIndex];
+                currentRange = rangeIterators[currentIndex];
 
-                if (it.next()) {
+                if (currentRange.next()) {
                     if (currentIndex < rangeIterators.length - 1) {
                         currentIndex++;
 
                         continue;
                     }
 
-                    currentRow  = rangeIterators[currentIndex].currentRow;
-                    currentData = currentRow.getData();
-
                     return true;
                 } else {
-                    it.reset();
+                    currentRange.reset();
 
                     currentIndex--;
 
@@ -1573,9 +1658,7 @@ public class RangeVariable implements Cloneable {
                 }
             }
 
-            currentData =
-                rangeIterators[rangeIterators.length - 1].rangeVar.emptyData;
-            currentRow = null;
+            currentRange = null;
 
             for (int i = 0; i < rangeIterators.length; i++) {
                 rangeIterators[i].reset();
@@ -1608,6 +1691,109 @@ public class RangeVariable implements Cloneable {
 
         public int getRangePosition() {
             return 0;
+        }
+    }
+
+    static final class RangeIteratorEmpty implements RowIterator {
+
+        public Object getField(int col) {
+            return null;
+        }
+
+        public boolean next() {
+            return false;
+        }
+
+        public Row getCurrentRow() {
+            return null;
+        }
+
+        public Object[] getCurrent() {
+            return null;
+        }
+
+        public boolean hasNext() {
+            return false;
+        }
+
+        public long getPos() {
+            return -1;
+        }
+
+        public int getStorageSize() {
+            return 0;
+        }
+
+        public void release() {}
+
+        public void removeCurrent() {}
+
+        public long getRowId() {
+            return 0L;
+        }
+    }
+
+    static final class RangeIteratorCheck implements RangeIterator {
+
+        final int rangePosition;
+        Object[]  currentData;
+
+        RangeIteratorCheck() {
+            this.rangePosition = 0;
+        }
+
+        RangeIteratorCheck(int rangePosition) {
+            this.rangePosition = rangePosition;
+        }
+
+        public Object getField(int col) {
+            return currentData[col];
+        }
+
+        public boolean next() {
+            return false;
+        }
+
+        public Row getCurrentRow() {
+            return null;
+        }
+
+        public Object[] getCurrent() {
+            return currentData;
+        }
+
+        public boolean hasNext() {
+            return false;
+        }
+
+        public long getPos() {
+            return -1;
+        }
+
+        public int getStorageSize() {
+            return 0;
+        }
+
+        public void release() {}
+
+        public void removeCurrent() {}
+
+        public long getRowId() {
+            return 0L;
+        }
+
+        public boolean isBeforeFirst() {
+            return false;
+        }
+
+        public void setCurrent(Object[] data) {
+            this.currentData = data;
+        }
+
+        public void reset() {}
+
+        public int getRangePosition() {
+            return rangePosition;
         }
     }
 
@@ -1798,12 +1984,12 @@ public class RangeVariable implements Cloneable {
 
         /**
          *
-         * @param exprList list of expressions
+         * @param exprList has the same length as index column count
          * @param index Index to use
          * @param colCount number of columns searched
          */
-        public void addIndexCondition(Expression[] exprList, Index index,
-                                      int colCount) {
+        void addIndexCondition(Expression[] exprList, Index index,
+                               int colCount) {
 
             int indexColCount = index.getColumnCount();
 
@@ -1863,8 +2049,9 @@ public class RangeVariable implements Cloneable {
                         indexEndCondition =
                             ExpressionLogical.andExpressions(indexEndCondition,
                                                              e);
-                        opType     = e.opType;
-                        opTypes[0] = e.opType;
+                        opType        = e.opType;
+                        opTypes[i]    = e.opType;
+                        opTypesEnd[i] = e.opType;
                     }
 
                     opTypeEnd = opType;
@@ -1872,14 +2059,21 @@ public class RangeVariable implements Cloneable {
                     break;
                 }
                 default :
-                    Error.runtimeError(ErrorCode.U_S0500, "RangeVariable");
+                    throw Error.runtimeError(ErrorCode.U_S0500,
+                                             "RangeVariable");
             }
 
             indexedColumnCount = colCount;
             hasIndex           = true;
         }
 
-        public void reverseIndexCondition() {
+        private void reverseIndexCondition() {
+
+            if (indexedColumnCount == 0) {
+                reversed = true;
+
+                return;
+            }
 
             if (opType == OpTypes.EQUAL || opType == OpTypes.IS_NULL) {
 
@@ -1887,16 +2081,33 @@ public class RangeVariable implements Cloneable {
             } else {
                 indexEndCondition = null;
 
-                for (int i = 0; i < indexedColumnCount; i++) {
-                    Expression e = indexCond[i];
+                Expression[] temp = indexCond;
 
-                    indexCond[i]    = indexEndCond[i];
-                    indexEndCond[i] = e;
+                indexCond    = indexEndCond;
+                indexEndCond = temp;
+
+                int[] temptypes = opTypes;
+
+                opTypes    = opTypesEnd;
+                opTypesEnd = temptypes;
+
+                for (int i = 0; i < indexedColumnCount; i++) {
+                    Expression e = indexEndCond[i];
+
                     indexEndCondition =
                         ExpressionLogical.andExpressions(indexEndCondition, e);
                 }
 
-                opType = opTypeEnd;
+                if (indexedColumnCount > 1
+                        && opTypes[indexedColumnCount - 1] == OpTypes.MAX) {
+                    indexedColumnCount--;
+
+                    opTypes[indexedColumnCount]    = 0;
+                    opTypesEnd[indexedColumnCount] = 0;
+                }
+
+                opType    = opTypes[indexedColumnCount - 1];
+                opTypeEnd = opTypesEnd[indexedColumnCount - 1];
             }
 
             reversed = true;
@@ -1926,7 +2137,8 @@ public class RangeVariable implements Cloneable {
                     sb.append("]\n");
                 }
 
-                if (indexEndCondition != null) {
+                if (this.opTypeEnd != OpTypes.EQUAL
+                        && indexEndCondition != null) {
                     String temp = indexEndCondition.describe(session, blanks);
 
                     sb.append(b).append("end condition=[").append(temp).append(
@@ -1944,8 +2156,8 @@ public class RangeVariable implements Cloneable {
             return sb.toString();
         }
 
-        public void replaceColumnReferences(RangeVariable range,
-                                            Expression[] list) {
+        private void replaceColumnReferences(RangeVariable range,
+                                             Expression[] list) {
 
             if (indexCond != null) {
                 for (int i = 0; i < indexCond.length; i++) {
@@ -1984,6 +2196,52 @@ public class RangeVariable implements Cloneable {
             if (terminalCondition != null) {
                 terminalCondition =
                     terminalCondition.replaceColumnReferences(range, list);
+            }
+        }
+
+        private void replaceExpressions(OrderedHashSet expressions,
+                                        int resultRangePosition) {
+
+            if (indexCond != null) {
+                for (int i = 0; i < indexCond.length; i++) {
+                    if (indexCond[i] != null) {
+                        indexCond[i] = indexCond[i].replaceExpressions(
+                            expressions, resultRangePosition);
+                    }
+                }
+            }
+
+            if (indexEndCond != null) {
+                for (int i = 0; i < indexEndCond.length; i++) {
+                    if (indexEndCond[i] != null) {
+                        indexEndCond[i] = indexEndCond[i].replaceExpressions(
+                            expressions, resultRangePosition);
+                    }
+                }
+            }
+
+            if (indexEndCondition != null) {
+                indexEndCondition =
+                    indexEndCondition.replaceExpressions(expressions,
+                        resultRangePosition);
+            }
+
+            if (excludeConditions != null) {
+                excludeConditions =
+                    excludeConditions.replaceExpressions(expressions,
+                        resultRangePosition);
+            }
+
+            if (nonIndexCondition != null) {
+                nonIndexCondition =
+                    nonIndexCondition.replaceExpressions(expressions,
+                        resultRangePosition);
+            }
+
+            if (terminalCondition != null) {
+                terminalCondition =
+                    terminalCondition.replaceExpressions(expressions,
+                        resultRangePosition);
             }
         }
     }

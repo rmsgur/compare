@@ -1,4 +1,4 @@
-/* Copyright (c) 2001-2011, The HSQL Development Group
+/* Copyright (c) 2001-2017, The HSQL Development Group
  * All rights reserved.
  *
  * Redistribution and use in source and binary forms, with or without
@@ -47,6 +47,7 @@ import java.lang.reflect.Constructor;
 import java.lang.reflect.InvocationTargetException;
 import java.nio.charset.Charset;
 import java.sql.SQLException;
+import java.sql.SQLFeatureNotSupportedException;
 import java.sql.SQLXML;
 import java.util.ArrayList;
 import java.util.List;
@@ -103,7 +104,7 @@ import org.xml.sax.InputSource;
 import org.xml.sax.Locator;
 import org.xml.sax.SAXException;
 
-/* $Id: JDBCSQLXML.java 5161 2013-02-03 01:45:10Z fredt $ */
+/* $Id: JDBCSQLXML.java 5743 2017-04-09 14:22:33Z fredt $ */
 
 /**
  * <!-- start generic documentation -->
@@ -281,7 +282,7 @@ import org.xml.sax.SAXException;
  *
  * Here is the current read/write availability lifecycle for JDBCSQLXML:
  *
- * <TABLE border="1" cellspacing=1" cellpadding="3">
+ * <TABLE summary="">
  *     <THEAD valign="bottom">
  *         <TR align="center">
  *             <TH>
@@ -341,13 +342,12 @@ import org.xml.sax.SAXException;
  * </div>
  * <!-- end release-specific documentation -->
  *
- * @author boucherb@users
+ * @author Campbell Burnet (campbell-burnet@users dot sourceforge.net)
  * @see javax.xml.parsers
  * @see javax.xml.stream
  * @see javax.xml.transform
  * @see javax.xml.xpath
  * @since JDK 1.6, HSQLDB 2.0
- * @revised Mustang Build 79
  */
 public class JDBCSQLXML implements SQLXML {
 
@@ -359,7 +359,7 @@ public class JDBCSQLXML implements SQLXML {
     private static TransformerFactory        transformerFactory;
 
     /**
-     * Precomputed Charset to reduce octect to character sequence conversion
+     * Precomputed Charset to reduce octet to character sequence conversion
      * charset lookup overhead.
      */
     private static final Charset                utf8Charset;
@@ -641,7 +641,7 @@ public class JDBCSQLXML implements SQLXML {
 
     /**
      * This method closes this object and releases the resources that it held.
-     * The SQL XML object becomes invalid and neither readable or writeable
+     * The SQL XML object becomes invalid and neither readable or writable
      * when this method is called.
      *
      * After <code>free</code> has been called, any attempt to invoke a
@@ -761,7 +761,7 @@ public class JDBCSQLXML implements SQLXML {
      * The behavior of this method is the same as ResultSet.updateCharacterStream()
      * when the designated column of the ResultSet has a type java.sql.Types of SQLXML.
      * <p>
-     * The SQL XML object becomes not writeable when this method is called and
+     * The SQL XML object becomes not writable when this method is called and
      * may also become not readable depending on implementation.
      *
      * @return a stream to which data can be written.
@@ -876,7 +876,7 @@ public class JDBCSQLXML implements SQLXML {
      * </pre>
      *
      * @param sourceClass The class of the source, or null.
-     * If the class is null, a vendor specifc Source implementation will be returned.
+     * If the class is null, a vendor specific Source implementation will be returned.
      * The following classes are supported at a minimum:
      * <pre>
      *   javax.xml.transform.dom.DOMSource - returns a DOMSource
@@ -914,7 +914,7 @@ public class JDBCSQLXML implements SQLXML {
      * <p>
      * The systemID of the Result is implementation dependent.
      * <p>
-     * The SQL XML object becomes not writeable when this method is called and
+     * The SQL XML object becomes not writable when this method is called and
      * may also become not readable depending on implementation.
      * <p>
      * Note that SAX is a callback architecture and the returned
@@ -963,7 +963,7 @@ public class JDBCSQLXML implements SQLXML {
     }
 
     /**
-     * @return that may be used to perform processesing asynchronously.
+     * @return that may be used to perform processing asynchronously.
      */
     protected static ExecutorService getExecutorService() {
 
@@ -1246,7 +1246,7 @@ public class JDBCSQLXML implements SQLXML {
 
     /**
      * Closes the input stream, if any, currently in use to read this object's
-     * SQLXML value and nullifies the stream reference to make it elligible
+     * SQLXML value and nullifies the stream reference to make it eligible
      * for subsequent garbage collection.
      */
     protected void freeInputStream() {
@@ -1265,9 +1265,9 @@ public class JDBCSQLXML implements SQLXML {
 
     /**
      * Closes the output stream, if any, currently in use to write this object's
-     * SQLXML value and nullifies the stream reference to make it elligible for
+     * SQLXML value and nullifies the stream reference to make it eligible for
      * subsequent garbage collection.  The stream's data buffer reference may
-     * also be nullified, in order to make it elligible for garbage collection
+     * also be nullified, in order to make it eligible for garbage collection
      * immediately, just in case an external client still holds a reference to
      * the output stream.
      */
@@ -1465,10 +1465,10 @@ public class JDBCSQLXML implements SQLXML {
         if (JAXBSource.class.isAssignableFrom(sourceClass)) {
 
             // Must go first presently, since JAXBSource extends SAXSource
-            // (purely as an implmentation detail) and it's not possible
+            // (purely as an implementation detail) and it's not possible
             // to instantiate a valid JAXBSource with a Zero-Args
             // constructor(or any subclass thereof, due to the finality of
-            // its private marshaller and context object attrbutes)
+            // its private marshaller and context object attributes)
             // FALL THROUGH... will throw an exception
         } else if (StreamSource.class.isAssignableFrom(sourceClass)) {
             return createStreamSource(sourceClass);
@@ -1686,7 +1686,7 @@ public class JDBCSQLXML implements SQLXML {
         if (JAXBResult.class.isAssignableFrom(resultClass)) {
 
             // Must go first presently, since JAXBResult extends SAXResult
-            // (purely as an implmentation detail) and it's not possible
+            // (purely as an implementation detail) and it's not possible
             // to instantiate a valid JAXBResult with a Zero-Args
             // constructor(or any subclass thereof, due to the finality of
             // its private UnmarshallerHandler)
@@ -2520,6 +2520,8 @@ public class JDBCSQLXML implements SQLXML {
 
         /**
          * Retrieves whether this DOMBuilder is closed.
+         * 
+         * @return boolean
          */
         public boolean isClosed() {
             return this.closed;
@@ -2538,14 +2540,16 @@ public class JDBCSQLXML implements SQLXML {
         }
 
         /**
-         * Retrieves the document. <p>
+         * Retrieves the document.
+         * 
+         * @return Document
          */
         public Document getDocument() {
             return this.document;
         }
 
         /**
-         * Retreives the current element. <p>
+         * Retrieves the current element. <p>
          */
         protected Element getCurrentElement() {
             return this.currentElement;
@@ -3108,6 +3112,8 @@ public class JDBCSQLXML implements SQLXML {
 
         /**
          * Retrieves whether this object is closed.
+         *
+         * @return boolean
          */
         public boolean isClosed() {
             return this.closed;
@@ -3126,7 +3132,7 @@ public class JDBCSQLXML implements SQLXML {
         }
 
         // --------------------- internal implementation -----------------------
-        protected class QualifiedName {
+        protected static class QualifiedName {
 
             public final String namespaceName;
             public final String prefix;

@@ -1,4 +1,4 @@
-/* Copyright (c) 2001-2011, The HSQL Development Group
+/* Copyright (c) 2001-2016, The HSQL Development Group
  * All rights reserved.
  *
  * Redistribution and use in source and binary forms, with or without
@@ -33,6 +33,7 @@ package org.hsqldb;
 
 import java.math.BigDecimal;
 
+import org.hsqldb.HsqlNameManager.HsqlName;
 import org.hsqldb.error.Error;
 import org.hsqldb.error.ErrorCode;
 import org.hsqldb.lib.ArrayUtil;
@@ -47,34 +48,37 @@ import org.hsqldb.types.Types;
 
 /**
  * @author Fred Toussi (fredt@users dot sourceforge.net)
- * @version 2.2.9
+ * @version 2.3.4
  * @since 1.9.0
  */
 public class ParserBase {
 
     protected Scanner scanner;
-    protected Token token;
+    protected Token   token;
 
     //
+    private final Token dummyToken = new Token();
+
+    //
+    protected int           parsePosition;
+    protected HsqlException lastError;
+    protected HsqlName      lastSynonym;
+    protected boolean       isCheckOrTriggerCondition;
+    protected boolean       isSchemaDefinition;
+    protected boolean       isViewDefinition;
     protected boolean       isRecording;
     protected HsqlArrayList recordedStatement;
-    private final Token     dummyToken = new Token();
-
-    //
-    protected boolean isCheckOrTriggerCondition;
-    protected boolean isSchemaDefinition;
-    protected int     parsePosition;
     static final BigDecimal LONG_MAX_VALUE_INCREMENT =
         BigDecimal.valueOf(Long.MAX_VALUE).add(BigDecimal.valueOf(1));
 
     /**
      * Constructs a new BaseParser object with the given context.
      *
-     * @param t the token source from which to parse commands
+     * @param scanner the token source from which to parse commands
      */
-    ParserBase(Scanner t) {
-        scanner = t;
-        token   = scanner.token;
+    ParserBase(Scanner scanner) {
+        this.scanner = scanner;
+        this.token   = scanner.token;
     }
 
     public Scanner getScanner() {
@@ -97,14 +101,17 @@ public class ParserBase {
      *
      * @param sql a new SQL character sequence to replace the current one
      */
-    void reset(String sql) {
+    void reset(Session session, String sql) {
 
-        scanner.reset(sql);
+        scanner.reset(session, sql);
 
         //
         parsePosition             = 0;
+        lastError                 = null;
+        lastSynonym               = null;
         isCheckOrTriggerCondition = false;
         isSchemaDefinition        = false;
+        isViewDefinition          = false;
         isRecording               = false;
         recordedStatement         = null;
     }
@@ -174,7 +181,7 @@ public class ParserBase {
 
     String getStatementForRoutine(int startPosition, short[] startTokens) {
 
-        int tokenIndex   = 0;;
+        int tokenIndex   = 0;
         int semiIndex    = -1;
         int semiPosition = -1;
 
@@ -220,7 +227,7 @@ public class ParserBase {
         if (isRecording) {
             return (Token) recordedStatement.get(recordedStatement.size() - 1);
         } else {
-            return dummyToken;
+            return token.duplicate();
         }
     }
 
@@ -279,6 +286,8 @@ public class ParserBase {
                 case Tokens.X_MALFORMED_IDENTIFIER :
                     errorCode = ErrorCode.X_42583;
                     break;
+
+                default :
             }
 
             throw Error.error(errorCode, token.getFullString());
@@ -294,18 +303,18 @@ public class ParserBase {
     }
 
     boolean isReservedKey() {
-        return scanner.token.isReservedIdentifier;
+        return token.isReservedIdentifier;
     }
 
     boolean isCoreReservedKey() {
-        return scanner.token.isCoreReservedIdentifier;
+        return token.isCoreReservedIdentifier;
     }
 
     boolean isNonReservedIdentifier() {
 
-        return !scanner.token.isReservedIdentifier
-               && (scanner.token.isUndelimitedIdentifier
-                   || scanner.token.isDelimitedIdentifier);
+        return !token.isReservedIdentifier
+               && (token.isUndelimitedIdentifier
+                   || token.isDelimitedIdentifier);
     }
 
     void checkIsNonReservedIdentifier() {
@@ -317,9 +326,9 @@ public class ParserBase {
 
     boolean isNonCoreReservedIdentifier() {
 
-        return !scanner.token.isCoreReservedIdentifier
-               && (scanner.token.isUndelimitedIdentifier
-                   || scanner.token.isDelimitedIdentifier);
+        return !token.isCoreReservedIdentifier
+               && (token.isUndelimitedIdentifier
+                   || token.isDelimitedIdentifier);
     }
 
     void checkIsNonCoreReservedIdentifier() {
@@ -331,14 +340,13 @@ public class ParserBase {
 
     void checkIsIrregularCharInIdentifier() {
 
-        if (scanner.token.hasIrregularChar) {
+        if (token.hasIrregularChar) {
             throw unexpectedToken();
         }
     }
 
     boolean isIdentifier() {
-        return scanner.token.isUndelimitedIdentifier
-               || scanner.token.isDelimitedIdentifier;
+        return token.isUndelimitedIdentifier || token.isDelimitedIdentifier;
     }
 
     void checkIsIdentifier() {
@@ -349,19 +357,19 @@ public class ParserBase {
     }
 
     boolean isDelimitedIdentifier() {
-        return scanner.token.isDelimitedIdentifier;
+        return token.isDelimitedIdentifier;
     }
 
     void checkIsDelimitedIdentifier() {
 
-        if (token.tokenType != Tokens.X_DELIMITED_IDENTIFIER) {
+        if (!token.isDelimitedIdentifier) {
             throw Error.error(ErrorCode.X_42569);
         }
     }
 
-    void checkIsNotQuoted() {
+    void checkIsUndelimitedIdentifier() {
 
-        if (token.tokenType == Tokens.X_DELIMITED_IDENTIFIER) {
+        if (!token.isUndelimitedIdentifier) {
             throw unexpectedToken();
         }
     }
@@ -373,10 +381,10 @@ public class ParserBase {
         }
     }
 
-    void checkIsValue(int dataTypeCode) {
+    void checkIsQuotedString() {
 
         if (token.tokenType != Tokens.X_VALUE
-                || token.dataType.typeCode != dataTypeCode) {
+                || !token.dataType.isCharacterType()) {
             throw unexpectedToken();
         }
     }
@@ -424,7 +432,7 @@ public class ParserBase {
 
         checkIsValue();
 
-        if (token.dataType.typeCode != Types.SQL_CHAR) {
+        if (!token.dataType.isCharacterType()) {
             throw Error.error(ErrorCode.X_42563);
         }
 
@@ -457,6 +465,28 @@ public class ParserBase {
         return false;
     }
 
+    void readThis(String tokenString) {
+
+        if (!tokenString.equals(token.tokenString)) {
+            String required = tokenString;
+
+            throw unexpectedTokenRequire(required);
+        }
+
+        read();
+    }
+
+    boolean readIfThis(String tokenString) {
+
+        if (tokenString.equals(token.tokenString)) {
+            read();
+
+            return true;
+        }
+
+        return false;
+    }
+
     Integer readIntegerObject() {
 
         int value = readInteger();
@@ -468,7 +498,7 @@ public class ParserBase {
 
         boolean minus = false;
 
-        if (token.tokenType == Tokens.MINUS) {
+        if (token.tokenType == Tokens.MINUS_OP) {
             minus = true;
 
             read();
@@ -503,7 +533,7 @@ public class ParserBase {
 
         boolean minus = false;
 
-        if (token.tokenType == Tokens.MINUS) {
+        if (token.tokenType == Tokens.MINUS_OP) {
             minus = true;
 
             read();
@@ -544,7 +574,7 @@ public class ParserBase {
                 read();
 
                 if (token.tokenType != Tokens.X_VALUE
-                        || token.dataType.typeCode != Types.SQL_CHAR) {
+                        || !token.dataType.isCharacterType()) {
                     break;
                 }
 
@@ -560,7 +590,7 @@ public class ParserBase {
                 read();
 
                 if (token.tokenType != Tokens.X_VALUE
-                        || token.dataType.typeCode != Types.SQL_CHAR) {
+                        || !token.dataType.isCharacterType()) {
                     break;
                 }
 
@@ -577,7 +607,7 @@ public class ParserBase {
                 read();
 
                 if (token.tokenType != Tokens.X_VALUE
-                        || token.dataType.typeCode != Types.SQL_CHAR) {
+                        || !token.dataType.isCharacterType()) {
                     break;
                 }
 
@@ -595,11 +625,11 @@ public class ParserBase {
 
                 read();
 
-                if (token.tokenType == Tokens.MINUS) {
+                if (token.tokenType == Tokens.MINUS_OP) {
                     read();
 
                     minus = true;
-                } else if (token.tokenType == Tokens.PLUS) {
+                } else if (token.tokenType == Tokens.PLUS_OP) {
                     read();
                 }
 
@@ -610,14 +640,14 @@ public class ParserBase {
                 String s = token.tokenString;
 
                 /* INT literal accepted in addition to string literal */
-                if (token.dataType.typeCode != Types.SQL_INTEGER
-                        && token.dataType.typeCode != Types.SQL_CHAR) {
+                if (!token.dataType.isIntegralType()
+                        && !token.dataType.isCharacterType()) {
                     break;
                 }
 
                 read();
 
-                IntervalType dataType = readIntervalType(false);
+                IntervalType dataType = readIntervalType(session, false);
                 Object       interval = scanner.newInterval(s, dataType);
 
                 dataType = (IntervalType) scanner.dateTimeType;
@@ -637,14 +667,19 @@ public class ParserBase {
         return null;
     }
 
-    IntervalType readIntervalType(boolean maxPrecisionDefault) {
+    IntervalType readIntervalType(Session session,
+                                  boolean maxPrecisionDefault) {
 
-        int precision = -1;
-        int scale     = -1;
-        int startToken;
-        int endToken;
+        int    precision = -1;
+        int    scale     = -1;
+        int    startToken;
+        int    endToken;
+        String startTokenString;
+        int    startIndex = -1;
+        int    endIndex   = -1;
 
-        startToken = endToken = token.tokenType;
+        startToken       = endToken = token.tokenType;
+        startTokenString = token.tokenString;
 
         read();
 
@@ -698,10 +733,9 @@ public class ParserBase {
             readThis(Tokens.CLOSEBRACKET);
         }
 
-        int startIndex = ArrayUtil.find(Tokens.SQL_INTERVAL_FIELD_CODES,
-                                        startToken);
-        int endIndex = ArrayUtil.find(Tokens.SQL_INTERVAL_FIELD_CODES,
-                                      endToken);
+        startIndex = ArrayUtil.find(Tokens.SQL_INTERVAL_FIELD_CODES,
+                                    startToken);
+        endIndex = ArrayUtil.find(Tokens.SQL_INTERVAL_FIELD_CODES, endToken);
 
         if (precision == -1 && maxPrecisionDefault) {
             if (startIndex == IntervalType.INTERVAL_SECOND_INDEX) {
@@ -709,6 +743,16 @@ public class ParserBase {
             } else {
                 precision = IntervalType.maxIntervalPrecision;
             }
+        }
+
+        if (startIndex == -1 && session.database.sqlSyntaxMys) {
+            int type = FunctionCustom.getSQLTypeForToken(startTokenString);
+            int startType = IntervalType.getStartIntervalType(type);
+            int endType   = IntervalType.getEndIntervalType(type);
+
+            return IntervalType.getIntervalType(
+                type, startType, endType, IntervalType.maxIntervalPrecision,
+                IntervalType.maxFractionPrecision, true);
         }
 
         return IntervalType.getIntervalType(startIndex, endIndex, precision,
@@ -732,9 +776,9 @@ public class ParserBase {
     static {
 
         // comparison
-        expressionTypeMap.put(Tokens.EQUALS, OpTypes.EQUAL);
-        expressionTypeMap.put(Tokens.GREATER, OpTypes.GREATER);
-        expressionTypeMap.put(Tokens.LESS, OpTypes.SMALLER);
+        expressionTypeMap.put(Tokens.EQUALS_OP, OpTypes.EQUAL);
+        expressionTypeMap.put(Tokens.GREATER_OP, OpTypes.GREATER);
+        expressionTypeMap.put(Tokens.LESS_OP, OpTypes.SMALLER);
         expressionTypeMap.put(Tokens.GREATER_EQUALS, OpTypes.GREATER_EQUAL);
         expressionTypeMap.put(Tokens.LESS_EQUALS, OpTypes.SMALLER_EQUAL);
         expressionTypeMap.put(Tokens.NOT_EQUALS, OpTypes.NOT_EQUAL);
@@ -758,6 +802,14 @@ public class ParserBase {
     }
 
     HsqlException unexpectedToken(String tokenS) {
+        return Error.parseError(ErrorCode.X_42581, tokenS,
+                                scanner.getLineNumber());
+    }
+
+    HsqlException unexpectedToken(int token) {
+
+        String tokenS = Tokens.getKeyword(token);
+
         return Error.parseError(ErrorCode.X_42581, tokenS,
                                 scanner.getLineNumber());
     }

@@ -1,4 +1,4 @@
-/* Copyright (c) 2001-2011, The HSQL Development Group
+/* Copyright (c) 2001-2016, The HSQL Development Group
  * All rights reserved.
  *
  * Redistribution and use in source and binary forms, with or without
@@ -36,20 +36,20 @@ import org.hsqldb.Row;
 /**
  *
  * @author Fred Toussi (fredt@users dot sourceforge.net)
- * @version 1.9.0
+ * @version 2.3.5
  * @since 1.7.2
  */
 public interface RowIterator {
 
-    Row getNextRow();
+    Object getField(int col);
 
-    Object[] getNext();
+    boolean next();
 
-    boolean hasNext();
+    Row getCurrentRow();
+
+    Object[] getCurrent();
 
     void removeCurrent();
-
-    boolean setRowColumns(boolean[] columns);
 
     void release();
 

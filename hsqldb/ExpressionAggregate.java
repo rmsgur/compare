@@ -1,4 +1,4 @@
-/* Copyright (c) 2001-2011, The HSQL Development Group
+/* Copyright (c) 2001-2016, The HSQL Development Group
  * All rights reserved.
  *
  * Redistribution and use in source and binary forms, with or without
@@ -43,13 +43,12 @@ import org.hsqldb.types.RowType;
  * Implementation of aggregate operations
  *
  * @author Fred Toussi (fredt@users dot sourceforge.net)
- * @version 2.3.0
+ * @version 2.3.3
  * @since 1.9.0
  */
 public class ExpressionAggregate extends Expression {
 
-    boolean    isDistinctAggregate;
-    ArrayType  arrayType;
+    ArrayType arrayType;
 
     ExpressionAggregate(int type, boolean distinct, Expression e) {
 
@@ -75,6 +74,7 @@ public class ExpressionAggregate extends Expression {
 
             case OpTypes.COUNT :
                 sb.append(' ').append(Tokens.T_COUNT).append('(');
+                sb.append(left).append(')');
                 break;
 
             case OpTypes.SUM :
@@ -190,6 +190,8 @@ public class ExpressionAggregate extends Expression {
             case OpTypes.VAR_SAMP :
                 sb.append(Tokens.T_VAR_SAMP).append(' ');
                 break;
+
+            default :
         }
 
         if (getLeftNode() != null) {
@@ -202,8 +204,8 @@ public class ExpressionAggregate extends Expression {
     }
 
     public HsqlList resolveColumnReferences(Session session,
-            RangeGroup rangeGroup, int rangeCount,
-            RangeGroup[] rangeGroups, HsqlList unresolvedSet, boolean acceptsSequences) {
+            RangeGroup rangeGroup, int rangeCount, RangeGroup[] rangeGroups,
+            HsqlList unresolvedSet, boolean acceptsSequences) {
 
         HsqlList conditionSet = nodes[RIGHT].resolveColumnReferences(session,
             rangeGroup, rangeCount, rangeGroups, null, false);
@@ -217,6 +219,11 @@ public class ExpressionAggregate extends Expression {
         }
 
         unresolvedSet.add(this);
+
+        if (rangeGroup.getRangeVariables().length > 0) {
+            this.rangeGroups = rangeGroups;
+            this.rangeGroup  = rangeGroup;
+        }
 
         return unresolvedSet;
     }
@@ -255,14 +262,11 @@ public class ExpressionAggregate extends Expression {
 
     public boolean equals(Expression other) {
 
-        if (!(other instanceof ExpressionAggregate)) {
-            return false;
-        }
+        if (other instanceof ExpressionAggregate) {
+            ExpressionAggregate o = (ExpressionAggregate) other;
 
-        ExpressionAggregate o = (ExpressionAggregate) other;
-
-        if (isDistinctAggregate == o.isDistinctAggregate) {
-            return super.equals(other);
+            return super.equals(other)
+                   && isDistinctAggregate == o.isDistinctAggregate;
         }
 
         return false;
@@ -292,8 +296,8 @@ public class ExpressionAggregate extends Expression {
     /**
      * Get the result of a SetFunction or an ordinary value
      *
+     * @param session session
      * @param currValue instance of set function or value
-     * @param session context
      * @return object
      */
     public Object getAggregatedValue(Session session, Object currValue) {

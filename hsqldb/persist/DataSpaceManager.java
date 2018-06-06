@@ -1,4 +1,4 @@
-/* Copyright (c) 2001-2011, The HSQL Development Group
+/* Copyright (c) 2001-2016, The HSQL Development Group
  * All rights reserved.
  *
  * Redistribution and use in source and binary forms, with or without
@@ -35,13 +35,15 @@ import org.hsqldb.lib.DoubleIntIndex;
 
 /**
  * @author Fred Toussi (fredt@users dot sourceforge.net)
- * @version 2.3.0
+ * @version 2.3.3
  * @since 2.3.0
  */
 public interface DataSpaceManager {
 
     int tableIdEmpty     = 0;
     int tableIdDirectory = 1;
+    int tableIdLookup    = 5;
+    int tableIdSetAside  = 6;
     int tableIdDefault   = 7;
     int tableIdFirst     = 8;
 
@@ -54,12 +56,12 @@ public interface DataSpaceManager {
 
     int getNewTableSpaceID();
 
-    long getFileBlocks(int tableId, int blockCount);
+    long getFileBlocks(int spaceId, int blockCount);
 
     void freeTableSpace(int spaceId);
 
-    void freeTableSpace(DoubleIntIndex spaceList, long offset,
-                               long limit, boolean full);
+    void freeTableSpace(int spaceId, DoubleIntIndex spaceList, long offset,
+                        long limit, boolean full);
 
     long getLostBlocksSize();
 
@@ -72,4 +74,8 @@ public interface DataSpaceManager {
     void reset();
 
     boolean isMultiSpace();
+
+    int getFileBlockItemCount();
+
+    DirectoryBlockCachedObject[] getDirectoryList();
 }

@@ -1,4 +1,4 @@
-/* Copyright (c) 2001-2011, The HSQL Development Group
+/* Copyright (c) 2001-2017, The HSQL Development Group
  * All rights reserved.
  *
  * Redistribution and use in source and binary forms, with or without
@@ -33,7 +33,6 @@ package org.hsqldb;
 
 import org.hsqldb.HsqlNameManager.HsqlName;
 import org.hsqldb.types.CharacterType;
-import org.hsqldb.types.Charset;
 import org.hsqldb.types.DateTimeType;
 import org.hsqldb.types.NumberType;
 import org.hsqldb.types.Type;
@@ -44,7 +43,7 @@ import org.hsqldb.types.UserTypeModifier;
  * Information Schema types.
  *
  * @author Fred Toussi (fredt@users dot sourceforge.net)
- * @version 2.3.0
+ * @version 2.3.5
  * @since 1.9.0
  */
 public class TypeInvariants {
@@ -54,6 +53,8 @@ public class TypeInvariants {
     public static final Type CHARACTER_DATA;
     public static final Type SQL_IDENTIFIER;
     public static final Type TIME_STAMP;
+    public static final Type NCNAME;
+    public static final Type URI;
 
     static {
         HsqlName name;
@@ -92,5 +93,17 @@ public class TypeInvariants {
                                       Types.SQL_TIMESTAMP, 6);
         TIME_STAMP.userTypeModifier = new UserTypeModifier(name,
                 SchemaObject.DOMAIN, TIME_STAMP);
+
+       name = HsqlNameManager.newInfoSchemaObjectName("NCNAME",
+                false, SchemaObject.DOMAIN);
+        NCNAME = new CharacterType(Types.SQL_VARCHAR, (1 << 12));
+        NCNAME.userTypeModifier = new UserTypeModifier(name,
+                SchemaObject.DOMAIN, NCNAME);
+
+        name = HsqlNameManager.newInfoSchemaObjectName("URI",
+                false, SchemaObject.DOMAIN);
+        URI = new CharacterType(Types.SQL_VARCHAR, (1 << 12));
+        URI.userTypeModifier = new UserTypeModifier(name,
+                SchemaObject.DOMAIN, URI);
     }
 }

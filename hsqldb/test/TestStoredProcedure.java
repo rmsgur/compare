@@ -1,4 +1,4 @@
-/* Copyright (c) 2001-2011, The HSQL Development Group
+/* Copyright (c) 2001-2014, The HSQL Development Group
  * All rights reserved.
  *
  * Redistribution and use in source and binary forms, with or without
@@ -46,13 +46,17 @@ import junit.framework.TestResult;
  * Tests for stored procedures.
  *
  * @author Fred Toussi (fredt@users dot sourceforge.net)
- * @version 2.0.1
+ * @version 2.3.3
  * @since 2.0.1
  */
 public class TestStoredProcedure extends TestBase {
 
     public TestStoredProcedure(String name) {
         super(name);
+    }
+
+    protected void setUp() throws Exception {
+        super.setUp();
     }
 
     public void testOne() throws Exception {
@@ -317,26 +321,29 @@ public class TestStoredProcedure extends TestBase {
         rs.close();
     }
 
+    String testSixProcedure =
+        "CREATE PROCEDURE get_columns_and_table(tname VARCHAR(128), sname VARCHAR(128)) "
+        + "READS SQL DATA DYNAMIC RESULT SETS 2 " + "BEGIN ATOMIC "
+        + "DECLARE result1 CURSOR FOR SELECT * FROM information_schema.columns "
+        + "WHERE table_name = tname AND table_schema = sname; "
+        + "DECLARE result2 CURSOR FOR SELECT * FROM information_schema.tables "
+        + "WHERE table_name = tname AND table_schema = sname; "
+        + "OPEN result1; " + "OPEN result2; " + "END";
+
     public void testSix() throws SQLException {
 
         Connection conn = newConnection();
         Statement  st   = conn.createStatement();
 
-        st.execute(
-            "CREATE PROCEDURE get_columns_and_table(tname VARCHAR(128), sname VARCHAR(128)) "
-            + "READS SQL DATA DYNAMIC RESULT SETS 2 " + "BEGIN ATOMIC "
-            + "DECLARE result1 CURSOR FOR SELECT * FROM information_schema.columns "
-            + "WHERE table_name = tname AND table_schema = sname; "
-            + "DECLARE result2 CURSOR FOR SELECT * FROM information_schema.tables "
-            + "WHERE table_name = tname AND table_schema = sname; "
-            + "OPEN result1; " + "OPEN result2; " + "END");
+        st.execute(testSixProcedure);
 
         CallableStatement cs = conn.prepareCall(
             "call get_columns_and_table('TABLES', 'INFORMATION_SCHEMA')");
         boolean isResult = cs.execute();
 
         assertFalse(isResult);
-        cs.getMoreResults();
+
+        isResult = cs.getMoreResults();
 
         ResultSet rs = cs.getResultSet();
 
@@ -420,7 +427,7 @@ public class TestStoredProcedure extends TestBase {
             rs = ps.getResultSet();
 
             rs.next();
-            assertEquals("INFORMATION_SCHEMA",rs.getString(2));
+            assertEquals("INFORMATION_SCHEMA", rs.getString(2));
         }
 
     }
@@ -449,7 +456,8 @@ public class TestStoredProcedure extends TestBase {
     }
 
     public static void procWithResultTwo(Connection conn, Integer[] intparam,
-                                         ResultSet[] resultparamOne, ResultSet[] resultparamTwo)
+                                         ResultSet[] resultparamOne,
+                                         ResultSet[] resultparamTwo)
                                          throws SQLException {
 
         conn.setTransactionIsolation(Connection.TRANSACTION_READ_COMMITTED);
@@ -535,9 +543,7 @@ public class TestStoredProcedure extends TestBase {
         return false;
     }
 
-    public static void procTest3(Integer value)
-                                    throws java.sql.SQLException {
-    }
+    public static void procTest3(Integer value) throws java.sql.SQLException {}
 
     public static void main(String[] args) throws Exception {
 

@@ -1,4 +1,4 @@
-/* Copyright (c) 2001-2011, The HSQL Development Group
+/* Copyright (c) 2001-2017, The HSQL Development Group
  * All rights reserved.
  *
  * Redistribution and use in source and binary forms, with or without
@@ -44,7 +44,7 @@ import org.hsqldb.persist.PersistentStore;
  * Manages rows involved in transactions
  *
  * @author Fred Toussi (fredt@users dot sourceforge.net)
- * @version 2.3.0
+ * @version 2.3.4
  * @since 2.0.0
  */
 public class TransactionManagerMV2PL extends TransactionManagerCommon
@@ -56,15 +56,19 @@ implements TransactionManager {
 
     public TransactionManagerMV2PL(Database db) {
 
-        database        = db;
-        lobSession      = database.sessionManager.getSysLobSession();
-        rowActionMap    = new LongKeyHashMap(10000);
-        txModel         = MVLOCKS;
-        catalogNameList = new HsqlName[]{ database.getCatalogName() };
+        super(db);
+
+        lobSession   = database.sessionManager.getSysLobSession();
+        rowActionMap = new LongKeyHashMap(8192);
+        txModel      = MVLOCKS;
     }
 
     public long getGlobalChangeTimestamp() {
         return globalChangeTimestamp.get();
+    }
+
+    public void setGlobalChangeTimestamp(long ts) {
+        globalChangeTimestamp.set(ts);
     }
 
     public boolean isMVRows() {
@@ -72,6 +76,10 @@ implements TransactionManager {
     }
 
     public boolean isMVCC() {
+        return false;
+    }
+
+    public boolean is2PL() {
         return false;
     }
 
@@ -159,12 +167,14 @@ implements TransactionManager {
                 addToCommittedQueue(session, list);
             }
 
+            session.isTransaction = false;
+
             endTransactionTPL(session);
         } finally {
             writeLock.unlock();
         }
 
-        session.tempSet.clear();
+        session.actionSet.clear();
 
         return true;
     }
@@ -180,6 +190,10 @@ implements TransactionManager {
 
             rollbackPartial(session, 0, session.transactionTimestamp);
             endTransaction(session);
+            session.logSequences();
+
+            session.isTransaction = false;
+
             endTransactionTPL(session);
         } finally {
             writeLock.unlock();
@@ -220,31 +234,43 @@ implements TransactionManager {
             return;
         }
 
-        for (int i = start; i < limit; i++) {
+        for (int i = limit - 1; i >= start; i--) {
             RowAction action = (RowAction) session.rowActionList.get(i);
 
-            if (action == null) {
-/*
-            System.out.println("null insert action " + session + " "
-                               + session.actionTimestamp);
-*/
-                throw Error.runtimeError(ErrorCode.GENERAL_ERROR,
-                                         "null rollback action ");
+            if (action == null || action.type == RowActionBase.ACTION_NONE
+                    || action.type == RowActionBase.ACTION_DELETE_FINAL) {
+                continue;
             }
 
-            action.rollback(session, timestamp);
-        }
+            Row row = action.memoryRow;
 
-        // rolled back transactions can always be merged as they have never been
-        // seen by other sessions
-        writeLock.lock();
+            if (row == null) {
+                row = (Row) action.store.get(action.getPos(), false);
+            }
 
-        try {
-            Object[] list = session.rowActionList.getArray();
+            if (row == null) {
+                continue;
+            }
 
-            mergeRolledBackTransaction(session, timestamp, list, start, limit);
-        } finally {
-            writeLock.unlock();
+            writeLock.lock();
+
+            try {
+                action.rollback(session, timestamp);
+
+                int type = action.mergeRollback(session, timestamp, row);
+
+                if (action.type == RowActionBase.ACTION_DELETE_FINAL) {
+                    if (action.deleteComplete) {
+                        continue;
+                    }
+
+                    action.deleteComplete = true;
+                }
+
+                action.store.rollbackRow(session, row, type, txModel);
+            } finally {
+                writeLock.unlock();
+            }
         }
 
         session.rowActionList.setSize(start);
@@ -303,6 +329,13 @@ implements TransactionManager {
         }
 
         store.indexRow(session, row);
+
+        if (table.persistenceScope == Table.SCOPE_ROUTINE) {
+            row.rowAction = null;
+
+            return;
+        }
+
         session.rowActionList.add(action);
     }
 
@@ -463,6 +496,7 @@ implements TransactionManager {
             if (!session.isTransaction) {
                 session.actionTimestamp      = getNextGlobalChangeTimestamp();
                 session.transactionTimestamp = session.actionTimestamp;
+                session.isPreTransaction     = false;
                 session.isTransaction        = true;
 
                 transactionCount++;
@@ -481,26 +515,26 @@ implements TransactionManager {
      */
     public void beginAction(Session session, Statement cs) {
 
-        if (session.hasLocks(cs)) {
-            return;
-        }
-
         writeLock.lock();
 
         try {
-            if (cs.getCompileTimestamp()
-                    < database.schemaManager.getSchemaChangeTimestamp()) {
-                cs = session.statementManager.getStatement(session, cs);
-                session.sessionContext.currentStatement = cs;
+            if (hasExpired) {
+                session.redoAction = true;
 
-                if (cs == null) {
-                    return;
-                }
+                return;
+            }
+
+            cs = updateCurrentStatement(session, cs);
+
+            if (cs == null) {
+                return;
             }
 
             boolean canProceed = setWaitedSessionsTPL(session, cs);
 
             if (canProceed) {
+                session.isPreTransaction = true;
+
                 if (session.tempSet.isEmpty()) {
                     lockTablesTPL(session, cs);
 
@@ -525,10 +559,12 @@ implements TransactionManager {
         writeLock.lock();
 
         try {
-            session.actionTimestamp = getNextGlobalChangeTimestamp();
+            session.actionTimestamp      = getNextGlobalChangeTimestamp();
+            session.actionStartTimestamp = session.actionTimestamp;
 
             if (!session.isTransaction) {
                 session.transactionTimestamp = session.actionTimestamp;
+                session.isPreTransaction     = false;
                 session.isTransaction        = true;
 
                 liveTransactionTimestamps.addLast(
@@ -541,19 +577,21 @@ implements TransactionManager {
         }
     }
 
+    public void resetSession(Session session, Session targetSession,
+                             int mode) {
+        super.resetSession(session, targetSession, mode);
+    }
+
     /**
      * remove session from queue when a transaction ends
      * and expire any committed transactions
      * that are no longer required. remove transactions ended before the first
      * timestamp in liveTransactionsSession queue
      */
-    void endTransaction(Session session) {
+    private void endTransaction(Session session) {
 
         long timestamp = session.transactionTimestamp;
-
-        session.isTransaction = false;
-
-        int index = liveTransactionTimestamps.indexOf(timestamp);
+        int  index     = liveTransactionTimestamps.indexOf(timestamp);
 
         if (index >= 0) {
             transactionCount--;

@@ -1,4 +1,4 @@
-/* Copyright (c) 2001-2011, The HSQL Development Group
+/* Copyright (c) 2001-2014, The HSQL Development Group
  * All rights reserved.
  *
  * Redistribution and use in source and binary forms, with or without
@@ -44,7 +44,7 @@ import java.util.List;
 public class AppendableException extends Exception {
 
     static final long    serialVersionUID = -1002629580611098803L;
-    public static String LS = System.getProperty("line.separator");
+    public static final String LS = System.getProperty("line.separator");
     public List<String>  appendages       = null;
 
     public String getMessage() {

@@ -1,4 +1,4 @@
-/* Copyright (c) 2001-2011, The HSQL Development Group
+/* Copyright (c) 2001-2016, The HSQL Development Group
  * All rights reserved.
  *
  * Redistribution and use in source and binary forms, with or without
@@ -57,7 +57,7 @@ import org.hsqldb.types.Types;
  *
  * @author Bob Preston (sqlbob@users dot sourceforge.net)
  * @author Fred Toussi (fredt@users dot sourceforge.net)
- * @version 2.0.1
+ * @version 2.3.5
  * @since 1.7.0
  */
 abstract class RowOutputBase extends HsqlByteArrayOutputStream
@@ -96,14 +96,16 @@ implements RowOutputInterface {
         super(buffer);
     }
 
+    public abstract long scalePosition(long position);
+
+    public abstract void setStorageSize(int size);
+
 // fredt@users - comment - methods for writing Result column type, name and data size
     public abstract void writeEnd();
 
     public abstract void writeSize(int size);
 
     public abstract void writeType(int type);
-
-    public abstract void writeIntData(int i, int position);
 
     public abstract void writeString(String s);
 
@@ -144,6 +146,8 @@ implements RowOutputInterface {
 
     protected abstract void writeBit(BinaryData o);
 
+    protected abstract void writeUUID(BinaryData o);
+
     protected abstract void writeBinary(BinaryData o);
 
     protected abstract void writeClob(ClobData o, Type type);
@@ -182,11 +186,11 @@ implements RowOutputInterface {
                 writeString(col.getName().statementName);
             }
 
-            writeData(t, o);
+            writeData(o, t);
         }
     }
 
-    public void writeData(Type t, Object o) {
+    public void writeData(Object o, Type t) {
 
         if (o == null) {
             writeNull(t);
@@ -283,6 +287,9 @@ implements RowOutputInterface {
                 writeArray((Object[]) o, t);
                 break;
 
+            case Types.SQL_GUID :
+                writeUUID((BinaryData) o);
+                break;
 
             case Types.SQL_BINARY :
             case Types.SQL_VARBINARY :

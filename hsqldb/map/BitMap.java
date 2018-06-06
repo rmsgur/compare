@@ -1,4 +1,4 @@
-/* Copyright (c) 2001-2011, The HSQL Development Group
+/* Copyright (c) 2001-2016, The HSQL Development Group
  * All rights reserved.
  *
  * Redistribution and use in source and binary forms, with or without
@@ -31,110 +31,141 @@
 
 package org.hsqldb.map;
 
+import org.hsqldb.lib.ArrayUtil;
+
 /**
- * Implementation of a bit map of any size, together with static methods to
- * manipulate int, byte and byte[] values as bit maps.
+ * Implementation of a bit map of any size. The map is initialised with
+ * the given size with no bits set. The map is fixed length depending on
+ * the constructor argument.
+ *
+ * Static methods to manipulate int, byte and byte[] values as bit maps.
  *
  * @author Fred Toussi (fredt@users dot sourceforge.net)
- * @version 2.3.0
+ * @version 2.3.3
  * @since 1.8.0
 */
 public class BitMap {
 
-    int           defaultCapacity;
-    int           capacity;
-    int[]         map;
-    int           limitPos;
-    final boolean extendCapacity;
+    private boolean canChangeSize;
+    private int     initialSize;
+    private int[]   map;
+    private int     limitPos;
 
-    public BitMap(int initialCapacity, boolean extend) {
+    public BitMap(int size, boolean extend) {
 
-        int words = initialCapacity / 32;
+        int words = size / Integer.SIZE;
 
-        if (initialCapacity % 32 != 0) {
+        if (size == 0 || size % Integer.SIZE != 0) {
             words++;
         }
 
-        defaultCapacity = capacity = words * 32;
-        map             = new int[words];
-        limitPos        = 0;
-        extendCapacity  = extend;
+        map           = new int[words];
+        canChangeSize = extend;
+        limitPos      = size;
+        initialSize   = size;
     }
 
     public BitMap(int[] map) {
 
-        this.map        = map;
-        defaultCapacity = capacity = map.length * 32;
-        limitPos        = capacity;
-        extendCapacity  = false;
+        this.map      = map;
+        initialSize   = map.length * Integer.SIZE;
+        limitPos      = initialSize;
+        canChangeSize = false;
+    }
+
+    public BitMap duplicate() {
+
+        BitMap newMap = new BitMap((int[]) ArrayUtil.duplicateArray(this.map));
+
+        newMap.canChangeSize = this.canChangeSize;
+        newMap.initialSize   = this.initialSize;
+        newMap.limitPos      = this.limitPos;
+
+        return newMap;
     }
 
     public int size() {
         return limitPos;
     }
 
-    public void setSize(int size) {
-        limitPos = size;
+    public void setSize(int newSize) {
+
+        if (!canChangeSize) {
+            throw new UnsupportedOperationException("BitMap");
+        }
+
+        ensureCapacity(newSize);
+
+        // if newSize is smaller
+        if (limitPos > newSize) {
+            unsetRange(newSize, limitPos - newSize);
+
+            limitPos = newSize;
+        }
     }
 
     /**
-     * Resets to blank with original capacity
+     * Resets to bits not set with original size
      */
     public void reset() {
 
-        if (capacity == defaultCapacity) {
-            for (int i = 0; i < map.length; i++) {
-                map[i] = 0;
+        for (int i = 0; i < map.length; i++) {
+            map[i] = 0;
+        }
+
+        limitPos = initialSize;
+    }
+
+    /**
+     * Counts the bit positions that are set both in this and the other map.
+     */
+    public int countSetMatches(BitMap other) {
+
+        int matchCount = 0;
+
+        for (int i = 0; i < map.length; i++) {
+            int matches = this.map[i] & other.map[i];
+
+            if (matches != 0) {
+                matchCount += Integer.bitCount(matches);
             }
-        } else {
-            map      = new int[defaultCapacity / 32];
-            capacity = defaultCapacity;
         }
 
-        limitPos = 0;
+        return matchCount;
     }
 
-    public void setRange(int pos, int count) {
-        setOrUnsetRange(pos, count, true);
+    public int setRange(int pos, int count) {
+        return setOrUnsetRange(pos, count, true);
     }
 
-    public void unsetRange(int pos, int count) {
-        setOrUnsetRange(pos, count, false);
+    public int unsetRange(int pos, int count) {
+        return setOrUnsetRange(pos, count, false);
     }
 
-    private void setOrUnsetRange(int pos, int count, boolean set) {
+    /**
+     * returns count of bits that change
+     */
+    private int setOrUnsetRange(int pos, int count, boolean set) {
 
-        if (pos + count > capacity) {
-            doubleCapacity();
+        if (count == 0) {
+            return 0;
         }
 
-        if (pos + count > limitPos) {
-            limitPos = pos + count;
-        }
+        ensureCapacity(pos + count);
 
         int windex    = pos >> 5;
         int windexend = (pos + count - 1) >> 5;
+        int mask      = 0xffffffff >>> (pos & 0x1F);
+        int maskend   = 0x80000000 >> ((pos + count - 1) & 0x1F);
+        int word;
+        int setCount;
 
         if (windex == windexend) {
-            int mask    = 0xffffffff >>> (pos & 0x1F);
-            int maskend = 0x80000000 >> ((pos + count - 1) & 0x1F);
-
             mask &= maskend;
-
-            int word = map[windex];
-
-            if (set) {
-                map[windex] = (word | mask);
-            } else {
-                mask        = ~mask;
-                map[windex] = (word & mask);
-            }
-
-            return;
         }
 
-        int mask = 0xffffffff >>> (pos & 0x1F);
-        int word = map[windex];
+        word     = map[windex];
+        setCount = Integer.bitCount(word & mask);
 
         if (set) {
             map[windex] = (word | mask);
@@ -143,20 +174,26 @@ public class BitMap {
             map[windex] = (word & mask);
         }
 
-        mask = 0x80000000 >> ((pos + count - 1) & 0x1F);
-        word = map[windexend];
+        if (windex != windexend) {
+            word     = map[windexend];
+            setCount += Integer.bitCount(word & maskend);
 
-        if (set) {
-            map[windexend] = (word | mask);
-        } else {
-            mask           = ~mask;
-            map[windexend] = (word & mask);
+            if (set) {
+                map[windexend] = (word | maskend);
+            } else {
+                maskend        = ~maskend;
+                map[windexend] = (word & maskend);
+            }
+
+            for (int i = windex + 1; i < windexend; i++) {
+                setCount += Integer.bitCount(map[i]);
+                map[i]   = set ? 0xffffffff
+                               : 0;
+            }
         }
 
-        for (int i = windex + 1; i < windexend; i++) {
-            map[i] = set ? 0xffffffff
-                         : 0;
-        }
+        return set ? count - setCount
+                   : setCount;
     }
 
     public int setValue(int pos, boolean set) {
@@ -169,13 +206,7 @@ public class BitMap {
      */
     public int set(int pos) {
 
-        while (pos >= capacity) {
-            doubleCapacity();
-        }
-
-        if (pos >= limitPos) {
-            limitPos = pos + 1;
-        }
+        ensureCapacity(pos + 1);
 
         int windex = pos >> 5;
         int mask   = 0x80000000 >>> (pos & 0x1F);
@@ -193,15 +224,7 @@ public class BitMap {
      */
     public int unset(int pos) {
 
-        while (pos >= capacity) {
-            doubleCapacity();
-        }
-
-        if (pos >= limitPos) {
-            limitPos = pos + 1;
-
-            return 0;
-        }
+        ensureCapacity(pos + 1);
 
         int windex = pos >> 5;
         int mask   = 0x80000000 >>> (pos & 0x1F);
@@ -233,8 +256,22 @@ public class BitMap {
         return get(pos) == 1;
     }
 
+    /**
+     * Sets all bits that are set in the other map.
+     */
+    public void set(BitMap other) {
+
+        for (int windex = 0; windex < map.length; windex++) {
+            int word = other.map[windex];
+
+            map[windex] |= word;
+        }
+    }
+
     public int countSet(int pos, int count) {
+
         int set = 0;
+
         for (int i = pos; i < pos + count; i++) {
             if (isSet(i)) {
                 set++;
@@ -248,7 +285,7 @@ public class BitMap {
 
         int setCount = 0;
 
-        for (int windex = 0; windex < limitPos / 32; windex++) {
+        for (int windex = 0; windex < limitPos / Integer.SIZE; windex++) {
             int word = map[windex];
 
             if (word == 0) {
@@ -256,7 +293,7 @@ public class BitMap {
             }
 
             if (word == -1) {
-                setCount += 32;
+                setCount += Integer.SIZE;
 
                 continue;
             }
@@ -264,8 +301,9 @@ public class BitMap {
             setCount += Integer.bitCount(word);
         }
 
-        if (limitPos % 32 != 0) {
-            int word = map[limitPos / 32];
+        if (limitPos % Integer.SIZE != 0) {
+            int maskend = 0x80000000 >> ((limitPos - 1) & 0x1F);
+            int word    = map[limitPos / Integer.SIZE] & maskend;
 
             setCount += Integer.bitCount(word);
         }
@@ -279,16 +317,16 @@ public class BitMap {
     public int countSetBitsEnd() {
 
         int count  = 0;
-        int windex = (limitPos / 32) - 1;
+        int windex = (limitPos / Integer.SIZE) - 1;
 
         for (; windex >= 0; windex--) {
             if (map[windex] == 0xffffffff) {
-                count += 32;
+                count += Integer.SIZE;
 
                 continue;
             }
 
-            int val = countSetBitsLow(map[windex]);
+            int val = countSetBitsEnd(map[windex]);
 
             count += val;
 
@@ -341,35 +379,77 @@ public class BitMap {
         return buf;
     }
 
-    private void doubleCapacity() {
+    /**
+     * Ensures capacity by enlarging the array if necessary.
+     * Sets limitPos if capacity is increased.
+     */
+    private void ensureCapacity(int newSize) {
 
-        if (!extendCapacity) {
-            throw new ArrayStoreException("BitMap extend");
+        if (newSize > limitPos) {
+            if (!canChangeSize) {
+                throw new ArrayStoreException("BitMap extend");
+            }
         }
 
-        int[] newmap = new int[map.length * 2];
+        if (newSize <= map.length * Integer.SIZE) {
+            if (newSize > limitPos) {
+                limitPos = newSize;
+            }
 
-        capacity *= 2;
+            return;
+        }
+
+        int newMapLength = map.length;
+
+        while (newSize > newMapLength * Integer.SIZE) {
+            newMapLength *= 2;
+        }
+
+        int[] newmap = new int[newMapLength];
 
         System.arraycopy(map, 0, newmap, 0, map.length);
 
-        map = newmap;
+        map      = newmap;
+        limitPos = newSize;
     }
 
     /**
      * count the set bits at the low end
      */
-    public static int countSetBitsLow(int map) {
+    public static int countSetBitsEnd(int map) {
 
         int mask  = 0x01;
         int count = 0;
 
-        for (; count < 32; count++) {
+        for (; count < Integer.SIZE; count++) {
             if ((map & mask) == 0) {
                 break;
             }
 
-            map = map >> 1;
+            map >>= 1;
+        }
+
+        return count;
+    }
+
+    /**
+     * count the unset bits at the high end
+     */
+    public static int countUnsetBitsStart(int map) {
+
+        int mask  = 0x80000000;
+        int count = 0;
+
+        if (map == 0) {
+            return Integer.SIZE;
+        }
+
+        for (; count < Integer.SIZE; count++) {
+            if ((map & mask) != 0) {
+                break;
+            }
+
+            mask >>>= 1;
         }
 
         return count;
@@ -430,7 +510,7 @@ public class BitMap {
 
     public static boolean isSet(byte[] map, int pos) {
 
-        int mask  = 0x00000080 >>> (pos & 0x07);;
+        int mask  = 0x00000080 >>> (pos & 0x07);
         int index = pos / 8;
 
         if (index >= map.length) {

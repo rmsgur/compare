@@ -1,4 +1,4 @@
-/* Copyright (c) 2001-2011, The HSQL Development Group
+/* Copyright (c) 2001-2014, The HSQL Development Group
  * All rights reserved.
  *
  * Redistribution and use in source and binary forms, with or without
@@ -68,7 +68,7 @@ public interface BlobData extends LobData {
 
     void setBytes(SessionInterface session, long pos, byte[] bytes);
 
-    public void setBytes(SessionInterface session, long pos, BlobData b, long offset, long length);
+    void setBytes(SessionInterface session, long pos, BlobData b, long offset, long length);
 
     void setBinaryStream(SessionInterface session, long pos, InputStream in);
 

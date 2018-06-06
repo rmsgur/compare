@@ -1,4 +1,4 @@
-/* Copyright (c) 2001-2011, The HSQL Development Group
+/* Copyright (c) 2001-2017, The HSQL Development Group
  * All rights reserved.
  *
  * Redistribution and use in source and binary forms, with or without
@@ -39,9 +39,9 @@ import java.sql.RowId;
 import java.sql.SQLException;
 import java.util.Arrays;
 
-/* $Id: JDBCRowId.java 5161 2013-02-03 01:45:10Z fredt $ */
+/* $Id: JDBCRowId.java 5728 2017-03-27 12:25:15Z fredt $ */
 
-//boucherb@users 20060522 - doc 1.8.1 full synch up to Mustang Build 84
+//campbell-burnet@users 20060522 - doc 1.8.1 full synch up to Mustang Build 84
 
 /**
  *
@@ -76,7 +76,7 @@ import java.util.Arrays;
  *
  * @see java.sql.DatabaseMetaData
  * @since JDK 1.6, HSQLDB 2.0
- * @author boucherb@users
+ * @author Campbell Burnet (campbell-burnet@users dot sourceforge.net)
  */
 public final class JDBCRowId implements RowId {
 
@@ -92,9 +92,9 @@ public final class JDBCRowId implements RowId {
      * RowId objects, yet it also may need to be public to allow access from
      * other packages. As such (in the interest of efficiency) this object
      * maintains a reference to the given octet sequence rather than making a
-     * copy; special care should be taken by extenal clients never to use this
+     * copy; special care should be taken by external clients never to use this
      * constructor with a byte array object that may later be modified
-     * extenally.
+     * externally.
      *
      * @param id the octet sequence representing the Rowid value
      * @throws SQLException if the argument is null
@@ -120,7 +120,7 @@ public final class JDBCRowId implements RowId {
 
     /**
      * Constructs a new JDBCRowId instance whose internal octet sequence is
-     * is that represented by the given hexidecimal character sequence. <p>
+     * is that represented by the given hexadecimal character sequence. <p>
      * @param hex the hexadecimal character sequence from which to derive
      *        the internal octet sequence
      * @throws java.sql.SQLException if the argument is null or is not a valid

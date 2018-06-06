@@ -1,4 +1,4 @@
-/* Copyright (c) 2001-2011, The HSQL Development Group
+/* Copyright (c) 2001-2016, The HSQL Development Group
  * All rights reserved.
  *
  * Redistribution and use in source and binary forms, with or without
@@ -31,16 +31,14 @@
 
 package org.hsqldb.navigator;
 
-import java.io.IOException;
-
 import org.hsqldb.HsqlException;
 import org.hsqldb.QueryExpression;
 import org.hsqldb.QuerySpecification;
 import org.hsqldb.Row;
 import org.hsqldb.Session;
 import org.hsqldb.SortAndSlice;
+import org.hsqldb.Table;
 import org.hsqldb.TableBase;
-import org.hsqldb.index.Index;
 import org.hsqldb.lib.ArrayUtil;
 import org.hsqldb.persist.PersistentStore;
 import org.hsqldb.result.ResultMetaData;
@@ -51,46 +49,28 @@ import org.hsqldb.rowio.RowOutputInterface;
  * Implementation of RowSetNavigator using a table as the data store.
  *
  * @author Fred Toussi (fredt@users dot sourceforge.net)
- * @version 2.2.9
+ * @version 2.3.5
  * @since 1.9.0
  */
 public class RowSetNavigatorDataTable extends RowSetNavigatorData {
 
-    final Session          session;
     public TableBase       table;
     public PersistentStore store;
     RowIterator            iterator;
     Row                    currentRow;
-    int                    maxMemoryRowCount;
-    boolean                isClosed;
-    int                    visibleColumnCount;
-    boolean                isAggregate;
-    boolean                isSimpleAggregate;
-    Object[]               simpleAggregateData;
     Object[]               tempRowData;
-
-    //
-    boolean reindexTable;
-
-    //
-    private Index mainIndex;
-    private Index fullIndex;
-    private Index orderIndex;
-    private Index groupIndex;
-    private Index idIndex;
 
     public RowSetNavigatorDataTable(Session session,
                                     QuerySpecification select) {
 
         super(session);
 
-        this.session       = session;
         this.rangePosition = select.resultRangePosition;
-        maxMemoryRowCount  = session.getResultMemoryRowCount();
         visibleColumnCount = select.indexLimitVisible;
         table              = select.resultTable.duplicate();
-        table.store = store = session.sessionData.getNewResultRowStore(table,
+        store = session.sessionData.getNewResultRowStore(table,
                 !select.isAggregated);
+        table.store       = store;
         isAggregate       = select.isAggregated;
         isSimpleAggregate = select.isAggregated && !select.isGrouped;
         reindexTable      = select.isGrouped;
@@ -106,12 +86,12 @@ public class RowSetNavigatorDataTable extends RowSetNavigatorData {
                                     QuerySpecification select,
                                     RowSetNavigatorData navigator) {
 
-        this(session, (QuerySpecification) select);
+        this(session, select);
 
         navigator.reset();
 
-        while (navigator.hasNext()) {
-            add(navigator.getNext());
+        while (navigator.next()) {
+            add(navigator.getCurrent());
         }
     }
 
@@ -120,27 +100,23 @@ public class RowSetNavigatorDataTable extends RowSetNavigatorData {
 
         super(session);
 
-        this.session       = session;
-        maxMemoryRowCount  = session.getResultMemoryRowCount();
         table              = queryExpression.resultTable.duplicate();
         visibleColumnCount = table.getColumnCount();
-        table.store = store = session.sessionData.getNewResultRowStore(table,
-                true);
-        mainIndex = queryExpression.mainIndex;
-        fullIndex = queryExpression.fullIndex;
+        store = session.sessionData.getNewResultRowStore(table, true);
+        table.store        = store;
+        mainIndex          = queryExpression.mainIndex;
+        fullIndex          = queryExpression.fullIndex;
     }
 
-    public RowSetNavigatorDataTable(Session session, TableBase table) {
+    public RowSetNavigatorDataTable(Session session, Table table) {
 
         super(session);
 
-        this.session       = session;
-        maxMemoryRowCount  = session.getResultMemoryRowCount();
         this.table         = table;
         visibleColumnCount = table.getColumnCount();
-        store              = table.getRowStore(session);
         mainIndex          = table.getPrimaryIndex();
-        fullIndex          = table.getFullIndex();
+        fullIndex          = table.getFullIndex(session);
+        store              = table.getRowStore(session);
         this.size          = (int) mainIndex.size(session, store);
 
         reset();
@@ -153,10 +129,6 @@ public class RowSetNavigatorDataTable extends RowSetNavigatorData {
         }
 
         mainIndex = fullIndex;
-
-        if (iterator != null) {
-            iterator.release();
-        }
 
         reset();
     }
@@ -190,9 +162,10 @@ public class RowSetNavigatorDataTable extends RowSetNavigatorData {
     public void add(Object[] data) {
 
         try {
-            Row row = (Row) store.getNewCachedObject(session, data, false);
+            Row row = (Row) store.getNewCachedObject((Session) session, data,
+                false);
 
-            store.indexRow(session, row);
+            store.indexRow((Session) session, row);
 
             size++;
         } catch (HsqlException e) {}
@@ -222,11 +195,10 @@ public class RowSetNavigatorDataTable extends RowSetNavigatorData {
             return;
         }
 
-        RowIterator it = groupIndex.findFirstRow(session, store, oldData);
+        RowIterator it = groupIndex.findFirstRow((Session) session, store,
+            oldData);
 
-        if (it.hasNext()) {
-            Row row = it.getNextRow();
-
+        if (it.next()) {
             it.removeCurrent();
             it.release();
 
@@ -252,7 +224,13 @@ public class RowSetNavigatorDataTable extends RowSetNavigatorData {
 
         boolean result = super.next();
 
-        currentRow = iterator.getNextRow();
+        if (!result) {
+            return false;
+        }
+
+        iterator.next();
+
+        currentRow = iterator.getCurrentRow();
 
         return result;
     }
@@ -277,7 +255,7 @@ public class RowSetNavigatorDataTable extends RowSetNavigatorData {
             iterator.release();
         }
 
-        iterator = mainIndex.firstRow(session, store, 0);
+        iterator = mainIndex.firstRow((Session) session, store, 0, null);
     }
 
     public void release() {
@@ -305,11 +283,9 @@ public class RowSetNavigatorDataTable extends RowSetNavigatorData {
         return store.isMemory();
     }
 
-    public void read(RowInputInterface in,
-                     ResultMetaData meta) throws IOException {}
+    public void read(RowInputInterface in, ResultMetaData meta) {}
 
-    public void write(RowOutputInterface out,
-                      ResultMetaData meta) throws IOException {
+    public void write(RowOutputInterface out, ResultMetaData meta) {
 
         reset();
         out.writeLong(id);
@@ -317,8 +293,8 @@ public class RowSetNavigatorDataTable extends RowSetNavigatorData {
         out.writeInt(0);    // offset
         out.writeInt(size);
 
-        while (hasNext()) {
-            Object[] data = getNext();
+        while (next()) {
+            Object[] data = getCurrent();
 
             out.writeData(meta.getExtendedColumnCount(), meta.columnTypes,
                           data, null, null);
@@ -331,16 +307,19 @@ public class RowSetNavigatorDataTable extends RowSetNavigatorData {
 
         tempRowData[0] = rowId;
 
-        RowIterator it = idIndex.findFirstRow(session, store, tempRowData,
+        RowIterator it = idIndex.findFirstRow((Session) session, store,
+                                              tempRowData,
                                               idIndex.getDefaultColumnMap());
 
-        return it.getNext();
+        it.next();
+
+        return it.getCurrent();
     }
 
     public void copy(RowSetNavigatorData other, int[] rightColumnIndexes) {
 
-        while (other.hasNext()) {
-            Object[] currentData = other.getNext();
+        while (other.next()) {
+            Object[] currentData = other.getCurrent();
 
             addAdjusted(currentData, rightColumnIndexes);
         }
@@ -356,21 +335,24 @@ public class RowSetNavigatorDataTable extends RowSetNavigatorData {
         removeDuplicates(session);
         other.reset();
 
-        while (other.hasNext()) {
-            currentData = other.getNext();
+        while (other.next()) {
+            currentData = other.getCurrent();
 
             RowIterator it = findFirstRow(currentData);
 
-            if (!it.hasNext()) {
+            if (!it.next()) {
                 currentData =
                     (Object[]) ArrayUtil.resizeArrayIfDifferent(currentData,
                         colCount);
 
                 add(currentData);
             }
+
+            it.release();
         }
 
         other.release();
+        reset();
     }
 
     public void intersect(Session session, RowSetNavigatorData other) {
@@ -378,8 +360,8 @@ public class RowSetNavigatorDataTable extends RowSetNavigatorData {
         removeDuplicates(session);
         other.sortFull(session);
 
-        while (hasNext()) {
-            Object[] currentData = getNext();
+        while (next()) {
+            Object[] currentData = getCurrent();
             boolean  hasRow      = other.containsRow(currentData);
 
             if (!hasRow) {
@@ -402,8 +384,8 @@ public class RowSetNavigatorDataTable extends RowSetNavigatorData {
 
         it = fullIndex.emptyIterator();
 
-        while (hasNext()) {
-            Object[] currentData = getNext();
+        while (next()) {
+            Object[] currentData = getCurrent();
             boolean newGroup =
                 compareData == null
                 || fullIndex.compareRowNonUnique(
@@ -415,15 +397,14 @@ public class RowSetNavigatorDataTable extends RowSetNavigatorData {
                 it          = other.findFirstRow(currentData);
             }
 
-            otherRow  = it.getNextRow();
-            otherData = otherRow == null ? null
-                                         : otherRow.getData();
+            if (it.next()) {
+                otherData = it.getCurrent();
 
-            if (otherData != null
-                    && fullIndex.compareRowNonUnique(
+                if (fullIndex.compareRowNonUnique(
                         session, currentData, otherData,
                         fullIndex.getColumnCount()) == 0) {
-                continue;
+                    continue;
+                }
             }
 
             removeCurrent();
@@ -437,8 +418,8 @@ public class RowSetNavigatorDataTable extends RowSetNavigatorData {
         removeDuplicates(session);
         other.sortFull(session);
 
-        while (hasNext()) {
-            Object[] currentData = getNext();
+        while (next()) {
+            Object[] currentData = getCurrent();
             boolean  hasRow      = other.containsRow(currentData);
 
             if (hasRow) {
@@ -453,7 +434,6 @@ public class RowSetNavigatorDataTable extends RowSetNavigatorData {
 
         Object[]    compareData = null;
         RowIterator it;
-        Row         otherRow  = null;
         Object[]    otherData = null;
 
         sortFull(session);
@@ -461,8 +441,8 @@ public class RowSetNavigatorDataTable extends RowSetNavigatorData {
 
         it = fullIndex.emptyIterator();
 
-        while (hasNext()) {
-            Object[] currentData = getNext();
+        while (next()) {
+            Object[] currentData = getCurrent();
             boolean newGroup =
                 compareData == null
                 || fullIndex.compareRowNonUnique(
@@ -474,15 +454,14 @@ public class RowSetNavigatorDataTable extends RowSetNavigatorData {
                 it          = other.findFirstRow(currentData);
             }
 
-            otherRow  = it.getNextRow();
-            otherData = otherRow == null ? null
-                                         : otherRow.getData();
+            if (it.next()) {
+                otherData = it.getCurrent();
 
-            if (otherData != null
-                    && fullIndex.compareRowNonUnique(
+                if (fullIndex.compareRowNonUnique(
                         session, currentData, otherData,
                         fullIndex.getColumnCount()) == 0) {
-                removeCurrent();
+                    removeCurrent();
+                }
             }
         }
 
@@ -495,8 +474,8 @@ public class RowSetNavigatorDataTable extends RowSetNavigatorData {
 
         Object[] lastRowData = null;
 
-        while (hasNext()) {
-            Object[] currentData = getNext();
+        while (next()) {
+            Object[] currentData = getCurrent();
 
             if (hasNull(currentData)) {
                 continue;
@@ -566,8 +545,7 @@ public class RowSetNavigatorDataTable extends RowSetNavigatorData {
             next();
         }
 
-        while (hasNext()) {
-            next();
+        while (next()) {
             removeCurrent();
         }
     }
@@ -598,10 +576,11 @@ public class RowSetNavigatorDataTable extends RowSetNavigatorData {
             return simpleAggregateData;
         }
 
-        RowIterator it = groupIndex.findFirstRow(session, store, data);
+        RowIterator it = groupIndex.findFirstRow((Session) session, store,
+            data);
 
-        if (it.hasNext()) {
-            Row row = it.getNextRow();
+        if (it.next()) {
+            Row row = it.getCurrentRow();
 
             if (isAggregate) {
                 row.setChanged(true);
@@ -615,8 +594,9 @@ public class RowSetNavigatorDataTable extends RowSetNavigatorData {
 
     boolean containsRow(Object[] data) {
 
-        RowIterator it     = mainIndex.findFirstRow(session, store, data);
-        boolean     result = it.hasNext();
+        RowIterator it = mainIndex.findFirstRow((Session) session, store,
+            data);
+        boolean result = it.next();
 
         it.release();
 
@@ -624,6 +604,6 @@ public class RowSetNavigatorDataTable extends RowSetNavigatorData {
     }
 
     RowIterator findFirstRow(Object[] data) {
-        return mainIndex.findFirstRow(session, store, data);
+        return mainIndex.findFirstRow((Session) session, store, data);
     }
 }

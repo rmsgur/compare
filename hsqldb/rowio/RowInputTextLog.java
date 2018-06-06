@@ -1,4 +1,4 @@
-/* Copyright (c) 2001-2011, The HSQL Development Group
+/* Copyright (c) 2001-2016, The HSQL Development Group
  * All rights reserved.
  *
  * Redistribution and use in source and binary forms, with or without
@@ -31,7 +31,6 @@
 
 package org.hsqldb.rowio;
 
-import java.io.IOException;
 import java.math.BigDecimal;
 import java.util.Calendar;
 import java.util.GregorianCalendar;
@@ -39,6 +38,7 @@ import java.util.GregorianCalendar;
 import org.hsqldb.HsqlDateTime;
 import org.hsqldb.HsqlException;
 import org.hsqldb.Scanner;
+import org.hsqldb.Session;
 import org.hsqldb.Tokens;
 import org.hsqldb.error.Error;
 import org.hsqldb.error.ErrorCode;
@@ -55,7 +55,6 @@ import org.hsqldb.types.IntervalMonthData;
 import org.hsqldb.types.IntervalSecondData;
 import org.hsqldb.types.IntervalType;
 import org.hsqldb.types.JavaObjectData;
-import org.hsqldb.types.NumberType;
 import org.hsqldb.types.TimeData;
 import org.hsqldb.types.TimestampData;
 import org.hsqldb.types.Type;
@@ -64,7 +63,7 @@ import org.hsqldb.types.Type;
  * Class for reading the data for a database row from the script file.
  *
  * @author Fred Toussi (fredt@users dot sourceforge.net)
- * @version 2.2.9
+ * @version 2.3.5
  * @since 1.7.3
  */
 public class RowInputTextLog extends RowInputBase
@@ -94,9 +93,9 @@ implements RowInputInterface {
         this.version18 = version18;
     }
 
-    public void setSource(String text) {
+    public void setSource(Session session, String text) {
 
-        scanner.reset(text);
+        scanner.reset(session, text);
 
         statementType = ScriptReaderBase.ANY_STATEMENT;
 
@@ -159,7 +158,7 @@ implements RowInputInterface {
         readFieldPrefix();
         scanner.scanNext();
 
-        boolean minus = scanner.getTokenType() == Tokens.MINUS;
+        boolean minus = scanner.getTokenType() == Tokens.MINUS_OP;
 
         if (minus) {
             scanner.scanNext();
@@ -169,7 +168,7 @@ implements RowInputInterface {
 
         if (minus) {
             try {
-                value = ((NumberType) scanner.getDataType()).negate(value);
+                value = scanner.getDataType().negate(value);
             } catch (HsqlException e) {}
         }
     }
@@ -186,26 +185,34 @@ implements RowInputInterface {
         }
     }
 
-    public String readString() throws IOException {
+    public String readString() {
 
         readField();
 
         return (String) value;
     }
 
-    public short readShort() throws IOException {
-        throw Error.runtimeError(ErrorCode.U_S0500, "");
+    public char readChar() {
+        throw Error.runtimeError(ErrorCode.U_S0500, "RowInputTextLog");
     }
 
-    public int readInt() throws IOException {
-        throw Error.runtimeError(ErrorCode.U_S0500, "");
+    public byte readByte() {
+        throw Error.runtimeError(ErrorCode.U_S0500, "RowInputTextLog");
     }
 
-    public long readLong() throws IOException {
-        throw Error.runtimeError(ErrorCode.U_S0500, "");
+    public short readShort() {
+        throw Error.runtimeError(ErrorCode.U_S0500, "RowInputTextLog");
     }
 
-    public int readType() throws IOException {
+    public int readInt() {
+        throw Error.runtimeError(ErrorCode.U_S0500, "RowInputTextLog");
+    }
+
+    public long readLong() {
+        throw Error.runtimeError(ErrorCode.U_S0500, "RowInputTextLog");
+    }
+
+    public int readType() {
         return 0;
     }
 
@@ -215,21 +222,21 @@ implements RowInputInterface {
         return false;
     }
 
-    protected String readChar(Type type) throws IOException {
+    protected String readChar(Type type) {
 
         readField();
 
         return (String) value;
     }
 
-    protected Integer readSmallint() throws IOException {
+    protected Integer readSmallint() {
 
         readNumberField(Type.SQL_SMALLINT);
 
         return (Integer) value;
     }
 
-    protected Integer readInteger() throws IOException {
+    protected Integer readInteger() {
 
         readNumberField(Type.SQL_INTEGER);
 
@@ -240,7 +247,7 @@ implements RowInputInterface {
         return (Integer) value;
     }
 
-    protected Long readBigint() throws IOException {
+    protected Long readBigint() {
 
         readNumberField(Type.SQL_BIGINT);
 
@@ -255,7 +262,7 @@ implements RowInputInterface {
         return ValuePool.getLong(((Number) value).longValue());
     }
 
-    protected Double readReal() throws IOException {
+    protected Double readReal() {
 
         readNumberField(Type.SQL_DOUBLE);
 
@@ -263,7 +270,7 @@ implements RowInputInterface {
             return null;
         }
 
-        if (scanner.scanSpecialIdentifier(Tokens.T_DIVIDE)) {
+        if (scanner.scanSpecialIdentifier(Tokens.T_DIVIDE_OP)) {
             scanner.scanNext();
 
             Object divisor = scanner.getValue();
@@ -277,10 +284,10 @@ implements RowInputInterface {
                 } else if (((Number) value).doubleValue() == 0E0) {
                     i = Double.NaN;
                 } else {
-                    throw Error.error(ErrorCode.X_42584);
+                    throw Error.error(ErrorCode.X_42585);
                 }
             } else {
-                throw Error.error(ErrorCode.X_42584);
+                throw Error.error(ErrorCode.X_42585);
             }
 
             value = Double.valueOf(i);
@@ -289,7 +296,7 @@ implements RowInputInterface {
         return (Double) value;
     }
 
-    protected BigDecimal readDecimal(Type type) throws IOException {
+    protected BigDecimal readDecimal(Type type) {
 
         readNumberField(type);
 
@@ -299,10 +306,10 @@ implements RowInputInterface {
 
         BigDecimal bd = (BigDecimal) type.convertToDefaultType(null, value);
 
-        return (BigDecimal) type.convertToTypeLimits(null, bd);
+        return bd;
     }
 
-    protected TimeData readTime(Type type) throws IOException {
+    protected TimeData readTime(Type type) {
 
         readField();
 
@@ -324,7 +331,7 @@ implements RowInputInterface {
         return scanner.newTime((String) value);
     }
 
-    protected TimestampData readDate(Type type) throws IOException {
+    protected TimestampData readDate(Type type) {
 
         readField();
 
@@ -346,7 +353,7 @@ implements RowInputInterface {
         return scanner.newDate((String) value);
     }
 
-    protected TimestampData readTimestamp(Type type) throws IOException {
+    protected TimestampData readTimestamp(Type type) {
 
         readField();
 
@@ -362,7 +369,7 @@ implements RowInputInterface {
                     dateTime.getTime());
             int nanos = dateTime.getNanos();
 
-            nanos = ((DateTimeType) type).normaliseFraction(nanos, type.scale);
+            nanos = DateTimeType.normaliseFraction(nanos, type.scale);
 
             return new TimestampData(millis / 1000, nanos, 0);
         }
@@ -370,8 +377,7 @@ implements RowInputInterface {
         return scanner.newTimestamp((String) value);
     }
 
-    protected IntervalMonthData readYearMonthInterval(Type type)
-    throws IOException {
+    protected IntervalMonthData readYearMonthInterval(Type type) {
 
         readField();
 
@@ -383,8 +389,7 @@ implements RowInputInterface {
                 (IntervalType) type);
     }
 
-    protected IntervalSecondData readDaySecondInterval(Type type)
-    throws IOException {
+    protected IntervalSecondData readDaySecondInterval(Type type) {
 
         readField();
 
@@ -396,7 +401,7 @@ implements RowInputInterface {
                 (IntervalType) type);
     }
 
-    protected Boolean readBoole() throws IOException {
+    protected Boolean readBoole() {
 
         readFieldPrefix();
         scanner.scanNext();
@@ -414,7 +419,7 @@ implements RowInputInterface {
         return (Boolean) value;
     }
 
-    protected Object readOther() throws IOException {
+    protected Object readOther() {
 
         readFieldPrefix();
 
@@ -433,7 +438,7 @@ implements RowInputInterface {
         return new JavaObjectData(((BinaryData) value).getBytes());
     }
 
-    protected BinaryData readBit() throws IOException {
+    protected BinaryData readBit() {
 
         readFieldPrefix();
 
@@ -452,7 +457,26 @@ implements RowInputInterface {
         return (BinaryData) value;
     }
 
-    protected BinaryData readBinary() throws IOException {
+    protected BinaryData readUUID() {
+
+        readFieldPrefix();
+
+        if (scanner.scanNull()) {
+            return null;
+        }
+
+        scanner.scanUUIDStringWithQuote();
+
+        if (scanner.getTokenType() == Tokens.X_MALFORMED_BINARY_STRING) {
+            throw Error.error(ErrorCode.X_42587);
+        }
+
+        value = scanner.getValue();
+
+        return (BinaryData) value;
+    }
+
+    protected BinaryData readBinary() {
 
         readFieldPrefix();
 
@@ -471,7 +495,7 @@ implements RowInputInterface {
         return (BinaryData) value;
     }
 
-    protected ClobData readClob() throws IOException {
+    protected ClobData readClob() {
 
         readNumberField(Type.SQL_BIGINT);
 
@@ -484,7 +508,7 @@ implements RowInputInterface {
         return new ClobDataID(id);
     }
 
-    protected BlobData readBlob() throws IOException {
+    protected BlobData readBlob() {
 
         readNumberField(Type.SQL_BIGINT);
 
@@ -497,7 +521,7 @@ implements RowInputInterface {
         return new BlobDataID(id);
     }
 
-    protected Object[] readArray(Type type) throws IOException {
+    protected Object[] readArray(Type type) {
 
         type = type.collectionBaseType();
 

@@ -1,4 +1,4 @@
-/* Copyright (c) 2001-2011, The HSQL Development Group
+/* Copyright (c) 2001-2017, The HSQL Development Group
  * All rights reserved.
  *
  * Redistribution and use in source and binary forms, with or without
@@ -32,7 +32,6 @@
 package org.hsqldb;
 
 import org.hsqldb.HsqlNameManager.HsqlName;
-import org.hsqldb.HsqlNameManager.SimpleName;
 import org.hsqldb.ParserDQL.CompileContext;
 import org.hsqldb.error.Error;
 import org.hsqldb.error.ErrorCode;
@@ -47,21 +46,18 @@ import org.hsqldb.rights.Grantee;
 /**
  * Statement implementation for DML and base DQL statements.
  *
- * @author Campbell Boucher-Burnet (boucherb@users dot sourceforge.net)
+ * @author Campbell Burnet (campbell-burnet@users dot sourceforge.net)
  * @author Fred Toussi (fredt@users dot sourceforge.net)
- * @version 2.2.7
+ * @version 2.3.5
  * @since 1.7.2
  */
 
 // fredt@users 20040404 - patch 1.7.2 - fixed type resolution for parameters
-// boucherb@users 200404xx - patch 1.7.2 - changed parameter naming scheme for SQLCI client usability/support
+// campbell-burnet@users 200404xx - patch 1.7.2 - changed parameter naming scheme for SQLCI client usability/support
 // fredt@users 20050609 - 1.8.0 - fixed EXPLAIN PLAN by implementing describe(Session)
 // fredt@users - 1.9.0 - support for generated column reporting
 // fredt@users - 1.9.0 - support for multi-row inserts
 public abstract class StatementDMQL extends Statement {
-
-    public static final String PCOL_PREFIX        = "@p";
-    static final String        RETURN_COLUMN_NAME = "@p0";
 
     /** target table for INSERT_XXX, UPDATE and DELETE and MERGE */
     Table targetTable;
@@ -118,19 +114,7 @@ public abstract class StatementDMQL extends Statement {
     /**
      * Name of cursor
      */
-    SimpleName cursorName;
-
-    /**
-     * Parse-order array of Expression objects, all of type PARAMETER ,
-     * involved in some way in any INSERT_XXX, UPDATE, DELETE, SELECT or
-     * CALL CompiledStatement
-     */
-    ExpressionColumn[] parameters;
-
-    /**
-     * ResultMetaData for parameters
-     */
-    ResultMetaData parameterMetaData;
+    HsqlName cursorName;
 
     /**
      * Subqueries inverse usage depth order
@@ -164,14 +148,6 @@ public abstract class StatementDMQL extends Statement {
         }
     }
 
-    public void setCursorName(SimpleName name) {
-        cursorName = name;
-    }
-
-    public SimpleName getCursorName() {
-        return cursorName;
-    }
-
     public Result execute(Session session) {
 
         Result result;
@@ -193,14 +169,12 @@ public abstract class StatementDMQL extends Statement {
             }
 
             result = getResult(session);
-
-            clearStructures(session);
         } catch (Throwable t) {
-            clearStructures(session);
-
-            result = Result.newErrorResult(t, null);
+            result = Result.newErrorResult(t);
 
             result.getException().setStatementType(group, type);
+        } finally {
+            clearStructures(session);
         }
 
         return result;
@@ -336,7 +310,7 @@ public abstract class StatementDMQL extends Statement {
         return subQueryArray;
     }
 
-    void setDatabseObjects(Session session, CompileContext compileContext) {
+    void setDatabaseObjects(Session session, CompileContext compileContext) {
 
         parameters = compileContext.getParameters();
 
@@ -379,6 +353,16 @@ public abstract class StatementDMQL extends Statement {
 
         if (targetTable != null) {
             references.add(targetTable.getName());
+
+            if (targetTable == baseTable) {
+                if (insertCheckColumns != null) {
+                    targetTable.getColumnNames(insertCheckColumns, references);
+                }
+
+                if (updateCheckColumns != null) {
+                    targetTable.getColumnNames(updateCheckColumns, references);
+                }
+            }
         }
     }
 
@@ -511,71 +495,6 @@ public abstract class StatementDMQL extends Statement {
         return parameterMetaData;
     }
 
-    void setParameterMetaData() {
-
-        int     offset;
-        int     idx;
-        boolean hasReturnValue;
-
-        offset = 0;
-
-        if (parameters.length == 0) {
-            parameterMetaData = ResultMetaData.emptyParamMetaData;
-
-            return;
-        }
-
-// NO:  Not yet
-//        hasReturnValue = (type == CALL && !expression.isProcedureCall());
-//
-//        if (hasReturnValue) {
-//            outlen++;
-//            offset = 1;
-//        }
-        parameterMetaData =
-            ResultMetaData.newParameterMetaData(parameters.length);
-
-// NO: Not yet
-//        if (hasReturnValue) {
-//            e = expression;
-//            out.sName[0]       = DIProcedureInfo.RETURN_COLUMN_NAME;
-//            out.sClassName[0]  = e.getValueClassName();
-//            out.colType[0]     = e.getDataType();
-//            out.colSize[0]     = e.getColumnSize();
-//            out.colScale[0]    = e.getColumnScale();
-//            out.nullability[0] = e.nullability;
-//            out.isIdentity[0]  = false;
-//            out.paramMode[0]   = expression.PARAM_OUT;
-//        }
-        for (int i = 0; i < parameters.length; i++) {
-            idx = i + offset;
-
-            // always i + 1.  We currently use the convention of @p0 to name the
-            // return value OUT parameter
-            parameterMetaData.columnLabels[idx] = StatementDMQL.PCOL_PREFIX
-                                                  + (i + 1);
-            parameterMetaData.columnTypes[idx] = parameters[i].dataType;
-
-            if (parameters[i].dataType == null) {
-                throw Error.error(ErrorCode.X_42567);
-            }
-
-            byte parameterMode = SchemaObject.ParameterModes.PARAM_IN;
-
-            if (parameters[i].column != null
-                    && parameters[i].column.getParameterMode()
-                       != SchemaObject.ParameterModes.PARAM_UNKNOWN) {
-                parameterMode = parameters[i].column.getParameterMode();
-            }
-
-            parameterMetaData.paramModes[idx] = parameterMode;
-            parameterMetaData.paramNullable[idx] =
-                parameters[i].column == null
-                ? SchemaObject.Nullability.NULLABLE
-                : parameters[i].column.getNullability();
-        }
-    }
-
     /**
      * Retrieves a String representation of this object.
      */
@@ -605,7 +524,7 @@ public abstract class StatementDMQL extends Statement {
 
             case StatementTypes.SELECT_CURSOR : {
                 sb.append(queryExpression.describe(session, 0));
-                appendParms(sb).append('\n');
+                appendParams(sb).append('\n');
                 appendSubqueries(session, sb, 2);
 
                 return sb.toString();
@@ -616,7 +535,7 @@ public abstract class StatementDMQL extends Statement {
                     sb.append('[').append('\n');
                     appendMultiColumns(sb, insertColumnMap).append('\n');
                     appendTable(sb).append('\n');
-                    appendParms(sb).append('\n');
+                    appendParams(sb).append('\n');
                     appendSubqueries(session, sb, 2).append(']');
 
                     return sb.toString();
@@ -627,7 +546,7 @@ public abstract class StatementDMQL extends Statement {
                     appendTable(sb).append('\n');
                     sb.append(queryExpression.describe(session,
                                                        blanks)).append('\n');
-                    appendParms(sb).append('\n');
+                    appendParams(sb).append('\n');
                     appendSubqueries(session, sb, 2).append(']');
 
                     return sb.toString();
@@ -645,7 +564,7 @@ public abstract class StatementDMQL extends Statement {
                             blanks)).append('\n');
                 }
 
-                appendParms(sb).append('\n');
+                appendParams(sb).append('\n');
                 appendSubqueries(session, sb, 2).append(']');
 
                 return sb.toString();
@@ -661,7 +580,7 @@ public abstract class StatementDMQL extends Statement {
                             blanks)).append('\n');
                 }
 
-                appendParms(sb).append('\n');
+                appendParams(sb).append('\n');
                 appendSubqueries(session, sb, 2).append(']');
 
                 return sb.toString();
@@ -685,7 +604,7 @@ public abstract class StatementDMQL extends Statement {
                             blanks)).append('\n');
                 }
 
-                appendParms(sb).append('\n');
+                appendParams(sb).append('\n');
                 appendSubqueries(session, sb, 2).append(']');
 
                 return sb.toString();
@@ -784,7 +703,7 @@ public abstract class StatementDMQL extends Statement {
         return sb;
     }
 
-    private StringBuffer appendParms(StringBuffer sb) {
+    private StringBuffer appendParams(StringBuffer sb) {
 
         sb.append("PARAMETERS=[");
 
@@ -808,7 +727,7 @@ public abstract class StatementDMQL extends Statement {
 
     public void resolve(Session session) {}
 
-    public final boolean isCatalogLock() {
+    public final boolean isCatalogLock(int model) {
         return false;
     }
 

@@ -1,4 +1,4 @@
-/* Copyright (c) 2001-2011, The HSQL Development Group
+/* Copyright (c) 2001-2016, The HSQL Development Group
  * All rights reserved.
  *
  * Redistribution and use in source and binary forms, with or without
@@ -31,8 +31,6 @@
 
 package org.hsqldb.navigator;
 
-import java.io.IOException;
-
 import org.hsqldb.HsqlException;
 import org.hsqldb.Row;
 import org.hsqldb.error.Error;
@@ -47,7 +45,7 @@ import org.hsqldb.rowio.RowOutputInterface;
  * a server-side row set.
  *
  * @author Fred Toussi (fredt@users dot sourceforge.net)
- * @version 2.2.7
+ * @version 2.3.5
  * @since 1.9.0
  */
 public class RowSetNavigatorClient extends RowSetNavigator {
@@ -90,7 +88,7 @@ public class RowSetNavigatorClient extends RowSetNavigator {
     }
 
     /**
-     * For communication of small resuls such as BATCHEXECRESPONSE
+     * For communication of small results such as BATCHEXECRESPONSE
      */
     public void setData(Object[][] table) {
         this.table = table;
@@ -114,7 +112,7 @@ public class RowSetNavigatorClient extends RowSetNavigator {
             return null;
         }
 
-        if (currentPos == currentOffset + table.length) {
+        if (currentPos >= currentOffset + table.length) {
             getBlock(currentOffset + table.length);
         }
 
@@ -125,8 +123,18 @@ public class RowSetNavigatorClient extends RowSetNavigator {
         throw Error.runtimeError(ErrorCode.U_S0500, "RowSetNavigatorClient");
     }
 
+    /**
+     * Only for navigators for INSERT
+     */
     public void removeCurrent() {
-        throw Error.runtimeError(ErrorCode.U_S0500, "RowSetNavigatorClient");
+
+        System.arraycopy(table, currentPos + 1, table, currentPos,
+                         size - currentPos - 1);
+
+        table[size - 1] = null;
+
+        currentPos--;
+        size--;
     }
 
     public void add(Object[] data) {
@@ -143,13 +151,20 @@ public class RowSetNavigatorClient extends RowSetNavigator {
     }
 
     public void clear() {
+
         setData(emptyTable);
+
+        size = 0;
+
         reset();
     }
 
     public void release() {
+
         setData(emptyTable);
         reset();
+
+        isClosed = true;
     }
 
     public boolean absolute(int position) {
@@ -179,8 +194,7 @@ public class RowSetNavigatorClient extends RowSetNavigator {
         return true;
     }
 
-    public void readSimple(RowInputInterface in,
-                           ResultMetaData meta) throws IOException {
+    public void readSimple(RowInputInterface in, ResultMetaData meta) {
 
         size = in.readInt();
 
@@ -193,8 +207,7 @@ public class RowSetNavigatorClient extends RowSetNavigator {
         }
     }
 
-    public void writeSimple(RowOutputInterface out,
-                            ResultMetaData meta) throws IOException {
+    public void writeSimple(RowOutputInterface out, ResultMetaData meta) {
 
         out.writeInt(size);
 
@@ -206,8 +219,7 @@ public class RowSetNavigatorClient extends RowSetNavigator {
         }
     }
 
-    public void read(RowInputInterface in,
-                     ResultMetaData meta) throws IOException {
+    public void read(RowInputInterface in, ResultMetaData meta) {
 
         id            = in.readLong();
         size          = in.readInt();
@@ -223,8 +235,7 @@ public class RowSetNavigatorClient extends RowSetNavigator {
         }
     }
 
-    public void write(RowOutputInterface out,
-                      ResultMetaData meta) throws HsqlException, IOException {
+    public void write(RowOutputInterface out, ResultMetaData meta) {
 
         int limit = size - currentOffset;
 

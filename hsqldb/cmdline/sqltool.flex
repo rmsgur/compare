@@ -1,4 +1,4 @@
-/* Copyright (c) 2001-2011, The HSQL Development Group
+/* Copyright (c) 2001-2015, The HSQL Development Group
  * All rights reserved.
  *
  * Redistribution and use in source and binary forms, with or without
@@ -29,7 +29,7 @@
  */
 
 
-/* @(#)$Id: sqltool.flex 4705 2011-11-05 01:15:23Z unsaved $ */
+/* @(#)$Id: sqltool.flex 5472 2015-05-22 23:00:58Z fredt $ */
 
 package org.hsqldb.cmdline.sqltool;
 
@@ -217,9 +217,13 @@ TRADITIONAL_COMMENT = "/*" ~"*/"
 [Bb][Ee][Gg][Ii][Nn] [\f\t ]* {LINETERM_MAC} |
 [Cc][Rr][Ee][Aa][Tt][Ee] [\f\t ]+ [Ff][Uu][Nn][Cc][Tt][Ii][Oo][Nn] [^\n\r]* {LINETERM_MAC} |
 [Cc][Rr][Ee][Aa][Tt][Ee] [\f\t ]+ [Pp][Rr][Oo][Cc][Ee][Dd][Uu][Rr][Ee] [^\n\r]* {LINETERM_MAC} |
+[Cc][Rr][Ee][Aa][Tt][Ee] [\f\t ]+ [Pp][Aa][Cc][Kk][Aa][Gg][Ee] [^\n\r]* {LINETERM_MAC} |
+[Cc][Rr][Ee][Aa][Tt][Ee] [\f\t ]+ [Oo][Rr] [\f\t ]+ [Rr][Ee][Pp][Ll][Aa][Cc][Ee] [\f\t ]+ [Ff][Uu][Nn][Cc][Tt][Ii][Oo][Nn] [^\n\r]* {LINETERM_MAC} |
+[Cc][Rr][Ee][Aa][Tt][Ee] [\f\t ]+ [Oo][Rr] [\f\t ]+ [Rr][Ee][Pp][Ll][Aa][Cc][Ee] [\f\t ]+ [Pp][Rr][Oo][Cc][Ee][Dd][Uu][Rr][Ee] [^\n\r]* {LINETERM_MAC} |
+[Cc][Rr][Ee][Aa][Tt][Ee] [\f\t ]+ [Oo][Rr] [\f\t ]+ [Rr][Ee][Pp][Ll][Aa][Cc][Ee] [\f\t ]+ [Pp][Aa][Cc][Kk][Aa][Gg][Ee] [^\n\r]* {LINETERM_MAC} |
 [Dd][Ee][Cc][Ll][Aa][Rr][Ee] [\f\t ]* {LINETERM_MAC} {
     /* These are commands which may contain nested commands and/or which
-     * require the closing semicolon to sent to the DB engine.
+     * require the closing semicolon to send to the DB engine.
      * The BEGIN and DECLARE needed for PL/SQL probably do not need to
      * terminate the line, as we have it specified here, but I'd rather not be
      * too liberal with proprietary SQL like this, because it's easy to

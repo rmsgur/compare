@@ -1,4 +1,4 @@
-/* Copyright (c) 2001-2011, The HSQL Development Group
+/* Copyright (c) 2001-2016, The HSQL Development Group
  * All rights reserved.
  *
  * Redistribution and use in source and binary forms, with or without
@@ -46,7 +46,7 @@ import org.hsqldb.types.Type;
  * Implementation of Statement for PSM compound statements.
 
  * @author Fred Toussi (fredt@users dot sourceforge.net)
- * @version 2.3.0
+ * @version 2.3.3
  * @since 1.9.0
  */
 public class StatementCompound extends Statement implements RangeGroup {
@@ -69,10 +69,13 @@ public class StatementCompound extends Statement implements RangeGroup {
     HashMappedList    scopeTables;
 
     //
+    int variablesOffset;
+
+    //
     public static final StatementCompound[] emptyStatementArray =
         new StatementCompound[]{};
 
-    StatementCompound(int type, HsqlName label) {
+    StatementCompound(int type, HsqlName label, StatementCompound parent) {
 
         super(type, StatementTypes.X_SQL_CONTROL);
 
@@ -97,6 +100,8 @@ public class StatementCompound extends Statement implements RangeGroup {
                 throw Error.runtimeError(ErrorCode.U_S0500,
                                          "StatementCompound");
         }
+
+        this.parent = parent;
     }
 
     public String getSQL() {
@@ -198,7 +203,7 @@ public class StatementCompound extends Statement implements RangeGroup {
         return sql;
     }
 
-    protected String describe(Session session, int blanks) {
+    String describe(Session session, int blanks) {
 
         StringBuffer sb = new StringBuffer();
 
@@ -213,7 +218,11 @@ public class StatementCompound extends Statement implements RangeGroup {
         return sb.toString();
     }
 
-    public void setLocalDeclarations(Object[] declarations) {
+    boolean isLoop() {
+        return isLoop;
+    }
+
+    void setLocalDeclarations(Object[] declarations) {
 
         int varCount     = 0;
         int handlerCount = 0;
@@ -283,7 +292,7 @@ public class StatementCompound extends Statement implements RangeGroup {
         setCursors();
     }
 
-    public void setLoopStatement(StatementQuery cursorStatement) {
+    void setLoopStatement(HsqlName name, StatementQuery cursorStatement) {
 
         loopCursor = cursorStatement;
 
@@ -311,7 +320,7 @@ public class StatementCompound extends Statement implements RangeGroup {
         this.statements = statements;
     }
 
-    public void setCondition(StatementExpression condition) {
+    void setCondition(StatementExpression condition) {
         this.condition = condition;
     }
 
@@ -454,8 +463,7 @@ public class StatementCompound extends Statement implements RangeGroup {
                             break;
                     }
 
-                    Result actionResult = executeProtected(session,
-                                                           handler.statement);
+                    Result actionResult = executeProtected(session, handler);
 
                     if (actionResult.isError()) {
                         result = actionResult;
@@ -488,9 +496,7 @@ public class StatementCompound extends Statement implements RangeGroup {
 
         Result result = Result.updateZeroResult;
 
-        while (queryResult.navigator.hasNext()) {
-            queryResult.navigator.next();
-
+        while (queryResult.navigator.next()) {
             Object[] data = queryResult.navigator.getCurrent();
 
             initialiseVariables(session, data,
@@ -740,6 +746,11 @@ public class StatementCompound extends Statement implements RangeGroup {
             }
         }
 
+        if (loopCursor != null) {
+            set.addAll(loopCursor.getReferences());
+            readTableNamesSet.addAll(loopCursor.getTableNamesForRead());
+        }
+
         if (condition != null) {
             set.addAll(condition.getReferences());
             readTableNamesSet.addAll(condition.getTableNamesForRead());
@@ -801,24 +812,14 @@ public class StatementCompound extends Statement implements RangeGroup {
 
         HashMappedList list = new HashMappedList();
 
-        if (variables.length == 0) {
-            if (parent == null) {
-                rangeVariables = root.getRangeVariables();
-            } else {
-                rangeVariables = parent.rangeVariables;
-            }
-
-            scopeVariables = list;
-
-            return;
-        }
-
         if (parent != null && parent.scopeVariables != null) {
             for (int i = 0; i < parent.scopeVariables.size(); i++) {
                 list.add(parent.scopeVariables.getKey(i),
                          parent.scopeVariables.get(i));
             }
         }
+
+        variablesOffset = list.size();
 
         for (int i = 0; i < variables.length; i++) {
             String  name  = variables[i].getName().name;
@@ -956,13 +957,11 @@ public class StatementCompound extends Statement implements RangeGroup {
     private void initialiseVariables(Session session, Object[] data,
                                      int count) {
 
-        Object[] vars   = session.sessionContext.routineVariables;
-        int      offset = parent == null ? 0
-                                         : parent.scopeVariables.size();
+        Object[] vars = session.sessionContext.routineVariables;
 
         for (int i = 0; i < count; i++) {
             try {
-                vars[offset + i] = data[i];
+                vars[variablesOffset + i] = data[i];
             } catch (HsqlException e) {}
         }
     }

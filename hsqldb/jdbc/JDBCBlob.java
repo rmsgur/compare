@@ -1,4 +1,4 @@
-/* Copyright (c) 2001-2011, The HSQL Development Group
+/* Copyright (c) 2001-2017, The HSQL Development Group
  * All rights reserved.
  *
  * Redistribution and use in source and binary forms, with or without
@@ -37,17 +37,21 @@ import java.io.OutputStream;
 import java.sql.Blob;
 import java.sql.SQLException;
 
+//#ifdef JAVA6
+import java.sql.SQLFeatureNotSupportedException;
+//#endif JAVA6
+
 import org.hsqldb.error.ErrorCode;
 import org.hsqldb.lib.KMPSearchAlgorithm;
 import org.hsqldb.lib.java.JavaSystem;
 
-// boucherb@users 2004-04-xx - patch 1.7.2 - position and truncate methods
+// campbell-burnet@users 2004-04-xx - patch 1.7.2 - position and truncate methods
 //                             implemented; minor changes for moderate thread
 //                             safety and optimal performance
-// boucherb@users 2004-04-xx - doc 1.7.2 - javadocs updated; methods put in
+// campbell-burnet@users 2004-04-xx - doc 1.7.2 - javadocs updated; methods put in
 //                             correct (historical, interface declared) order
-// boucherb@users 2005-12-07 - patch 1.8.0.x - initial JDBC 4.0 support work
-// boucherb@users 2006-05-22 - doc 1.9.0     - full synch up to Mustang Build 84
+// campbell-burnet@users 2005-12-07 - patch 1.8.0.x - initial JDBC 4.0 support work
+// campbell-burnet@users 2006-05-22 - doc 1.9.0     - full synch up to Mustang Build 84
 //                           - patch 1.9.0   - setBinaryStream improvement
 // patch 1.9.0
 //  - fixed invalid reference to new BinaryStream(...) in getBinaryStream
@@ -59,8 +63,7 @@ import org.hsqldb.lib.java.JavaSystem;
 
 /**
  * The representation (mapping) in
- * the Java<sup><font size=-2>TM</font></sup> programming
- * language of an SQL
+ * the Java&trade; programming language of an SQL
  * <code>BLOB</code> value.  An SQL <code>BLOB</code> is a built-in type
  * that stores a Binary Large Object as a column value in a row of
  * a database table. By default drivers implement <code>Blob</code> using
@@ -118,10 +121,9 @@ import org.hsqldb.lib.java.JavaSystem;
  * <!-- end Release-specific documentation -->
  *
  * @author james house jhouse@part.net
- * @author boucherb@users
- * @version 2.3.0
+ * @author campbell-burnet@users
+ * @version 2.4.0
  * @since JDK 1.2, HSQLDB 1.7.2
- * @revised JDK 1.6, HSQLDB 2.0
  */
 public class JDBCBlob implements Blob {
 
@@ -151,10 +153,11 @@ public class JDBCBlob implements Blob {
      *
      * The official specification above is ambiguous in that it does not
      * precisely indicate the policy to be observed when
-     * pos > this.length() - length.  One policy would be to retrieve the
+     * {@code pos > this.length() - length}.  One policy would be to retrieve the
      * octets from pos to this.length().  Another would be to throw an
      * exception.  HSQLDB observes the second policy.
-     * </div> <!-- end release-specific documentation -->
+     * </div>
+     * <!-- end release-specific documentation -->
      *
      * @param pos the ordinal position of the first byte in the
      *        <code>BLOB</code> value to be extracted; the first byte is at
@@ -178,18 +181,19 @@ public class JDBCBlob implements Blob {
         final byte[] data = getData();
         final int    dlen = data.length;
 
-        if (pos < MIN_POS || pos > MIN_POS + dlen) {
+        if (pos < MIN_POS || pos - MIN_POS > dlen) {
             throw JDBCUtil.outOfRangeArgument("pos: " + pos);
         }
-        pos--;
 
-        if (length < 0 || length > dlen - pos) {
+        final int index = (int) pos - 1;
+
+        if (length < 0 || length > dlen - index) {
             throw JDBCUtil.outOfRangeArgument("length: " + length);
         }
 
         final byte[] result = new byte[length];
 
-        System.arraycopy(data, (int) pos, result, 0, length);
+        System.arraycopy(data, index, result, 0, length);
 
         return result;
     }
@@ -283,7 +287,7 @@ public class JDBCBlob implements Blob {
         }
 
         // by now, we know start <= Integer.MAX_VALUE;
-        final int  startIndex = (int) start - 1;
+        final int  startIndex = (int) (start - MIN_POS);
         final long plen       = pattern.length();
 
         if (plen == 0 || startIndex > ((long) dlen) - plen) {
@@ -338,7 +342,7 @@ public class JDBCBlob implements Blob {
      * initially empty Blob instances. To propagate the Blob value to a database
      * in this case, it is required to supply the Blob instance to an updating
      * or inserting setXXX method of a Prepared or Callable Statement, or to
-     * supply the Blob instance to an updateXXX method of an updateable
+     * supply the Blob instance to an updateXXX method of an updatable
      * ResultSet. <p>
      *
      * <b>Implementation Notes:</b><p>
@@ -369,15 +373,9 @@ public class JDBCBlob implements Blob {
      * this method
      * @see #getBytes
      * @since JDK 1.4, HSQLDB 1.7.2
-     * @revised JDK 1.6, HSQLDB 2.0
      */
     public int setBytes(long pos, byte[] bytes) throws SQLException {
-
-        if (bytes == null) {
-            throw JDBCUtil.nullArgument("bytes");
-        }
-
-        return (setBytes(pos, bytes, 0, bytes.length));
+        return setBytes(pos, bytes, 0, bytes == null ? 0 : bytes.length);
     }
 
     /**
@@ -411,7 +409,7 @@ public class JDBCBlob implements Blob {
      * initially empty Blob instances. To propagate the Blob value to a database
      * in this case, it is required to supply the Blob instance to an updating
      * or inserting setXXX method of a Prepared or Callable Statement, or to
-     * supply the Blob instance to an updateXXX method of an updateable
+     * supply the Blob instance to an updateXXX method of an updatable
      * ResultSet. <p>
      *
      * <b>Implementation Notes:</b><p>
@@ -452,16 +450,11 @@ public class JDBCBlob implements Blob {
      * this method
      * @see #getBytes
      * @since JDK 1.4, HSQLDB 1.7.2
-     * @revised JDK 1.6, HSQLDB 2.0
      */
     public int setBytes(long pos, byte[] bytes, int offset,
                         int len) throws SQLException {
 
-        if (!m_createdByConnection) {
-
-            /** @todo - better error message */
-            throw JDBCUtil.notSupported();
-        }
+        checkReadonly();
 
         if (bytes == null) {
             throw JDBCUtil.nullArgument("bytes");
@@ -475,26 +468,25 @@ public class JDBCBlob implements Blob {
             throw JDBCUtil.outOfRangeArgument("len: " + len);
         }
 
-        if (pos < MIN_POS || pos > 1L + (Integer.MAX_VALUE - len)) {
+        if (pos < MIN_POS || (pos - MIN_POS) > (Integer.MAX_VALUE - len)) {
             throw JDBCUtil.outOfRangeArgument("pos: " + pos);
         }
-        pos--;
 
+        final int index = (int) (pos - MIN_POS);
         byte[]    data = getData();
         final int dlen = data.length;
 
-        if ((pos + len) > dlen) {
-            byte[] temp = new byte[(int) pos + len];
+        if (index > dlen - len) {
+            byte[] temp = new byte[index + len];
 
             System.arraycopy(data, 0, temp, 0, dlen);
 
             data = temp;
             temp = null;
         }
-        System.arraycopy(bytes, offset, data, (int) pos, len);
 
-        // paranoia, in case somone free'd us during the array copies.
-        checkClosed();
+        System.arraycopy(bytes, offset, data, index, len);
+
         setData(data);
 
         return len;
@@ -529,7 +521,7 @@ public class JDBCBlob implements Blob {
      * initially empty Blob instances. To propagate the Blob value to a database
      * in this case, it is required to supply the Blob instance to an updating
      * or inserting setXXX method of a Prepared or Callable Statement, or to
-     * supply the Blob instance to an updateXXX method of an updateable
+     * supply the Blob instance to an updateXXX method of an updatable
      * ResultSet. <p>
      *
      * <b>Implementation Notes:</b><p>
@@ -568,27 +560,31 @@ public class JDBCBlob implements Blob {
      * this method
      * @see #getBinaryStream
      * @since JDK 1.4, HSQLDB 1.7.2
-     * @revised JDK 1.6, HSQLDB 2.0
      */
     public OutputStream setBinaryStream(final long pos) throws SQLException {
 
-        if (!m_createdByConnection) {
-
-            /** @todo - Better error message */
-            throw JDBCUtil.notSupported();
-        }
+        checkReadonly();
 
         if (pos < MIN_POS || pos > MAX_POS) {
             throw JDBCUtil.outOfRangeArgument("pos: " + pos);
         }
+
         checkClosed();
 
         return new java.io.ByteArrayOutputStream() {
+            private boolean closed;
 
             public synchronized void close() throws java.io.IOException {
-
+                if (closed) {
+                    return;
+                }
+                closed = true;
+                byte[] bytes = super.buf;
+                int length = super.count;
+                super.buf = NO_BYTES;
+                super.count = 0;
                 try {
-                    JDBCBlob.this.setBytes(pos, toByteArray());
+                    JDBCBlob.this.setBytes(pos, bytes, 0, length);
                 } catch (SQLException se) {
                     throw JavaSystem.toIOException(se);
                 } finally {
@@ -634,30 +630,23 @@ public class JDBCBlob implements Blob {
      * @exception SQLFeatureNotSupportedException if the JDBC driver does not support
      * this method
      * @since JDK 1.4, HSQLDB 1.7.2
-     * @revised JDK 1.6, HSQLDB 2.0
      */
     public void truncate(final long len) throws SQLException {
 
+        checkReadonly();
+
         final byte[] data = getData();
-
-        if (!m_createdByConnection) {
-
-            /** @todo - better error message */
-            throw JDBCUtil.notSupported();
-        }
 
         if (len < 0 || len > data.length) {
             throw JDBCUtil.outOfRangeArgument("len: " + len);
-        }
-
-        if (len == data.length) {
+        } else if (len == data.length) {
             return;
         }
 
         byte[] newData = new byte[(int) len];
 
         System.arraycopy(data, 0, newData, 0, (int) len);
-        checkClosed();    // limit possible race-condition with free()
+
         setData(newData);
     }
 
@@ -710,26 +699,29 @@ public class JDBCBlob implements Blob {
         if (pos < MIN_POS || pos > dlen) {
             throw JDBCUtil.outOfRangeArgument("pos: " + pos);
         }
-        pos--;
 
-        if (length < 0 || length > dlen - pos) {
+        int index = (int) (pos - MIN_POS);
+
+        if (length < 0 || length > dlen - index) {
             throw JDBCUtil.outOfRangeArgument("length: " + length);
         }
 
-        if (pos == 0 && length == dlen) {
+        if (index == 0 && length == dlen) {
             return new ByteArrayInputStream(data);
         }
 
-        final byte[] result = new byte[(int) length];
+        final int ilength = (int) length;
+        final byte[] result = new byte[ilength];
 
-        System.arraycopy(data, (int) pos, result, 0, (int) length);
+        System.arraycopy(data, index, result, 0, ilength);
 
         return new ByteArrayInputStream(result);
     }
 
     // ---------------------- internal implementation --------------------------
     public static final long MIN_POS = 1L;
-    public static final long MAX_POS = 1L + (long) Integer.MAX_VALUE;
+    public static final long MAX_POS = MIN_POS + (long) Integer.MAX_VALUE;
+    private static final byte[] NO_BYTES = new byte[0];
     private boolean          m_closed;
     private byte[]           m_data;
     private final boolean    m_createdByConnection;
@@ -750,7 +742,7 @@ public class JDBCBlob implements Blob {
     public JDBCBlob(final byte[] data) throws SQLException {
 
         if (data == null) {
-            throw JDBCUtil.nullArgument();
+            throw JDBCUtil.nullArgument("data");
         }
         m_data                = data;
         m_createdByConnection = false;
@@ -759,6 +751,12 @@ public class JDBCBlob implements Blob {
     protected JDBCBlob() {
         m_data                = new byte[0];
         m_createdByConnection = true;
+    }
+
+    protected void checkReadonly() throws SQLException {
+        if (!m_createdByConnection) {
+            throw JDBCUtil.sqlException(ErrorCode.X_25006, "Blob is read-only");
+        }
     }
 
     protected synchronized void checkClosed() throws SQLException {
@@ -772,6 +770,7 @@ public class JDBCBlob implements Blob {
         return getData();
     }
 
+    //@SuppressWarnings("ReturnOfCollectionOrArrayField")
     private synchronized byte[] getData() throws SQLException {
 
         checkClosed();
@@ -779,6 +778,7 @@ public class JDBCBlob implements Blob {
         return m_data;
     }
 
+    //@SuppressWarnings("AssignmentToCollectionOrArrayFieldFromParameter")
     private synchronized void setData(byte[] data) throws SQLException {
 
         checkClosed();

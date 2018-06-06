@@ -1,4 +1,4 @@
-/* Copyright (c) 2001-2011, The HSQL Development Group
+/* Copyright (c) 2001-2016, The HSQL Development Group
  * All rights reserved.
  *
  * Redistribution and use in source and binary forms, with or without
@@ -45,15 +45,10 @@ public class AllTests extends TestCase {
 
         TestSuite suite = new TestSuite();
 
-        //suite.addTestSuite(org.hsqldb.test.TestHTTPKeepAlive.class);
-        suite.addTestSuite(org.hsqldb.test.TestBatchExecution.class);
-        suite.addTestSuite(org.hsqldb.test.TestBug1191815.class);
-        suite.addTestSuite(org.hsqldb.test.TestBug778213.class);
-        suite.addTestSuite(org.hsqldb.test.TestBug785429.class);
-        suite.addTestSuite(org.hsqldb.test.TestBug808460.class);
         suite.addTestSuite(org.hsqldb.test.TestCollation.class);
         suite.addTestSuite(org.hsqldb.test.TestDatabaseMetaData.class);
         suite.addTestSuite(org.hsqldb.test.TestDateTime.class);
+        suite.addTestSuite(org.hsqldb.test.TestPeriodPredicates.class);
         suite.addTestSuite(org.hsqldb.test
             .TestINPredicateParameterizationAndCorrelation.class);
         suite.addTestSuite(org.hsqldb.test.TestJDBCGeneratedColumns.class);

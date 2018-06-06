@@ -1,4 +1,4 @@
-/* Copyright (c) 2001-2011, The HSQL Development Group
+/* Copyright (c) 2001-2016, The HSQL Development Group
  * All rights reserved.
  *
  * Redistribution and use in source and binary forms, with or without
@@ -71,56 +71,6 @@ public class TarReader {
      * existing files upon extraction.
      */
     public static final int OVERWRITE_MODE = 2;
-
-    /**
-     * Reads a specified tar file or stdin in order to either list or extract
-     * the file tar entries, depending on the first argument being "t" or "x",
-     * using default read buffer blocks.
-     */
-    public static void main(String[] sa)
-    throws IOException, TarMalformatException {
-
-        if (sa.length < 1) {
-            System.out.println(
-                    RB.TarReader_syntax.getString(TarReader.class.getName()));
-            System.out.println(RB.listing_format.getString());
-            System.exit(0);
-        }
-
-        File exDir = (sa.length > 1 && sa[1].startsWith("--directory="))
-                     ? (new File(sa[1].substring("--directory=".length())))
-                     : null;
-        int firstPatInd = (exDir == null) ? 2
-                                          : 3;
-
-        if (sa.length < firstPatInd
-                || ((!sa[0].equals("t")) && !sa[0].equals("x"))) {
-            throw new IllegalArgumentException(
-                RB.tarreader_syntaxerr.getString(TarReader.class.getName()));
-        }
-
-        String[] patternStrings = null;
-
-        if (sa.length > firstPatInd) {
-            patternStrings = new String[sa.length - firstPatInd];
-
-            for (int i = firstPatInd; i < sa.length; i++) {
-                patternStrings[i - firstPatInd] = sa[i];
-            }
-        }
-
-        if (sa[0].equals("t") && exDir != null) {
-            throw new IllegalArgumentException(RB.dir_x_conflict.getString());
-        }
-
-        int dirIndex      = (exDir == null) ? 1
-                                            : 2;
-        int tarReaderMode = sa[0].equals("t") ? LIST_MODE
-                                              : EXTRACT_MODE;
-
-        new TarReader(new File(sa[dirIndex]), tarReaderMode, patternStrings,
-                      null, exDir).read();
-    }
 
     protected TarFileInputStream archive;
     protected Pattern[]          patterns = null;
@@ -269,7 +219,7 @@ public class TarReader {
                         /* Display entry summary before successful extraction.
                          * Both "tar" and "rsync" display the name of the
                          * currently extracting file, and we do the same.
-                         * Thefore the currently "shown" name is still being
+                         * Therefore the currently "shown" name is still being
                          * extracted.
                          */
                         System.out.println(header.toString());
@@ -668,8 +618,8 @@ public class TarReader {
          */
         public String toString() {
 
-            StringBuffer sb =
-                new StringBuffer(sdf.format(new Long(modTime * 1000L)) + ' ');
+            StringBuffer sb = new StringBuffer(
+                sdf.format(Long.valueOf(modTime * 1000L)) + ' ');
 
             sb.append((entryType == '\0') ? ' '
                                           : entryType);
@@ -741,6 +691,9 @@ public class TarReader {
 
                 case -1 :
                     termIndex = stop - start;
+                    break;
+
+                default:
                     break;
             }
 

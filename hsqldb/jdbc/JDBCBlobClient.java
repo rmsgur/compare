@@ -1,4 +1,4 @@
-/* Copyright (c) 2001-2011, The HSQL Development Group
+/* Copyright (c) 2001-2017, The HSQL Development Group
  * All rights reserved.
  *
  * Redistribution and use in source and binary forms, with or without
@@ -45,10 +45,10 @@ import org.hsqldb.types.BlobInputStream;
 /**
  * A wrapper for HSQLDB BlobData objects.
  *
- * Instances of this class are returnd by calls to ResultSet methods.
+ * Instances of this class are returned by calls to ResultSet methods.
  *
  * @author Fred Toussi (fredt@users dot sourceforge.net)
- * @version 2.2.6
+ * @version 2.3.5
  * @since 1.9.0
  */
 public class JDBCBlobClient implements Blob {
@@ -62,6 +62,8 @@ public class JDBCBlobClient implements Blob {
      *   <code>BLOB</code>
      */
     public synchronized long length() throws SQLException {
+
+        checkClosed();
 
         try {
             return blob.length(session);
@@ -88,6 +90,8 @@ public class JDBCBlobClient implements Blob {
     public synchronized byte[] getBytes(long pos,
                                         int length) throws SQLException {
 
+        checkClosed();
+
         if (!isInLimits(Long.MAX_VALUE, pos - 1, length)) {
             throw JDBCUtil.outOfRangeArgument();
         }
@@ -108,6 +112,9 @@ public class JDBCBlobClient implements Blob {
      *   <code>BLOB</code> value
      */
     public synchronized InputStream getBinaryStream() throws SQLException {
+
+        checkClosed();
+
         return new BlobInputStream(session, blob, 0, length());
     }
 
@@ -125,6 +132,8 @@ public class JDBCBlobClient implements Blob {
      */
     public synchronized long position(byte[] pattern,
                                       long start) throws SQLException {
+
+        checkClosed();
 
         if (!isInLimits(Long.MAX_VALUE, start - 1, 0)) {
             throw JDBCUtil.outOfRangeArgument();
@@ -157,6 +166,8 @@ public class JDBCBlobClient implements Blob {
      */
     public synchronized long position(Blob pattern,
                                       long start) throws SQLException {
+
+        checkClosed();
 
         if (!isInLimits(Long.MAX_VALUE, start - 1, 0)) {
             throw JDBCUtil.outOfRangeArgument();
@@ -226,6 +237,8 @@ public class JDBCBlobClient implements Blob {
     public synchronized int setBytes(long pos, byte[] bytes, int offset,
                                      int len) throws SQLException {
 
+        checkClosed();
+
         if (!isInLimits(bytes.length, offset, len)) {
             throw JDBCUtil.outOfRangeArgument();
         }
@@ -276,6 +289,12 @@ public class JDBCBlobClient implements Blob {
      */
     public synchronized void truncate(long len) throws SQLException {
 
+        checkClosed();
+
+        if (!isInLimits(Long.MAX_VALUE, 0, len)) {
+            throw JDBCUtil.outOfRangeArgument();
+        }
+
         try {
             blob.truncate(session, len);
         } catch (HsqlException e) {
@@ -296,8 +315,6 @@ public class JDBCBlobClient implements Blob {
      *
      * @throws SQLException if an error occurs releasing
      * the Blob's resources
-     * @exception SQLFeatureNotSupportedException if the JDBC driver does not support
-     * this method
      * @since JDK 1.6, HSQLDB 2.0
      */
     public synchronized void free() throws SQLException {
@@ -316,14 +333,14 @@ public class JDBCBlobClient implements Blob {
      * in the <code>Blob</code> or if pos + length is greater than the number of bytes
      * in the <code>Blob</code>
      *
-     * @exception SQLFeatureNotSupportedException if the JDBC driver does not support
-     * this method
      * @since JDK 1.6, HSQLDB 2.0
      */
     public synchronized InputStream getBinaryStream(long pos,
             long length) throws SQLException {
 
-        if (!isInLimits(Long.MAX_VALUE, pos - 1, length)) {
+        checkClosed();
+
+        if (!isInLimits(this.length(), pos - 1, length)) {
             throw JDBCUtil.outOfRangeArgument();
         }
 
@@ -385,7 +402,7 @@ public class JDBCBlobClient implements Blob {
     private void checkClosed() throws SQLException {
 
         if (isClosed) {
-            throw JDBCUtil.sqlException(ErrorCode.X_07501);
+            throw JDBCUtil.sqlException(ErrorCode.X_0F502);
         }
     }
 

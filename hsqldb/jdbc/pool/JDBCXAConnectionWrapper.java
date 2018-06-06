@@ -1,4 +1,4 @@
-/* Copyright (c) 2001-2011, The HSQL Development Group
+/* Copyright (c) 2001-2017, The HSQL Development Group
  * All rights reserved.
  *
  * Redistribution and use in source and binary forms, with or without
@@ -36,7 +36,7 @@ import org.hsqldb.jdbc.JDBCConnection;
 import java.sql.SQLException;
 import java.sql.Savepoint;
 
-// @(#)$Id: JDBCXAConnectionWrapper.java 5026 2012-07-14 20:02:27Z fredt $
+// @(#)$Id: JDBCXAConnectionWrapper.java 5743 2017-04-09 14:22:33Z fredt $
 
 /**
  * This is a wrapper class for JDBCConnection objects (not java.sql.XAConnection
@@ -74,6 +74,9 @@ public class JDBCXAConnectionWrapper extends JDBCConnection {
      * Interceptor method, because this method is prohibited within
      * any global transaction.
      * See section 1.2.4 of the JDBC 3.0 spec.
+     * 
+     * @param autoCommit
+     * @throws SQLException on error
      */
     public void setAutoCommit(boolean autoCommit) throws SQLException {
         validateNotWithinTransaction();
@@ -84,6 +87,8 @@ public class JDBCXAConnectionWrapper extends JDBCConnection {
      * Interceptor method, because this method is prohibited within
      * any global transaction.
      * See section 1.2.4 of the JDBC 3.0 spec.
+     * 
+     * @throws SQLException on error
      */
     public void commit() throws SQLException {
         validateNotWithinTransaction();
@@ -94,6 +99,8 @@ public class JDBCXAConnectionWrapper extends JDBCConnection {
      * Interceptor method, because this method is prohibited within
      * any global transaction.
      * See section 1.2.4 of the JDBC 3.0 spec.
+     * 
+     * @throws SQLException on error
      */
     public void rollback() throws SQLException {
         validateNotWithinTransaction();
@@ -104,6 +111,8 @@ public class JDBCXAConnectionWrapper extends JDBCConnection {
      * Interceptor method, because this method is prohibited within
      * any global transaction.
      * See section 1.2.4 of the JDBC 3.0 spec.
+     * 
+     * @throws SQLException on error
      */
     public void rollback(Savepoint savepoint) throws SQLException {
         validateNotWithinTransaction();
@@ -114,6 +123,8 @@ public class JDBCXAConnectionWrapper extends JDBCConnection {
      * Interceptor method, because this method is prohibited within
      * any global transaction.
      * See section 1.2.4 of the JDBC 3.0 spec.
+     * 
+     * @throws SQLException on error
      */
     public Savepoint setSavepoint() throws SQLException {
 
@@ -141,6 +152,8 @@ public class JDBCXAConnectionWrapper extends JDBCConnection {
      *
      * HSQLDB does not allow changing the isolation level inside a transaction
      * of any kind.<p>
+     *
+     * @param level isolation level
      */
     public void setTransactionIsolation(int level) throws SQLException {
         validateNotWithinTransaction();

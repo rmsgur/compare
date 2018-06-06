@@ -1,4 +1,4 @@
-/* Copyright (c) 2001-2011, The HSQL Development Group
+/* Copyright (c) 2001-2014, The HSQL Development Group
  * All rights reserved.
  *
  * Redistribution and use in source and binary forms, with or without
@@ -36,7 +36,7 @@ import org.hsqldb.map.BaseHashMap;
 /**
  *
  * @author Fred Toussi (fredt@users dot sourceforge.net)
- * @version 2.0.0
+ * @version 2.3.3
  * @since 2.0.0
  */
 public class OrderedIntKeyHashMap extends BaseHashMap {
@@ -55,6 +55,24 @@ public class OrderedIntKeyHashMap extends BaseHashMap {
               BaseHashMap.objectKeyOrValue, false);
 
         isList = true;
+    }
+
+    public int getKey(int lookup, int def) {
+
+        if (lookup >= 0 && lookup < size()) {
+            return this.intKeyTable[lookup];
+        }
+
+        return def;
+    }
+
+    public Object getValue(int lookup) {
+
+        if (lookup >= 0 && lookup < size()) {
+            return this.objectValueTable[lookup];
+        }
+
+        return null;
     }
 
     public Object get(int key) {
@@ -78,7 +96,7 @@ public class OrderedIntKeyHashMap extends BaseHashMap {
 
     public Object remove(int key) {
 
-        int lookup = getLookup(key, key);
+        int lookup = getLookup(key);
 
         if (lookup < 0) {
             return null;
@@ -89,6 +107,14 @@ public class OrderedIntKeyHashMap extends BaseHashMap {
         removeRow(lookup);
 
         return returnValue;
+    }
+
+    public Object removeKeyAndValue(int index)
+    throws IndexOutOfBoundsException {
+
+        checkRange(index);
+
+        return remove(intKeyTable[index]);
     }
 
     public boolean containsKey(int key) {
@@ -125,6 +151,13 @@ public class OrderedIntKeyHashMap extends BaseHashMap {
         return values;
     }
 
+    private void checkRange(int i) {
+
+        if (i < 0 || i >= size()) {
+            throw new IndexOutOfBoundsException();
+        }
+    }
+
     class KeySet implements Set {
 
         public Iterator iterator() {
@@ -136,23 +169,23 @@ public class OrderedIntKeyHashMap extends BaseHashMap {
         }
 
         public boolean contains(Object o) {
-            throw new RuntimeException();
+            throw new UnsupportedOperationException();
         }
 
         public Object get(Object key) {
-            throw new RuntimeException();
+            throw new UnsupportedOperationException();
         }
 
         public boolean add(Object value) {
-            throw new RuntimeException();
+            throw new UnsupportedOperationException();
         }
 
         public boolean addAll(Collection c) {
-            throw new RuntimeException();
+            throw new UnsupportedOperationException();
         }
 
         public boolean remove(Object o) {
-            throw new RuntimeException();
+            throw new UnsupportedOperationException();
         }
 
         public boolean isEmpty() {
@@ -175,19 +208,19 @@ public class OrderedIntKeyHashMap extends BaseHashMap {
         }
 
         public boolean contains(Object o) {
-            throw new RuntimeException();
+            throw new UnsupportedOperationException();
         }
 
         public boolean add(Object value) {
-            throw new RuntimeException();
+            throw new UnsupportedOperationException();
         }
 
         public boolean addAll(Collection c) {
-            throw new RuntimeException();
+            throw new UnsupportedOperationException();
         }
 
         public boolean remove(Object o) {
-            throw new RuntimeException();
+            throw new UnsupportedOperationException();
         }
 
         public boolean isEmpty() {

@@ -1,4 +1,4 @@
-/* Copyright (c) 2001-2011, The HSQL Development Group
+/* Copyright (c) 2001-2017, The HSQL Development Group
  * All rights reserved.
  *
  * Redistribution and use in source and binary forms, with or without
@@ -31,6 +31,8 @@
 
 package org.hsqldb;
 
+import java.util.concurrent.atomic.AtomicLong;
+
 import org.hsqldb.error.Error;
 import org.hsqldb.error.ErrorCode;
 import org.hsqldb.lib.StringConverter;
@@ -59,7 +61,7 @@ import org.hsqldb.rights.Grantee;
  * than all the existing names.
  *
  * @author Fred Toussi (fredt@users dot sourceforge.net)
- * @version 2.3.0
+ * @version 2.3.5
  * @since 1.7.2
  */
 public final class HsqlNameManager {
@@ -67,7 +69,7 @@ public final class HsqlNameManager {
     private static final HsqlNameManager staticManager = new HsqlNameManager();
 
     static {
-        staticManager.serialNumber = Integer.MIN_VALUE;
+        staticManager.serialNumber.set(Long.MIN_VALUE);
     }
 
     private static final HsqlName[] autoColumnNames       = new HsqlName[32];
@@ -81,8 +83,8 @@ public final class HsqlNameManager {
         }
     }
 
-    private int      serialNumber = 1;        // 0 is reserved in lookups
-    private int      sysNumber    = 10000;    // avoid name clash in older scripts
+    private AtomicLong serialNumber = new AtomicLong(1);     // 0 is reserved in lookups
+    private AtomicLong sysNumber = new AtomicLong(10000);    // avoid name clash in older scripts
     private HsqlName catalogName;
     private boolean  sqlRegularNames;
     HsqlName         subqueryTableName;
@@ -215,11 +217,36 @@ public final class HsqlNameManager {
         return name;
     }
 
+    public HsqlName newConstraintIndexName(HsqlName tableName,
+                                           HsqlName constName,
+                                           boolean useConstraint) {
+
+        if (constName == null) {
+            useConstraint = false;
+        }
+
+        if (useConstraint) {
+            HsqlName name = new HsqlName(this, constName.name,
+                                         SchemaObject.INDEX, false);
+
+            name.schema = tableName.schema;
+            name.parent = tableName;
+
+            return name;
+        } else {
+            String constNameString = constName == null ? null
+                                                       : constName.name;
+
+            return newAutoName("IDX", constNameString, tableName.schema,
+                               tableName, SchemaObject.INDEX);
+        }
+    }
+
     public HsqlName newSpecificRoutineName(HsqlName name) {
 
         StringBuffer sb = new StringBuffer();
 
-        sb.append(name.name).append('_').append(++sysNumber);
+        sb.append(name.name).append('_').append(sysNumber.incrementAndGet());
 
         HsqlName hsqlName = new HsqlName(this, sb.toString(),
                                          SchemaObject.SPECIFIC_ROUTINE,
@@ -229,11 +256,6 @@ public final class HsqlNameManager {
         hsqlName.schema = name.schema;
 
         return hsqlName;
-    }
-
-    public static HsqlName getColumnName(SimpleName name) {
-        return new HsqlName(staticManager, name.name, name.isNameQuoted,
-                            SchemaObject.COLUMN);
     }
 
     /**
@@ -247,18 +269,6 @@ public final class HsqlNameManager {
 
         return new HsqlName(staticManager, "C_" + (i + 1),
                             SchemaObject.COLUMN, false);
-    }
-
-    /**
-     * Column index i is 0 based, returns 1 based numbered column.
-     */
-    public static String getAutoColumnNameString(int i) {
-
-        if (i < autoColumnNames.length) {
-            return autoColumnNames[i].name;
-        }
-
-        return "C" + (i + 1);
     }
 
     public static String getAutoNoNameColumnString(int i) {
@@ -298,7 +308,7 @@ public final class HsqlNameManager {
                     sb.append('_');
                 }
 
-                sb.append(++sysNumber);
+                sb.append(sysNumber.incrementAndGet());
             }
         } else {
             sb.append(namepart);
@@ -324,7 +334,7 @@ public final class HsqlNameManager {
         private SimpleName() {}
 
         private SimpleName(String name, boolean isNameQuoted) {
-            this.name         = new String(name);
+            this.name         = name;
             this.isNameQuoted = isNameQuoted;
         }
 
@@ -335,8 +345,7 @@ public final class HsqlNameManager {
         public boolean equals(Object other) {
 
             if (other instanceof SimpleName) {
-                return ((SimpleName) other).isNameQuoted == isNameQuoted
-                       && ((SimpleName) other).name.equals(name);
+                return ((SimpleName) other).name.equals(name);
             }
 
             return false;
@@ -359,20 +368,22 @@ public final class HsqlNameManager {
         static HsqlName[] emptyArray = new HsqlName[]{};
 
         //
-        HsqlNameManager   manager;
-        public String     statementName;
-        public String     comment;
-        public HsqlName   schema;
-        public HsqlName   parent;
-        public Grantee    owner;
-        public final int  type;
-        private final int hashCode;
+        HsqlNameManager  manager;
+        public String    statementName;
+        public String    comment;
+        public HsqlName  schema;
+        public HsqlName  parent;
+        public Grantee   owner;
+        public final int type;
+
+        //
+        private final long hashCode;
 
         private HsqlName(HsqlNameManager man, int type) {
 
             manager   = man;
             this.type = type;
-            hashCode  = manager.serialNumber++;
+            hashCode  = manager.serialNumber.getAndIncrement();
         }
 
         private HsqlName(HsqlNameManager man, String name, boolean isquoted,
@@ -433,17 +444,15 @@ public final class HsqlNameManager {
                 }
             }
 
-            if (schema == null) {
+            if (schema == null
+                    || SqlInvariants.SYSTEM_SCHEMA.equals(schema.name)) {
                 return statementName;
             }
 
             StringBuffer sb = new StringBuffer();
 
-            if (schema != null) {
-                sb.append(schema.getStatementName());
-                sb.append('.');
-            }
-
+            sb.append(schema.getStatementName());
+            sb.append('.');
             sb.append(statementName);
 
             return sb.toString();
@@ -460,7 +469,7 @@ public final class HsqlNameManager {
             }
 
             // get rid of the excess
-            this.name          = new String(name);
+            this.name          = name;
             this.statementName = this.name;
             this.isNameQuoted  = isquoted;
 
@@ -475,8 +484,8 @@ public final class HsqlNameManager {
                 try {
                     int temp = Integer.parseInt(name.substring(length));
 
-                    if (temp > manager.sysNumber) {
-                        manager.sysNumber = temp;
+                    if (temp > manager.sysNumber.get()) {
+                        manager.sysNumber.set(temp);
                     }
                 } catch (NumberFormatException e) {}
             }
@@ -511,7 +520,7 @@ public final class HsqlNameManager {
          * hash code for this object is its unique serial number.
          */
         public int hashCode() {
-            return hashCode;
+            return (int) hashCode;
         }
 
         /**
@@ -552,10 +561,6 @@ public final class HsqlNameManager {
                    + "[this.hashCode()=" + this.hashCode + ", name=" + name
                    + ", name.hashCode()=" + name.hashCode()
                    + ", isNameQuoted=" + isNameQuoted + "]";
-        }
-
-        public int compareTo(Object o) {
-            return hashCode - o.hashCode();
         }
 
         /**

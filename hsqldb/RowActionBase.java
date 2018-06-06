@@ -1,4 +1,4 @@
-/* Copyright (c) 2001-2011, The HSQL Development Group
+/* Copyright (c) 2001-2014, The HSQL Development Group
  * All rights reserved.
  *
  * Redistribution and use in source and binary forms, with or without
@@ -43,7 +43,8 @@ package org.hsqldb;
  * timestamps are not in any order
  *
  * @author Fred Toussi (fredt@users dot sourceforge dot net)
- * @version 2.1.1
+ * @version 2.3.2
+
  * @since 2.0.0
  */
 public class RowActionBase {
@@ -63,7 +64,6 @@ public class RowActionBase {
     long                     actionTimestamp;
     long                     commitTimestamp;
     byte                     type;
-    byte                     commitRollbackType;
     boolean                  deleteComplete;
     boolean                  rolledback;
     boolean                  prepared;

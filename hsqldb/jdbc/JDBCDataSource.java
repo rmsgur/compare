@@ -1,4 +1,4 @@
-/* Copyright (c) 2001-2011, The HSQL Development Group
+/* Copyright (c) 2001-2017, The HSQL Development Group
  * All rights reserved.
  *
  * Redistribution and use in source and binary forms, with or without
@@ -47,8 +47,6 @@ import javax.naming.Referenceable;
 import javax.naming.StringRefAddr;
 import javax.sql.DataSource;
 
-import org.hsqldb.persist.HsqlDatabaseProperties;
-
 /**
  * <p>A factory for connections to the physical data source that this
  * <code>DataSource</code> object represents.  An alternative to the
@@ -56,7 +54,7 @@ import org.hsqldb.persist.HsqlDatabaseProperties;
  * is the preferred means of getting a connection. An object that implements
  * the <code>DataSource</code> interface will typically be
  * registered with a naming service based on the
- * Java<sup><font size=-2>TM</font></sup> Naming and Directory (JNDI) API.
+ * Java&trade; Naming and Directory (JNDI) API.
  * <P>
  * The <code>DataSource</code> interface is implemented by a driver vendor.
  * There are three types of implementations:
@@ -100,9 +98,9 @@ import org.hsqldb.persist.HsqlDatabaseProperties;
  * </div>
  * <!-- end Release-specific documentation -->
  * @since JDK 1.4
- * @author Campbell Boucher-Burnet (boucherb@users dot sourceforge.net)
+ * @author Campbell Burnet (campbell-burnet@users dot sourceforge.net)
  * @author Fred Toussi (fredt@users dot sourceforge.net)
- * @version 2.2.5
+ * @version 2.3.2
  * @since 1.7.2
  */
 
@@ -142,10 +140,6 @@ public class JDBCDataSource extends JDBCCommonDataSource implements DataSource,
             }
 
             return getConnection(user, password);
-        }
-
-        if (connectionProps == null) {
-            return getConnection(url, new Properties());
         }
 
         return getConnection(url, connectionProps);

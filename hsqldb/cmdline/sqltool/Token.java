@@ -1,4 +1,4 @@
-/* Copyright (c) 2001-2011, The HSQL Development Group
+/* Copyright (c) 2001-2014, The HSQL Development Group
  * All rights reserved.
  *
  * Redistribution and use in source and binary forms, with or without
@@ -33,7 +33,7 @@ package org.hsqldb.cmdline.sqltool;
 
 import java.util.regex.Pattern;
 
-/* @(#)$Id: Token.java 4497 2011-10-09 18:43:39Z unsaved $ */
+/* @(#)$Id: Token.java 5337 2014-01-24 19:26:47Z fredt $ */
 
 public class Token {
     public static final int SQL_TYPE = 0;
@@ -117,10 +117,17 @@ public class Token {
             + " TYPE=" + getTypeString() + ", VALUE=(" + val + ')';
     }
 
+    public int hashCode() {
+        if (val == null) return 0;
+        return val.hashCode();
+    }
+
     /**
      * Equality ignores the line number
      */
-    public boolean equals(Token otherToken) {
+    public boolean equals(Object other) {
+        if (!(other instanceof Token)) return false;
+        Token otherToken = (Token) other;
         if (type != otherToken.type) return false;
         if (val == null && otherToken.val != null) return false;
         if (val != null && otherToken.val == null) return false;

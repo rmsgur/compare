@@ -1,4 +1,4 @@
-/* Copyright (c) 2001-2011, The HSQL Development Group
+/* Copyright (c) 2001-2017, The HSQL Development Group
  * All rights reserved.
  *
  * Redistribution and use in source and binary forms, with or without
@@ -32,12 +32,13 @@
 package org.hsqldb;
 
 import org.hsqldb.HsqlNameManager.HsqlName;
-import org.hsqldb.RangeVariable.RangeIteratorBase;
 import org.hsqldb.error.Error;
 import org.hsqldb.error.ErrorCode;
 import org.hsqldb.index.Index;
 import org.hsqldb.lib.ArrayUtil;
+import org.hsqldb.lib.HsqlList;
 import org.hsqldb.lib.OrderedHashSet;
+import org.hsqldb.navigator.RangeIterator;
 import org.hsqldb.navigator.RowIterator;
 import org.hsqldb.persist.PersistentStore;
 import org.hsqldb.result.Result;
@@ -49,7 +50,7 @@ import org.hsqldb.types.Type;
  * by the constraint.<p>
  *
  * @author Fred Toussi (fredt@users dot sourceforge.net)
- * @version 2.3.0
+ * @version 2.3.5
  * @since 1.6.0
  */
 public final class Constraint implements SchemaObject {
@@ -68,6 +69,7 @@ public final class Constraint implements SchemaObject {
     // for temp constraints only
     OrderedHashSet mainColSet;
     OrderedHashSet refColSet;
+    boolean        isSimpleIdentityPK;
 
     //
     public static final Constraint[] emptyArray = new Constraint[]{};
@@ -148,6 +150,9 @@ public final class Constraint implements SchemaObject {
             case SchemaObject.ReferentialAction.SET_DEFAULT :
             case SchemaObject.ReferentialAction.SET_NULL :
                 core.hasDeleteAction = true;
+                break;
+
+            default :
         }
 
         switch (core.updateAction) {
@@ -156,6 +161,9 @@ public final class Constraint implements SchemaObject {
             case SchemaObject.ReferentialAction.SET_DEFAULT :
             case SchemaObject.ReferentialAction.SET_NULL :
                 core.hasUpdateAction = true;
+                break;
+
+            default :
         }
     }
 
@@ -170,8 +178,7 @@ public final class Constraint implements SchemaObject {
     public Constraint(HsqlName uniqueName, HsqlName mainName,
                       HsqlName refName, Table mainTable, Table refTable,
                       int[] mainCols, int[] refCols, Index mainIndex,
-                      Index refIndex, int deleteAction,
-                      int updateAction) throws HsqlException {
+                      Index refIndex, int deleteAction, int updateAction) {
 
         this.name         = refName;
         constType         = SchemaObject.ConstraintTypes.FOREIGN_KEY;
@@ -205,6 +212,10 @@ public final class Constraint implements SchemaObject {
         copy.rangeVariable      = rangeVariable;
 
         return copy;
+    }
+
+    void setSimpleIdentityPK() {
+        isSimpleIdentityPK = true;
     }
 
     void setColumnsIndexes(Table table) {
@@ -375,6 +386,8 @@ public final class Constraint implements SchemaObject {
 
                 // should not throw as it is already tested OK
                 break;
+
+            default :
         }
 
         return sb.toString();
@@ -443,6 +456,11 @@ public final class Constraint implements SchemaObject {
         return constType;
     }
 
+    public boolean isUniqueOrPK() {
+        return constType == SchemaObject.ConstraintTypes.UNIQUE
+               || constType == SchemaObject.ConstraintTypes.PRIMARY_KEY;
+    }
+
     /**
      *  Returns the main table
      */
@@ -453,7 +471,7 @@ public final class Constraint implements SchemaObject {
     /**
      *  Returns the main index
      */
-    Index getMainIndex() {
+    public Index getMainIndex() {
         return core.mainIndex;
     }
 
@@ -467,7 +485,7 @@ public final class Constraint implements SchemaObject {
     /**
      *  Returns the reference index
      */
-    Index getRefIndex() {
+    public Index getRefIndex() {
         return core.refIndex;
     }
 
@@ -520,21 +538,28 @@ public final class Constraint implements SchemaObject {
     public boolean hasTriggeredAction() {
 
         if (constType == SchemaObject.ConstraintTypes.FOREIGN_KEY) {
-            switch (core.deleteAction) {
+            return hasCoreTriggeredAction();
+        }
 
-                case SchemaObject.ReferentialAction.CASCADE :
-                case SchemaObject.ReferentialAction.SET_DEFAULT :
-                case SchemaObject.ReferentialAction.SET_NULL :
-                    return true;
-            }
+        return false;
+    }
 
-            switch (core.updateAction) {
+    public boolean hasCoreTriggeredAction() {
 
-                case SchemaObject.ReferentialAction.CASCADE :
-                case SchemaObject.ReferentialAction.SET_DEFAULT :
-                case SchemaObject.ReferentialAction.SET_NULL :
-                    return true;
-            }
+        switch (core.deleteAction) {
+
+            case SchemaObject.ReferentialAction.CASCADE :
+            case SchemaObject.ReferentialAction.SET_DEFAULT :
+            case SchemaObject.ReferentialAction.SET_NULL :
+                return true;
+        }
+
+        switch (core.updateAction) {
+
+            case SchemaObject.ReferentialAction.CASCADE :
+            case SchemaObject.ReferentialAction.SET_DEFAULT :
+            case SchemaObject.ReferentialAction.SET_NULL :
+                return true;
         }
 
         return false;
@@ -586,13 +611,10 @@ public final class Constraint implements SchemaObject {
                        && core.mainCols[0] == colIndex;
 
             case SchemaObject.ConstraintTypes.MAIN :
-                return core.mainCols.length == 1
-                       && core.mainCols[0] == colIndex
-                       && core.mainTable == core.refTable;
+                return false;
 
             case SchemaObject.ConstraintTypes.FOREIGN_KEY :
-                return core.refCols.length == 1 && core.refCols[0] == colIndex
-                       && core.mainTable == core.refTable;
+                return core.refCols.length == 1 && core.refCols[0] == colIndex;
 
             default :
                 throw Error.runtimeError(ErrorCode.U_S0500, "Constraint");
@@ -613,14 +635,11 @@ public final class Constraint implements SchemaObject {
                        && ArrayUtil.find(core.mainCols, colIndex) != -1;
 
             case SchemaObject.ConstraintTypes.MAIN :
-                return ArrayUtil.find(core.mainCols, colIndex) != -1
-                       && (core.mainCols.length != 1
-                           || core.mainTable != core.refTable);
+                return ArrayUtil.find(core.mainCols, colIndex) != -1;
 
             case SchemaObject.ConstraintTypes.FOREIGN_KEY :
-                return ArrayUtil.find(core.refCols, colIndex) != -1
-                       && (core.mainCols.length != 1
-                           || core.mainTable != core.refTable);
+                return core.refCols.length != 1
+                       && ArrayUtil.find(core.refCols, colIndex) != -1;
 
             default :
                 throw Error.runtimeError(ErrorCode.U_S0500, "Constraint");
@@ -697,10 +716,9 @@ public final class Constraint implements SchemaObject {
      *
      * @param session Session
      * @param oldTable reference to the old version of the table
-     * @param newTable referenct to the new version of the table
+     * @param newTable reference to the new version of the table
      * @param colIndex index at which table column is added or removed
      * @param adjust -1, 0, +1 to indicate if column is added or removed
-     * @
      */
     void updateTable(Session session, Table oldTable, Table newTable,
                      int colIndex, int adjust) {
@@ -709,12 +727,10 @@ public final class Constraint implements SchemaObject {
             core.mainTable = newTable;
 
             if (core.mainIndex != null) {
-                core.mainIndex =
-                    core.mainTable.getIndex(core.mainIndex.getName().name);
+                core.mainIndex = core.mainTable.getSystemIndex(
+                    core.mainIndex.getName().name);
                 core.mainCols = ArrayUtil.toAdjustedColumnArray(core.mainCols,
                         colIndex, adjust);
-
-                core.mainIndex.setTable(newTable);
             }
         }
 
@@ -723,11 +739,9 @@ public final class Constraint implements SchemaObject {
 
             if (core.refIndex != null) {
                 core.refIndex =
-                    core.refTable.getIndex(core.refIndex.getName().name);
+                    core.refTable.getSystemIndex(core.refIndex.getName().name);
                 core.refCols = ArrayUtil.toAdjustedColumnArray(core.refCols,
                         colIndex, adjust);
-
-                core.refIndex.setTable(newTable);
             }
         }
 
@@ -784,14 +798,12 @@ public final class Constraint implements SchemaObject {
      */
     void checkCheckConstraint(Session session, Table table, Object[] data) {
 
-        RangeIteratorBase it =
+        RangeIterator it =
             session.sessionContext.getCheckIterator(rangeVariable);
 
-        it.currentData = data;
+        it.setCurrent(data);
 
         boolean nomatch = Boolean.FALSE.equals(check.getValue(session));
-
-        it.currentData = null;
 
         if (nomatch) {
             String[] info = new String[] {
@@ -890,9 +902,7 @@ public final class Constraint implements SchemaObject {
      *
      * @param session Session
      * @param row array of objects for a database row
-     * @param delete should we allow 'ON DELETE CASCADE' or 'ON UPDATE CASCADE'
      * @return iterator
-     * @
      */
     RowIterator findFkRef(Session session, Object[] row) {
 
@@ -906,6 +916,20 @@ public final class Constraint implements SchemaObject {
     }
 
     /**
+     * Finds a row matching the values in UNIQUE columns.
+     */
+    RowIterator findUniqueRows(Session session, Object[] row) {
+
+        if (row == null || ArrayUtil.hasNull(row, core.mainCols)) {
+            return core.mainIndex.emptyIterator();
+        }
+
+        PersistentStore store = core.mainTable.getRowStore(session);
+
+        return core.mainIndex.findFirstRow(session, store, row, core.mainCols);
+    }
+
+    /**
      * Check used before creating a new foreign key cosntraint, this method
      * checks all rows of a table to ensure they all have a corresponding
      * row in the main table.
@@ -914,14 +938,8 @@ public final class Constraint implements SchemaObject {
 
         RowIterator it = table.rowIterator(session);
 
-        while (true) {
-            Row row = it.getNextRow();
-
-            if (row == null) {
-                break;
-            }
-
-            Object[] rowData = row.getData();
+        while (it.next()) {
+            Object[] rowData = it.getCurrent();
 
             checkInsert(session, table, rowData, false);
         }
@@ -957,7 +975,7 @@ public final class Constraint implements SchemaObject {
     private Expression getNewCheckExpression(Session session) {
 
         String    ddl     = check.getSQL();
-        Scanner   scanner = new Scanner(ddl);
+        Scanner   scanner = new Scanner(session, ddl);
         ParserDQL parser  = new ParserDQL(session, scanner, null);
 
         parser.compileContext.setNextRangeVarIndex(0);
@@ -975,17 +993,13 @@ public final class Constraint implements SchemaObject {
         // to ensure no subselects etc. are in condition
         check.checkValidCheckConstraint();
 
-        if (table == null) {
-            check.resolveTypes(session, null);
-        } else {
-            QuerySpecification checkSelect = Expression.getCheckSelect(session,
-                table, check);
+        QuerySpecification checkSelect = Expression.getCheckSelect(session,
+            table, check);
 
-            rangeVariable = checkSelect.rangeVariables[0];
+        rangeVariable = checkSelect.rangeVariables[0];
 
-            // removes reference to the Index object in range variable
-            rangeVariable.setForCheckConstraint();
-        }
+        // removes reference to the Index object in range variable
+        rangeVariable.setForCheckConstraint();
 
         if (check.getType() == OpTypes.NOT
                 && check.getLeftNode().getType() == OpTypes.IS_NULL
@@ -995,6 +1009,23 @@ public final class Constraint implements SchemaObject {
                 check.getLeftNode().getLeftNode().getColumnIndex();
             isNotNull = true;
         }
+    }
+
+    void prepareDomainCheckConstraint(Session session) {
+
+        // to ensure no subselects etc. are in condition
+        check.checkValidCheckConstraint();
+
+        HsqlList list = check.resolveColumnReferences(session,
+            RangeGroup.emptyGroup, 0, RangeGroup.emptyArray, null, false);
+
+        if (list != null) {
+            Expression e = ((Expression) list.get(0));
+
+            throw Error.error(ErrorCode.X_42501, e.getSQL());
+        }
+
+        check.resolveTypes(session, null);
     }
 
     void checkCheckConstraint(Session session, Table table) {

@@ -1,4 +1,4 @@
-/* Copyright (c) 2001-2011, The HSQL Development Group
+/* Copyright (c) 2001-2016, The HSQL Development Group
  * All rights reserved.
  *
  * Redistribution and use in source and binary forms, with or without
@@ -39,11 +39,12 @@ import org.hsqldb.rights.Grantee;
  * SQL schema object interface
  *
  * @author Fred Toussi (fredt@users dot sourceforge.net)
- * @version 1.9.0
+ * @version 2.3.4
  * @since 1.9.0
  */
 public interface SchemaObject {
 
+    int DATABASE         = 0;
     int CATALOG          = 1;
     int SCHEMA           = 2;
     int TABLE            = 3;
@@ -72,6 +73,7 @@ public interface SchemaObject {
     int SERVER           = 26;
     int SUBQUERY         = 27;
     int SEARCH           = 28;
+    int REFERENCE        = 29;
 
     //
     SchemaObject[] emptyArray = new SchemaObject[]{};
@@ -126,9 +128,9 @@ public interface SchemaObject {
 
     interface Deferable {
 
-        int NOT_DEFERRABLE = 0;
-        int INIT_DEFERRED  = 1;
-        int INIT_IMMEDIATE = 2;
+        int INIT_DEFERRED  = 5;
+        int INIT_IMMEDIATE = 6;
+        int NOT_DEFERRABLE = 7;
     }
 
     interface ViewCheckModes {

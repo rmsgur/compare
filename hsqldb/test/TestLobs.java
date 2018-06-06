@@ -1,4 +1,4 @@
-/* Copyright (c) 2001-2011, The HSQL Development Group
+/* Copyright (c) 2001-2014, The HSQL Development Group
  * All rights reserved.
  *
  * Redistribution and use in source and binary forms, with or without
@@ -51,7 +51,6 @@ import org.hsqldb.jdbc.JDBCBlob;
 import org.hsqldb.jdbc.JDBCClob;
 import org.hsqldb.lib.HsqlByteArrayInputStream;
 import org.hsqldb.lib.StopWatch;
-import org.hsqldb.persist.HsqlDatabaseProperties;
 
 public class TestLobs extends TestBase {
 
@@ -61,12 +60,11 @@ public class TestLobs extends TestBase {
     public TestLobs(String name) {
 
 //        super(name);
-        super(name, "jdbc:hsqldb:file:test3", false, false);
-
-//        super(name, "jdbc:hsqldb:mem:test3", false, false);
+//        super(name, "jdbc:hsqldb:file:test3", false, false);
+        super(name, "jdbc:hsqldb:mem:test3", false, false);
     }
 
-    protected void setUp() {
+    protected void setUp() throws Exception {
 
         System.out.println("SetUp (sub-)test: " + getName());
         super.setUp();
@@ -933,8 +931,9 @@ public class TestLobs extends TestBase {
 
             while (result.next()) {
                 byte[] data = result.getBytes(1);
-                String s = data == null ? "null"
-                                        : String.valueOf(data.length);
+                String s    = data == null ? "null"
+                                           : String.valueOf(data.length);
+
                 System.out.println("Result: " + s);
             }
         } catch (SQLException e) {

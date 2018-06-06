@@ -1,4 +1,4 @@
-/* Copyright (c) 2001-2011, The HSQL Development Group
+/* Copyright (c) 2001-2017, The HSQL Development Group
  * All rights reserved.
  *
  * Redistribution and use in source and binary forms, with or without
@@ -41,7 +41,7 @@ import java.net.Socket;
  * Base class for producing the Socket objects used by HSQLDB.
  *
  * @author Blaine Simpson (blaine dot simpson at admc dot com)
- * @author boucherb@users
+ * @author campbell-burnet@users
  * @version 2.3.0
  * @since 1.7.2
  */
@@ -54,7 +54,7 @@ public class HsqlSocketFactory {
 // ------------------------------ constructors ---------------------------------
 
     /**
-     * External construction disabled.  New factory instances are retreived
+     * External construction disabled.  New factory instances are retrieved
      * through the newHsqlSocketFactory method instead.
      */
     protected HsqlSocketFactory() throws Exception {}
@@ -110,7 +110,7 @@ public class HsqlSocketFactory {
 
     /**
      * If socket argument is not null, returns it. If it is null,
-     * reates a socket and connects it to the specified remote host at the
+     * creates a socket and connects it to the specified remote host at the
      * specified remote port. This socket is configured using the socket options
      * established for this factory.
      *
@@ -183,7 +183,7 @@ public class HsqlSocketFactory {
      * for calls to isSecure();
      *
      * @return a new secure socket factory
-     * @param implClass the fully qaulified name of the desired
+     * @param implClass the fully qualified name of the desired
      *      class to construct
      * @throws Exception if a new secure socket factory cannot
      *      be constructed

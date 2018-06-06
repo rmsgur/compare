@@ -1,4 +1,4 @@
-/* Copyright (c) 2001-2011, The HSQL Development Group
+/* Copyright (c) 2001-2014, The HSQL Development Group
  * All rights reserved.
  *
  * Redistribution and use in source and binary forms, with or without
@@ -44,6 +44,7 @@ import java.sql.Statement;
 import java.text.SimpleDateFormat;
 
 import org.hsqldb.lib.ArraySort;
+import org.hsqldb.lib.ArrayUtil;
 import org.hsqldb.lib.FileUtil;
 import org.hsqldb.lib.HsqlArrayList;
 import org.hsqldb.lib.LineGroupReader;
@@ -74,6 +75,7 @@ public class TestUtil {
     static private boolean      abortOnErr        = false;
     static final private String TIMESTAMP_VAR_STR = "${timestamp}";
     static final String LS = System.getProperty("line.separator", "\n");
+    static final boolean        oneSessionOnly    = false;
 
     public static void main(String[] argv) {
 
@@ -87,7 +89,7 @@ public class TestUtil {
         FileUtil.deleteOrRenameDatabaseFiles(path);
     }
 
-    static boolean delete(String file) {
+    public static boolean delete(String file) {
         return new File(file).delete();
     }
 
@@ -149,18 +151,21 @@ public class TestUtil {
                 if (fname.startsWith("TestSelf") && fname.endsWith(".txt")) {
                     long elapsed = sw.elapsedTime();
 
-                    cConnection = DriverManager.getConnection(url, user,
-                            password);
+                    if (!oneSessionOnly || cConnection == null) {
+                        cConnection = DriverManager.getConnection(url, user,
+                                password);
+                    }
 
                     print("Opened DB in "
                           + (double) (sw.elapsedTime() - elapsed) / 1000
                           + " s");
                     testScript(cConnection, absolute + File.separator + fname);
-                    cConnection.close();
+
+                    if (!oneSessionOnly) {
+                        cConnection.close();
+                    }
                 }
             }
-
-            cConnection = DriverManager.getConnection(url, user, password);
         } catch (Exception e) {
             e.printStackTrace();
             print("TestUtil init error: " + e.toString());
@@ -377,9 +382,17 @@ public class TestUtil {
         //corresponds to the value of type
         switch (type) {
 
-            case 'u' :
-                return new UpdateParsedSection(sectionLines);
+            case 'u' : {
+                ParsedSection section = new UpdateParsedSection(sectionLines);
 
+                if (TestUtil.oneSessionOnly) {
+                    if (section.getSql().toUpperCase().contains("SHUTDOWN")) {
+                        section = new IgnoreParsedSection(sectionLines, type);
+                    }
+                }
+
+                return section;
+            }
             case 's' :
                 return new SilentParsedSection(sectionLines);
 
@@ -404,9 +417,17 @@ public class TestUtil {
             case 'e' :
                 return new ExceptionParsedSection(sectionLines);
 
-            case ' ' :
-                return new BlankParsedSection(sectionLines);
+            case ' ' : {
+                ParsedSection section = new BlankParsedSection(sectionLines);
 
+                if (TestUtil.oneSessionOnly) {
+                    if (section.getSql().toUpperCase().contains("SHUTDOWN")) {
+                        section = new IgnoreParsedSection(sectionLines, type);
+                    }
+                }
+
+                return section;
+            }
             default :
 
                 //if we arrive here, then we should have a valid code,
@@ -475,7 +496,7 @@ abstract class ParsedSection {
 
     /**
      * Common constructor functions for this family.
-     * @param aLines Array of the script lines containing the section of script.
+     * @param linesArray Array of the script lines containing the section of script.
      * database
      */
     protected ParsedSection(HsqlArrayList linesArray) {
@@ -613,7 +634,9 @@ abstract class ParsedSection {
     protected boolean test(Statement aStatement) {
 
         try {
-            aStatement.execute(getSql());
+            String sql = getSql();
+
+            aStatement.execute(sql);
         } catch (Exception x) {
             message = x.toString();
 
@@ -673,7 +696,6 @@ class ResultSetParsedSection extends ParsedSection {
     /**
      * constructs a new instance of ResultSetParsedSection, interpreting
      * the supplied results as one or more lines of delimited field values
-     * @param lines String[]
      */
     protected ResultSetParsedSection(HsqlArrayList linesArray) {
 
@@ -780,6 +802,38 @@ class ResultSetParsedSection extends ParsedSection {
                     String[] expectedFields =
                         StringUtil.split(expectedRows[count], delim);
 
+                    // handle ARRAY[val,val, val] commas
+                    for (int i = 0; i < expectedFields.length; i++) {
+                        if (expectedFields[i] == null) {
+                            expectedFields = (String[]) ArrayUtil.resizeArray(
+                                expectedFields, i);
+
+                            break;
+                        }
+
+                        if (expectedFields[i].startsWith("ARRAY[")) {
+                            if (expectedFields[i].endsWith("]")) {
+                                continue;
+                            }
+
+                            for (int j = i + 1; j < expectedFields.length;
+                                    j++) {
+                                String part = expectedFields[j];
+
+                                expectedFields[i] += delim + part;
+
+                                if (part.endsWith("]")) {
+                                    ArrayUtil.adjustArray(
+                                        ArrayUtil.CLASS_CODE_OBJECT,
+                                        expectedFields, expectedFields.length,
+                                        i + 1, i - j);
+
+                                    break;
+                                }
+                            }
+                        }
+                    }
+
                     //check that we have the number of columns expected...
                     if (colCount == expectedFields.length) {
 
@@ -869,7 +923,6 @@ class ResultSetOutputParsedSection extends ParsedSection {
     /**
      * constructs a new instance of ResultSetParsedSection, interpreting
      * the supplied results as one or more lines of delimited field values
-     * @param lines String[]
      */
     protected ResultSetOutputParsedSection(HsqlArrayList linesArray) {
 

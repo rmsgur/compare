@@ -1,4 +1,4 @@
-/* Copyright (c) 2001-2011, The HSQL Development Group
+/* Copyright (c) 2001-2014, The HSQL Development Group
  * All rights reserved.
  *
  * Redistribution and use in source and binary forms, with or without
@@ -47,12 +47,12 @@ import java.util.logging.LogRecord;
  * class name, method name, etc.).
  *
  * @see Formatter
- * @see SimpleFormatter
+ * @see java.util.logging.SimpleFormatter
  * @author Blaine Simpson (blaine dot simpson at admc dot com)
  */
 public class BasicTextJdkLogFormatter extends Formatter {
+    public static final String LS = System.getProperty("line.separator");
     protected boolean withTime = true;
-    public static String LS = System.getProperty("line.separator");
 
     protected SimpleDateFormat sdf =
             new SimpleDateFormat("yyyy-MM-dd'T'HH:mm:ss.SSSZ");

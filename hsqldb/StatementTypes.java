@@ -1,4 +1,4 @@
-/* Copyright (c) 2001-2011, The HSQL Development Group
+/* Copyright (c) 2001-2016, The HSQL Development Group
  * All rights reserved.
  *
  * Redistribution and use in source and binary forms, with or without
@@ -35,7 +35,7 @@ package org.hsqldb;
  * Codes based on SQL Standards for different types of statement.
  *
  * @author Fred Toussi (fredt@users dot sourceforge.net)
- * @version 2.2.7
+ * @version 2.3.4
  * @since 1.9.0
  */
 public interface StatementTypes {
@@ -43,20 +43,20 @@ public interface StatementTypes {
     int ALLOCATE_CURSOR                  = 1;
     int ALLOCATE_DESCRIPTOR              = 2;
     int ALTER_DOMAIN                     = 3;
-    int ALTER_ROUTINE                    = 17;
-    int ALTER_SEQUENCE                   = 134;
-    int ALTER_TYPE                       = 60;
-    int ALTER_TABLE                      = 4;
-    int ALTER_TRANSFORM                  = 127;
-    int CREATE_ASSERTION                 = 6;
-    int CALL                             = 7;
-    int CREATE_CHARACTER_SET             = 8;
-    int CLOSE_CURSOR                     = 9;
-    int CREATE_COLLATION                 = 10;
-    int COMMIT_WORK                      = 11;
-    int CONNECT                          = 13;
-    int DEALLOCATE_DESCRIPTOR            = 15;
-    int DEALLOCATE_PREPARE               = 16;
+    int ALTER_ROUTINE                    = 4;
+    int ALTER_SEQUENCE                   = 5;
+    int ALTER_TYPE                       = 6;
+    int ALTER_TABLE                      = 7;
+    int ALTER_TRANSFORM                  = 8;
+    int CREATE_ASSERTION                 = 9;
+    int CALL                             = 10;
+    int CREATE_CHARACTER_SET             = 11;
+    int CLOSE_CURSOR                     = 12;
+    int CREATE_COLLATION                 = 13;
+    int COMMIT_WORK                      = 14;
+    int CONNECT                          = 15;
+    int DEALLOCATE_DESCRIPTOR            = 16;
+    int DEALLOCATE_PREPARE               = 17;
     int DELETE_CURSOR                    = 18;
     int DELETE_WHERE                     = 19;
     int DESCRIBE                         = 20;
@@ -66,113 +66,114 @@ public interface StatementTypes {
     int DROP_ASSERTION                   = 24;
     int DROP_CHARACTER_SET               = 25;
     int DROP_COLLATION                   = 26;
-    int DROP_TYPE                        = 35;
-    int DROP_DOMAIN                      = 27;
+    int DROP_TYPE                        = 27;
+    int DROP_DOMAIN                      = 28;
     int DROP_ROLE                        = 29;
     int DROP_ROUTINE                     = 30;
     int DROP_SCHEMA                      = 31;
-    int DROP_SEQUENCE                    = 135;
-    int DROP_TABLE                       = 32;
-    int DROP_TRANSFORM                   = 116;
-    int DROP_TRANSLATION                 = 33;
-    int DROP_TRIGGER                     = 34;
-    int DROP_CAST                        = 78;
-    int DROP_ORDERING                    = 115;
-    int DROP_VIEW                        = 36;
-    int DYNAMIC_CLOSE                    = 37;
-    int DYNAMIC_DELETE_CURSOR            = 38;
-    int DYNAMIC_FETCH                    = 39;
-    int DYNAMIC_OPEN                     = 40;
-    int SELECT_CURSOR                    = 85;
-    int SELECT_SINGLE_DYNAMIC            = 41;    // identifier is SELECT
-    int DYNAMIC_UPDATE_CURSOR            = 42;
-    int EXECUTE_IMMEDIATE                = 43;
-    int EXECUTE                          = 44;
-    int FETCH                            = 45;
-    int FREE_LOCATOR                     = 98;
-    int GET_DESCRIPTOR                   = 47;
-    int HOLD_LOCATOR                     = 99;
-    int GRANT                            = 48;
-    int GRANT_ROLE                       = 49;
-    int INSERT                           = 50;
-    int MERGE                            = 128;
-    int OPEN                             = 53;
-    int PREPARABLE_DYNAMIC_DELETE_CURSOR = 54;
-    int PREPARABLE_DYNAMIC_UPDATE_CURSOR = 55;
-    int PREPARE                          = 56;
-    int RELEASE_SAVEPOINT                = 57;
-    int RETURN                           = 58;
-    int REVOKE                           = 59;
-    int REVOKE_ROLE                      = 129;
-    int CREATE_ROLE                      = 61;
-    int ROLLBACK_WORK                    = 62;
-    int SAVEPOINT                        = 63;
-    int CREATE_SCHEMA                    = 64;
-    int CREATE_ROUTINE                   = 14;
-    int SELECT_SINGLE                    = 65;    // identifier is SELECT
-    int CREATE_SEQUENCE                  = 133;
-    int SET_CATALOG                      = 66;
-    int SET_CONNECTION                   = 67;
-    int SET_CONSTRAINT                   = 68;
-    int SET_DESCRIPTOR                   = 70;
-    int SET_TIME_ZONE                    = 71;
-    int SET_NAMES                        = 72;
-    int SET_PATH                         = 69;
-    int SET_ROLE                         = 73;
-    int SET_SCHEMA                       = 74;
-    int SET_SESSION_AUTHORIZATION        = 76;
-    int SET_SESSION_CHARACTERISTICS      = 109;
-    int SET_COLLATION                    = 136;
-    int SET_TRANSFORM_GROUP              = 118;
-    int SET_TRANSACTION                  = 75;
-    int START_TRANSACTION                = 111;
-    int CREATE_TABLE                     = 77;
-    int CREATE_TRANSFORM                 = 117;
-    int CREATE_TRANSLATION               = 79;
-    int CREATE_TRIGGER                   = 80;
-    int UPDATE_CURSOR                    = 81;
-    int UPDATE_WHERE                     = 82;
-    int CREATE_CAST                      = 52;
-    int CREATE_TYPE                      = 83;
-    int CREATE_ORDERING                  = 114;
-    int CREATE_VIEW                      = 84;
-    int ASSIGNMENT                       = 5;     // PSM
-    int CASE                             = 86;
-    int BEGIN_END                        = 12;
-    int DROP_MODULE                      = 28;
-    int FOR                              = 46;
-    int IF                               = 88;
-    int ITERATE                          = 102;
-    int LEAVE                            = 89;
-    int LOOP                             = 90;
-    int RESIGNAL                         = 91;
-    int REPEAT                           = 95;
-    int SIGNAL                           = 92;
-    int CREATE_MODULE                    = 51;
-    int WHILE                            = 97;
+    int DROP_SEQUENCE                    = 32;
+    int DROP_TABLE                       = 33;
+    int DROP_TRANSFORM                   = 34;
+    int DROP_TRANSLATION                 = 35;
+    int DROP_TRIGGER                     = 36;
+    int DROP_CAST                        = 37;
+    int DROP_ORDERING                    = 38;
+    int DROP_VIEW                        = 39;
+    int DYNAMIC_CLOSE                    = 40;
+    int DYNAMIC_DELETE_CURSOR            = 41;
+    int DYNAMIC_FETCH                    = 42;
+    int DYNAMIC_OPEN                     = 43;
+    int SELECT_CURSOR                    = 44;
+    int SELECT_SINGLE_DYNAMIC            = 45;    // identifier is SELECT
+    int DYNAMIC_UPDATE_CURSOR            = 46;
+    int EXECUTE_IMMEDIATE                = 47;
+    int EXECUTE                          = 48;
+    int FETCH                            = 49;
+    int FREE_LOCATOR                     = 50;
+    int GET_DESCRIPTOR                   = 51;
+    int HOLD_LOCATOR                     = 52;
+    int GRANT                            = 53;
+    int GRANT_ROLE                       = 54;
+    int INSERT                           = 55;
+    int MERGE                            = 56;
+    int OPEN                             = 57;
+    int PREPARABLE_DYNAMIC_DELETE_CURSOR = 58;
+    int PREPARABLE_DYNAMIC_UPDATE_CURSOR = 59;
+    int PREPARE                          = 60;
+    int RELEASE_SAVEPOINT                = 61;
+    int RETURN                           = 62;
+    int REVOKE                           = 63;
+    int REVOKE_ROLE                      = 64;
+    int CREATE_ROLE                      = 65;
+    int ROLLBACK_WORK                    = 66;
+    int SAVEPOINT                        = 67;
+    int CREATE_SCHEMA                    = 68;
+    int CREATE_ROUTINE                   = 69;
+    int SELECT_SINGLE                    = 70;    // identifier is SELECT
+    int CREATE_SEQUENCE                  = 71;
+    int SET_CATALOG                      = 72;
+    int SET_CONNECTION                   = 73;
+    int SET_CONSTRAINT                   = 74;
+    int SET_DESCRIPTOR                   = 75;
+    int SET_TIME_ZONE                    = 76;
+    int SET_NAMES                        = 77;
+    int SET_PATH                         = 78;
+    int SET_ROLE                         = 79;
+    int SET_SCHEMA                       = 80;
+    int SET_SESSION_AUTHORIZATION        = 81;
+    int SET_SESSION_CHARACTERISTICS      = 82;
+    int SET_COLLATION                    = 83;
+    int SET_TRANSFORM_GROUP              = 84;
+    int SET_TRANSACTION                  = 85;
+    int START_TRANSACTION                = 86;
+    int CREATE_TABLE                     = 87;
+    int CREATE_TRANSFORM                 = 88;
+    int CREATE_TRANSLATION               = 89;
+    int CREATE_TRIGGER                   = 90;
+    int UPDATE_CURSOR                    = 91;
+    int UPDATE_WHERE                     = 92;
+    int CREATE_CAST                      = 93;
+    int CREATE_TYPE                      = 94;
+    int CREATE_ORDERING                  = 95;
+    int CREATE_VIEW                      = 96;
+    int ASSIGNMENT                       = 97;    // PSM
+    int CASE                             = 98;
+    int BEGIN_END                        = 99;
+    int DROP_MODULE                      = 100;
+    int FOR                              = 101;
+    int IF                               = 102;
+    int ITERATE                          = 103;
+    int LEAVE                            = 104;
+    int LOOP                             = 105;
+    int RESIGNAL                         = 106;
+    int REPEAT                           = 107;
+    int SIGNAL                           = 108;
+    int CREATE_MODULE                    = 109;
+    int WHILE                            = 110;
+    int NULL                             = 111;
 
     //
-    int ALTER_FOREIGN_TABLE         = 104;
-    int ALTER_USER_MAPPING          = 123;
-    int DROP_FOREIGN_DATA_WRAPPER   = 121;
-    int DROP_SERVER                 = 110;
-    int DROP_FOREIGN_TABLE          = 105;
-    int DROP_ROUTINE_MAPPING        = 131;
-    int DROP_USER_MAPPING           = 124;
-    int CREATE_FOREIGN_DATA_WRAPPER = 119;
-    int CREATE_SERVER               = 107;
-    int CREATE_FOREIGN_TABLE        = 103;
-    int IMPORT_FOREIGN_SCHEMA       = 125;
+    int ALTER_FOREIGN_TABLE         = 121;
+    int ALTER_USER_MAPPING          = 122;
+    int DROP_FOREIGN_DATA_WRAPPER   = 123;
+    int DROP_SERVER                 = 124;
+    int DROP_FOREIGN_TABLE          = 125;
+    int DROP_ROUTINE_MAPPING        = 126;
+    int DROP_USER_MAPPING           = 127;
+    int CREATE_FOREIGN_DATA_WRAPPER = 128;
+    int CREATE_SERVER               = 129;
+    int CREATE_FOREIGN_TABLE        = 130;
+    int IMPORT_FOREIGN_SCHEMA       = 131;
     int CREATE_ROUTINE_MAPPING      = 132;
-    int SET_PASSTHROUGH             = 126;
-    int CREATE_USER_MAPPING         = 122;
+    int SET_PASSTHROUGH             = 133;
+    int CREATE_USER_MAPPING         = 134;
 
     // hsqldb database
     int DATABASE_BACKUP     = 1001;
     int DATABASE_CHECKPOINT = 1002;
     int DATABASE_SHUTDOWN   = 1003;
     int DATABASE_SCRIPT     = 1004;
-    int ALTER_SESSION       = 1005;
+    int CHECK_INDEX         = 1005;
 
     // hsqldb database settings
     int SET_DATABASE_FILES_BACKUP_INCREMENT    = 1011;
@@ -212,56 +213,66 @@ public interface StatementTypes {
     int SET_DATABASE_DEFAULT_ISOLATION_LEVEL   = 1053;
     int SET_DATABASE_TRANSACTION_CONFLICT      = 1054;
     int SET_DATABASE_UNIQUE_NAME               = 1055;
+    int SET_DATABASE_PASSWORD_DIGEST           = 1056;
 
     // hsqldb user settings
-    int SET_USER_LOCAL          = 1060;
-    int SET_USER_INITIAL_SCHEMA = 1061;
-    int SET_USER_PASSWORD       = 1062;
+    int SET_USER_LOCAL          = 1091;
+    int SET_USER_INITIAL_SCHEMA = 1092;
+    int SET_USER_PASSWORD       = 1093;
 
     // hsqldb session
-    int TRANSACTION_LOCK_TABLE         = 1063;
-    int SET_SESSION_AUTOCOMMIT         = 1064;
-    int SET_SESSION_RESULT_MAX_ROWS    = 1065;
-    int SET_SESSION_RESULT_MEMORY_ROWS = 1066;
-    int ROLLBACK_SAVEPOINT             = 1067;
-    int DECLARE_SESSION_TABLE          = 1068;
+    int TRANSACTION_LOCK_CATALOG       = 1111;
+    int TRANSACTION_UNLOCK_CATALOG     = 1112;
+    int TRANSACTION_LOCK_TABLE         = 1113;
+    int SET_SESSION_AUTOCOMMIT         = 1114;
+    int SET_SESSION_FEATURE            = 1115;
+    int SET_SESSION_RESULT_MAX_ROWS    = 1116;
+    int SET_SESSION_RESULT_MEMORY_ROWS = 1117;
+    int ROLLBACK_SAVEPOINT             = 1118;
+    int DECLARE_SESSION_TABLE          = 1119;
+    int ALTER_SESSION                  = 1120;
 
     // hsqldb schema
-    int ALTER_INDEX                 = 1069;
-    int ALTER_VIEW                  = 1070;
-    int COMMENT                     = 1071;
-    int CREATE_ALIAS                = 1072;
-    int CREATE_INDEX                = 1073;
-    int CREATE_USER                 = 1074;
-    int DECLARE_VARIABLE            = 1075;
-    int DROP_COLUMN                 = 1076;
-    int DROP_INDEX                  = 1077;
-    int DROP_CONSTRAINT             = 1078;
-    int DROP_USER                   = 1079;
-    int DROP_DEFAULT                = 1080;
-    int ADD_COLUMN                  = 1081;
-    int ADD_CONSTRAINT              = 1082;
-    int ADD_DEFAULT                 = 1083;
-    int ALTER_COLUMN_TYPE           = 1084;
-    int ALTER_COLUMN_SEQUENCE       = 1085;
-    int ALTER_COLUMN_NULL           = 1086;
-    int ALTER_COLUMN_DEFAULT        = 1087;
-    int ALTER_COLUMN_DROP_DEFAULT   = 1088;
-    int ALTER_COLUMN_DROP_GENERATED = 1089;
-    int ALTER_COLUMN_TYPE_IDENTITY  = 1090;
+    int ALTER_INDEX                  = 1121;
+    int ALTER_VIEW                   = 1122;
+    int COMMENT                      = 1123;
+    int CREATE_ALIAS                 = 1124;
+    int CREATE_INDEX                 = 1125;
+    int CREATE_USER                  = 1126;
+    int DECLARE_VARIABLE             = 1127;
+    int DROP_COLUMN                  = 1128;
+    int DROP_INDEX                   = 1129;
+    int DROP_CONSTRAINT              = 1130;
+    int DROP_USER                    = 1131;
+    int DROP_DEFAULT                 = 1132;
+    int ADD_COLUMN                   = 1133;
+    int ADD_CONSTRAINT               = 1134;
+    int ADD_DEFAULT                  = 1135;
+    int ALTER_COLUMN_TYPE            = 1136;
+    int ALTER_COLUMN_SEQUENCE        = 1137;
+    int ALTER_COLUMN_NULL            = 1139;
+    int ALTER_COLUMN_DEFAULT         = 1140;
+    int ALTER_COLUMN_DROP_DEFAULT    = 1141;
+    int ALTER_COLUMN_DROP_EXPRESSION = 1142;
+    int ALTER_COLUMN_DROP_GENERATED  = 1143;
+    int ALTER_COLUMN_TYPE_IDENTITY   = 1144;
 
     //
-    int EXPLAIN_PLAN             = 1191;
-    int RENAME_OBJECT            = 1192;
-    int SET_TABLE_INDEX          = 1193;
-    int SET_TABLE_READONLY       = 1194;
-    int SET_TABLE_SOURCE         = 1195;
-    int SET_TABLE_SOURCE_HEADER  = 1196;
-    int SET_TABLE_TYPE           = 1197;
-    int SET_TABLE_CLUSTERED      = 1198;
-    int SET_TABLE_NEW_TABLESPACE = 1199;
-    int SET_TABLE_SET_TABLESPACE = 1200;
-    int LOG_SCHEMA_STATEMENT     = 1201;
+    int CREATE_REFERENCE = 1146;
+    int DROP_REFERENCE   = 1147;
+
+    //
+    int EXPLAIN_PLAN             = 1151;
+    int RENAME_OBJECT            = 1152;
+    int SET_TABLE_INDEX          = 1153;
+    int SET_TABLE_READONLY       = 1154;
+    int SET_TABLE_SOURCE         = 1155;
+    int SET_TABLE_SOURCE_HEADER  = 1156;
+    int SET_TABLE_TYPE           = 1157;
+    int SET_TABLE_CLUSTERED      = 1158;
+    int SET_TABLE_NEW_TABLESPACE = 1159;
+    int SET_TABLE_SET_TABLESPACE = 1160;
+    int LOG_SCHEMA_STATEMENT     = 1161;
 
     // hsqldb sql implementation
     int CONDITION = 1211;                         // element of IF
@@ -290,8 +301,9 @@ public interface StatementTypes {
     int X_HSQLDB_SCHEMA_MANIPULATION = 2012;
     int X_HSQLDB_SETTING             = 2013;
     int X_HSQLDB_DATABASE_OPERATION  = 2014;
-    int X_HSQLDB_TRANSACTION         = 2015;
-    int X_DYNAMIC                    = 2016;
+    int X_HSQLDB_NONBLOCK_OPERATION  = 2015;
+    int X_HSQLDB_TRANSACTION         = 2016;
+    int X_DYNAMIC                    = 2017;
 
     // Expected types of Result returned for an SQL statement
     int RETURN_ANY    = 0;

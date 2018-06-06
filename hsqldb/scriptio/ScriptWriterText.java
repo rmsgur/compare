@@ -1,4 +1,4 @@
-/* Copyright (c) 2001-2011, The HSQL Development Group
+/* Copyright (c) 2001-2016, The HSQL Development Group
  * All rights reserved.
  *
  * Redistribution and use in source and binary forms, with or without
@@ -37,7 +37,6 @@ import java.io.UnsupportedEncodingException;
 import java.util.zip.GZIPOutputStream;
 
 import org.hsqldb.Database;
-import org.hsqldb.HsqlNameManager;
 import org.hsqldb.HsqlNameManager.HsqlName;
 import org.hsqldb.NumberSequence;
 import org.hsqldb.Row;
@@ -66,7 +65,7 @@ import org.hsqldb.rowio.RowOutputTextLog;
  *
  *
  * @author Fred Toussi (fredt@users dot sourceforge.net)
- * @version 2.3.0
+ * @version 2.3.3
  * @since 1.7.2
  */
 public class ScriptWriterText extends ScriptWriterBase {
@@ -105,7 +104,11 @@ public class ScriptWriterText extends ScriptWriterBase {
             BYTES_C_ID_TERM    = "*/".getBytes(ISO_8859_1);
             BYTES_SCHEMA       = "SET SCHEMA ".getBytes(ISO_8859_1);
         } catch (UnsupportedEncodingException e) {
-            Error.runtimeError(ErrorCode.U_S0500, "ScriptWriterText");
+            throw Error.runtimeError(ErrorCode.U_S0500, "ScriptWriterText");
+        }
+
+        if (BYTES_LINE_SEP[0] != 0x0A && BYTES_LINE_SEP[0] != 0x0D) {
+            BYTES_LINE_SEP = new byte[]{ 0x0A };
         }
     }
 
@@ -117,8 +120,8 @@ public class ScriptWriterText extends ScriptWriterBase {
 
     public ScriptWriterText(Database db, String file,
                             boolean includeCachedData, boolean newFile,
-                            boolean isDump) {
-        super(db, file, includeCachedData, newFile, isDump);
+                            boolean isUserScript) {
+        super(db, file, includeCachedData, newFile, isUserScript);
     }
 
     public ScriptWriterText(Database db, String file,
@@ -205,7 +208,7 @@ public class ScriptWriterText extends ScriptWriterBase {
 
         writeSessionIdAndSchema(session);
         rowOut.reset();
-        ((RowOutputTextLog) rowOut).setMode(RowOutputTextLog.MODE_INSERT);
+        rowOut.setMode(RowOutputTextLog.MODE_INSERT);
         rowOut.write(BYTES_INSERT_INTO);
         rowOut.writeString(table.getName().statementName);
         rowOut.write(BYTES_VALUES);
@@ -221,7 +224,7 @@ public class ScriptWriterText extends ScriptWriterBase {
             return;
         }
 
-        if (schemaToLog == currentSession.loggedSchema) {
+        if (!includeTableInit && schemaToLog == currentSession.loggedSchema) {
             return;
         }
 
@@ -257,7 +260,7 @@ public class ScriptWriterText extends ScriptWriterBase {
 
         writeSessionIdAndSchema(session);
         rowOut.reset();
-        ((RowOutputTextLog) rowOut).setMode(RowOutputTextLog.MODE_DELETE);
+        rowOut.setMode(RowOutputTextLog.MODE_DELETE);
         rowOut.write(BYTES_DELETE_FROM);
         rowOut.writeString(table.getName().statementName);
         rowOut.write(BYTES_WHERE);
@@ -309,6 +312,10 @@ public class ScriptWriterText extends ScriptWriterBase {
     }
 
     void writeRowOutToFile() throws IOException {
+
+        if (fileStreamOut == null) {
+            return;
+        }
 
         synchronized (fileStreamOut) {
             fileStreamOut.write(rowOut.getBuffer(), 0, rowOut.size());

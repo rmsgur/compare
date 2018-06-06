@@ -1,4 +1,4 @@
-/* Copyright (c) 2001-2011, The HSQL Development Group
+/* Copyright (c) 2001-2016, The HSQL Development Group
  * All rights reserved.
  *
  * Redistribution and use in source and binary forms, with or without
@@ -38,12 +38,12 @@ import java.math.BigDecimal;
   * Java Objects. Leads to reduction in memory use when an Object is used more
   * then twice in the database.
   *
-  * getXXX methods are used for retrival of values. If a value is not in
+  * getXXX methods are used for retrieval of values. If a value is not in
   * the pool, it is added to the pool and returned. When the pool gets
   * full, half the contents that have been accessed less recently are purged.
   *
   * @author Fred Toussi (fredt@users dot sourceforge.net)
-  * @version 1.9.0
+  * @version 2.3.2
   * @since 1.7.2
   */
 public class ValuePool {
@@ -72,7 +72,18 @@ public class ValuePool {
     static int maxStringLength;
 
     //
+    public static final String spaceString;
+
     static {
+        char[] c = new char[SPACE_STRING_SIZE];
+
+        for (int i = 0; i < SPACE_STRING_SIZE; i++) {
+            c[i] = ' ';
+        }
+
+        spaceString = new String(c);
+
+        //
         initPool();
     }
 
@@ -82,15 +93,14 @@ public class ValuePool {
     public static final Integer INTEGER_MAX =
         ValuePool.getInt(Integer.MAX_VALUE);
     public static final BigDecimal BIG_DECIMAL_0 =
-        ValuePool.getBigDecimal(new BigDecimal(0.0));
+        ValuePool.getBigDecimal(BigDecimal.valueOf(0));
     public static final BigDecimal BIG_DECIMAL_1 =
-        ValuePool.getBigDecimal(new BigDecimal(1.0));
+        ValuePool.getBigDecimal(new BigDecimal(1));
 
     //
     public static final String[] emptyStringArray = new String[]{};
     public static final Object[] emptyObjectArray = new Object[]{};
     public static final int[]    emptyIntArray    = new int[]{};
-    public static String         spaceString;
 
     //
     private static void initPool() {
@@ -114,14 +124,6 @@ public class ValuePool {
             doublePool     = poolList[2];
             bigdecimalPool = poolList[3];
             stringPool     = poolList[4];
-
-            char[] c = new char[SPACE_STRING_SIZE];
-
-            for (int i = 0; i < SPACE_STRING_SIZE; i++) {
-                c[i] = ' ';
-            }
-
-            spaceString = new String(c);
         }
     }
 

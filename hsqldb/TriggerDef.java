@@ -1,4 +1,4 @@
-/* Copyright (c) 2001-2011, The HSQL Development Group
+/* Copyright (c) 2001-2016, The HSQL Development Group
  * All rights reserved.
  *
  * Redistribution and use in source and binary forms, with or without
@@ -414,6 +414,14 @@ public class TriggerDef implements Runnable, SchemaObject {
         return false;
     }
 
+    public boolean hasOldRow() {
+        return rangeVars[OLD_ROW] != null;
+    }
+
+    public boolean hasNewRow() {
+        return rangeVars[NEW_ROW] != null;
+    }
+
     public String getOldTransitionRowName() {
 
         return rangeVars[OLD_ROW] == null ? null
@@ -603,7 +611,7 @@ public class TriggerDef implements Runnable, SchemaObject {
 
     /**
      *  The main thread tells the trigger thread to fire by this call.
-     *  If this Trigger is not threaded then the fire method is caled
+     *  If this Trigger is not threaded then the fire method is called
      *  immediately and executed by the main thread. Otherwise, the row
      *  data objects are added to the queue to be used by the Trigger thread.
      *

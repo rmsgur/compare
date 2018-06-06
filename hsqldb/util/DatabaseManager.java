@@ -1,4 +1,4 @@
-/* Copyright (c) 2001-2011, The HSQL Development Group
+/* Copyright (c) 2001-2017, The HSQL Development Group
  * All rights reserved.
  *
  * Redistribution and use in source and binary forms, with or without
@@ -80,8 +80,9 @@ import org.hsqldb.lib.java.JavaSystem;
 */
 
 /**
- * AWT Tool for manageing a JDBC database.<p>
+ * AWT Tool for manageing a JDBC database.
  * <pre>
+ * {@code
  *             Usage: java DatabaseManagerSwing [--options]
  *             where options include:
  *              --driver <classname>  jdbc driver class
@@ -92,6 +93,7 @@ import org.hsqldb.lib.java.JavaSystem;
  *              --rcfile <file>       use instead of default (with urlid)
  *              --dir <path>          default directory
  *              --script <file>       reads from script file
+ * }
  *</pre>
  *
  * Originally in HypersonicSQL. Extended in various versions of HSQLDB.
@@ -120,13 +122,13 @@ implements ActionListener, WindowListener, KeyListener {
         "See the forums, mailing lists, and HSQLDB User Guide\n"
         + "at http://hsqldb.org.\n\n"
         + "Please paste the following version identifier with any\n"
-        + "problem reports or help requests:  $Revision: 5221 $"
+        + "problem reports or help requests:  $Revision: 5736 $"
         + (TT_AVAILABLE ? ""
                         : ("\n\nTransferTool classes are not in CLASSPATH.\n"
                            + "To enable the Tools menu, add 'transfer.jar' to your class path."));
     ;
     private static final String ABOUT_TEXT =
-        "$Revision: 5221 $ of DatabaseManager\n\n"
+        "$Revision: 5736 $ of DatabaseManager\n\n"
         + "Copyright (c) 1995-2000, The Hypersonic SQL Group.\n"
         + "Copyright (c) 2001-2011, The HSQL Development Group.\n"
         + "http://hsqldb.org  (User Guide available at this site).\n\n\n"
@@ -237,6 +239,7 @@ implements ActionListener, WindowListener, KeyListener {
     /**
      * Run with --help switch for usage instructions.
      *
+     * @param arg arguments
      * @throws IllegalArgumentException for the obvious reason
      */
     public static void main(String[] arg) {

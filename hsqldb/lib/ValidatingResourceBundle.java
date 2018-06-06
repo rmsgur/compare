@@ -1,4 +1,4 @@
-/* Copyright (c) 2001-2011, The HSQL Development Group
+/* Copyright (c) 2001-2015, The HSQL Development Group
  * All rights reserved.
  *
  * Redistribution and use in source and binary forms, with or without
@@ -35,7 +35,7 @@ import java.util.Enumeration;
 import java.util.HashSet;
 import java.util.Set;
 
-/* $Id: ValidatingResourceBundle.java 5221 2013-03-30 10:57:58Z fredt $ */
+/* $Id: ValidatingResourceBundle.java 5437 2015-03-09 23:45:20Z fredt $ */
 
 /**
  * Purpose of this class is to wrap a RefCapablePropertyResourceBundle to

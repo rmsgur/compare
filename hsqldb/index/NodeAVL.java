@@ -1,7 +1,7 @@
 /*
  * For work developed by the HSQL Development Group:
  *
- * Copyright (c) 2001-2011, The HSQL Development Group
+ * Copyright (c) 2001-2016, The HSQL Development Group
  * All rights reserved.
  *
  * Redistribution and use in source and binary forms, with or without
@@ -80,7 +80,7 @@ import org.hsqldb.rowio.RowOutputInterface;
 import org.hsqldb.rowio.RowInputInterface;
 
 // fredt@users 20020221 - patch 513005 by sqlbob@users (RMP)
-// fredt@users 20020920 - path 1.7.1 - refactoring to cut mamory footprint
+// fredt@users 20020920 - path 1.7.1 - refactoring to cut memory footprint
 // fredt@users 20021205 - path 1.7.2 - enhancements
 // fredt@users 20021215 - doc 1.7.2 - javadoc comments
 
@@ -95,8 +95,9 @@ import org.hsqldb.rowio.RowInputInterface;
  *
  *  New class derived from Hypersonic SQL code and enhanced in HSQLDB. <p>
  *
+ * @author Fred Toussi (fredt@users dot sourceforge dot net)
  * @author Thomas Mueller (Hypersonic SQL Group)
- * @version 1.9.0
+ * @version 2.3.3
  * @since Hypersonic SQL
  */
 public class NodeAVL implements CachedObject {
@@ -139,11 +140,11 @@ public class NodeAVL implements CachedObject {
         return iBalance;
     }
 
-    boolean isLeft(NodeAVL node) {
+    boolean isLeft(PersistentStore store, NodeAVL node) {
         return nLeft == node;
     }
 
-    boolean isRight(NodeAVL node) {
+    boolean isRight(PersistentStore store, NodeAVL node) {
         return nRight == node;
     }
 
@@ -262,6 +263,10 @@ public class NodeAVL implements CachedObject {
         return 0;
     }
 
+    final public boolean isInvariable() {
+        return false;
+    }
+
     final public boolean isBlock() {
         return false;
     }
@@ -276,10 +281,11 @@ public class NodeAVL implements CachedObject {
         return false;
     }
 
+    public void setChanged(boolean flag) {}
+
     public boolean isKeepInMemory() {
         return false;
     }
-    ;
 
     public boolean keepInMemory(boolean keep) {
         return true;

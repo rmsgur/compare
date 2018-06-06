@@ -1,4 +1,4 @@
-/* Copyright (c) 2001-2011, The HSQL Development Group
+/* Copyright (c) 2001-2017, The HSQL Development Group
  * All rights reserved.
  *
  * Redistribution and use in source and binary forms, with or without
@@ -46,14 +46,33 @@ import java.sql.SQLException;
 import java.sql.Time;
 import java.sql.Timestamp;
 import java.util.Calendar;
+import java.util.Locale;
 import java.util.Map;
 
 //#ifdef JAVA6
 import java.sql.NClob;
 import java.sql.RowId;
+import java.sql.SQLFeatureNotSupportedException;
 import java.sql.SQLXML;
 
 //#endif JAVA6
+
+//#ifdef JAVA8
+/*
+import java.sql.JDBCType;
+import java.sql.SQLType;
+import java.time.Duration;
+import java.time.LocalDate;
+import java.time.LocalDateTime;
+import java.time.LocalTime;
+import java.time.OffsetDateTime;
+import java.time.OffsetTime;
+import java.time.Period;
+import java.time.ZoneOffset;
+*/
+
+//#endif JAVA8
+
 import org.hsqldb.error.ErrorCode;
 import org.hsqldb.HsqlException;
 import org.hsqldb.HsqlDateTime;
@@ -65,17 +84,19 @@ import org.hsqldb.types.BinaryData;
 import org.hsqldb.types.BlobDataID;
 import org.hsqldb.types.ClobDataID;
 import org.hsqldb.types.DateTimeType;
+import org.hsqldb.types.IntervalMonthData;
+import org.hsqldb.types.IntervalSecondData;
 import org.hsqldb.types.JavaObjectData;
 import org.hsqldb.types.TimeData;
 import org.hsqldb.types.TimestampData;
 import org.hsqldb.types.Type;
 import org.hsqldb.types.Types;
 
-/* $Id: JDBCCallableStatement.java 5259 2013-07-05 20:19:09Z fredt $ */
+/* $Id: JDBCCallableStatement.java 5743 2017-04-09 14:22:33Z fredt $ */
 
-/** @todo fredt 1.9.0 - review wrt multiple result sets, named parameters etc. */
+/** @todo fredt 1.9.0 - continuous review wrt multiple result sets, named parameters etc. */
 
-// boucherb@users patch 1.7.2 - CallableStatement impl removed
+// campbell-burnet@users patch 1.7.2 - CallableStatement impl removed
 // from JDBCParameterMetaData and moved here; sundry changes elsewhere to
 // comply
 // TODO: 1.7.2 Alpha N :: DONE
@@ -87,13 +108,13 @@ import org.hsqldb.types.Types;
 //       engine and client-side mechanisms for adding, retrieving,
 //       navigating (and perhaps controlling holdability of) multiple
 //       results generated from a single execution.
-// boucherb@users 2004-03/04-xx - patch 1.7.2 - some minor code cleanup
+// campbell-burnet@users 2004-03/04-xx - patch 1.7.2 - some minor code cleanup
 //                                            - parameter map NPE correction
 //                                            - embedded SQL/SQLCLI client usability
 //                                              (parameter naming changed from @n to @pn)
-// boucherb@users 2004-04-xx - doc 1.7.2 - javadocs added/updated
-// boucherb@users 2005-12-07 - patch 1.8.0.x - initial JDBC 4.0 support work
-// boucherb@users 2006-05-22 - doc 1.9.0 - full synch up to Mustang Build 84
+// campbell-burnet@users 2004-04-xx - doc 1.7.2 - javadocs added/updated
+// campbell-burnet@users 2005-12-07 - patch 1.8.0.x - initial JDBC 4.0 support work
+// campbell-burnet@users 2006-05-22 - doc 1.9.0 - full synch up to Mustang Build 84
 // Revision 1.14  2006/07/12 11:58:49  boucherb
 //  - full synch up to Mustang b90
 
@@ -126,7 +147,6 @@ import org.hsqldb.types.Types;
  * For maximum portability, a call's <code>ResultSet</code> objects and
  * update counts should be processed prior to getting the values of output
  * parameters.
- * <P>
  *
  * <!-- end generic documentation -->
  *
@@ -192,16 +212,14 @@ import org.hsqldb.types.Types;
  *
  * </pre>
  *
- * (boucherb@users)
+ * (campbell-burnet@users)
  * </div>
  * <!-- end Release-specific documentation -->
  *
- * @author Campbell Boucher-Burnet (boucherb@users dot sourceforge.net)
+ * @author Campbell Burnet (campbell-burnet@users dot sourceforge.net)
  * @author Fred Toussi (fredt@users dot sourceforge.net)
- * @version 2.3.0
- * @since 1.7.2
- * @revised JDK 1.6, HSQLDB 2.0
- * @revised JDK 1.7, HSQLDB 2.0.1
+ * @version 2.4.0
+ * @since 1.9.0
  * @see JDBCConnection#prepareCall
  * @see JDBCResultSet
  */
@@ -817,7 +835,7 @@ public class JDBCCallableStatement extends JDBCPreparedStatement implements Call
      * <!-- start generic documentation -->
      *
      * Retrieves the value of the designated JDBC <code>TIMESTAMP</code>
-     * parameter as a <code>java.sql.Timestamp</code> object. <p>
+     * parameter as a <code>java.sql.Timestamp</code> object.
      *
      * <!-- end generic documentation -->
      *
@@ -902,11 +920,13 @@ public class JDBCCallableStatement extends JDBCPreparedStatement implements Call
             case Types.SQL_DATE :
                 return getDate(parameterIndex);
             case Types.SQL_TIME :
-            case Types.SQL_TIME_WITH_TIME_ZONE :
                 return getTime(parameterIndex);
+            case Types.SQL_TIME_WITH_TIME_ZONE :
+                return getTimeWithZone(parameterIndex);
             case Types.SQL_TIMESTAMP :
-            case Types.SQL_TIMESTAMP_WITH_TIME_ZONE :
                 return getTimestamp(parameterIndex);
+            case Types.SQL_TIMESTAMP_WITH_TIME_ZONE :
+                return getTimestampWithZone(parameterIndex);
             case Types.SQL_BINARY :
             case Types.SQL_VARBINARY :
                 return getBytes(parameterIndex);
@@ -968,8 +988,7 @@ public class JDBCCallableStatement extends JDBCPreparedStatement implements Call
      * if a database access error occurs or
      * this method is called on a closed <code>CallableStatement</code>
      * @see #setBigDecimal
-     * @since JDK 1.2 (JDK 1.1.x developers: read the overview for
-     *  JDBCParameterMetaData)
+     * @since JDK 1.2
      */
     public synchronized BigDecimal getBigDecimal(
             int parameterIndex) throws SQLException {
@@ -1036,11 +1055,8 @@ public class JDBCCallableStatement extends JDBCPreparedStatement implements Call
      * @exception SQLFeatureNotSupportedException if the JDBC driver does not support
      * this method
      * @see #setObject
-     * @since JDK 1.2 (JDK 1.1.x developers: read the overview for
-     *   JDBCParameterMetaData)
+     * @since JDK 1.2
      */
-
-//#ifdef JAVA6
     public Object getObject(int parameterIndex,
                             Map<String, Class<?>> map) throws SQLException {
 
@@ -1048,16 +1064,6 @@ public class JDBCCallableStatement extends JDBCPreparedStatement implements Call
 
         throw JDBCUtil.notSupported();
     }
-
-//#else
-/*
-    public Object getObject(int parameterIndex, Map map) throws SQLException {
-            checkGetParameterIndex(parameterIndex);
-        throw JDBCUtil.notSupported();
-    }
-*/
-
-//#endif
 
     /**
      * <!-- start generic documentation -->
@@ -1087,8 +1093,7 @@ public class JDBCCallableStatement extends JDBCPreparedStatement implements Call
      * this method is called on a closed <code>CallableStatement</code>
      * @exception SQLFeatureNotSupportedException if the JDBC driver does not support
      * this method
-     * @since JDK 1.2 (JDK 1.1.x developers: read the overview for
-     * JDBCParameterMetaData)
+     * @since JDK 1.2
      */
     public Ref getRef(int parameterIndex) throws SQLException {
 
@@ -1123,8 +1128,7 @@ public class JDBCCallableStatement extends JDBCPreparedStatement implements Call
      * this method is called on a closed <code>CallableStatement</code>
      * @exception SQLFeatureNotSupportedException if the JDBC driver does not support
      * this method
-     * @since JDK 1.2 (JDK 1.1.x developers: read the overview for
-     *  JDBCParameterMetaData)
+     * @since JDK 1.2
      */
     public synchronized Blob getBlob(int parameterIndex) throws SQLException {
 
@@ -1171,8 +1175,7 @@ public class JDBCCallableStatement extends JDBCPreparedStatement implements Call
      * this method is called on a closed <code>CallableStatement</code>
      * @exception SQLFeatureNotSupportedException if the JDBC driver does not support
      * this method
-     * @since JDK 1.2 (JDK 1.1.x developers: read the overview for
-     *  JDBCParameterMetaData)
+     * @since JDK 1.2
      */
     public synchronized Clob getClob(int parameterIndex) throws SQLException {
 
@@ -1219,8 +1222,7 @@ public class JDBCCallableStatement extends JDBCPreparedStatement implements Call
      * this method is called on a closed <code>CallableStatement</code>
      * @exception SQLFeatureNotSupportedException if the JDBC driver does not support
      * this method
-     * @since JDK 1.2 (JDK 1.1.x developers: read the overview for
-     *  JDBCParameterMetaData)
+     * @since JDK 1.2
      */
     public Array getArray(int parameterIndex) throws SQLException {
 
@@ -1275,8 +1277,7 @@ public class JDBCCallableStatement extends JDBCPreparedStatement implements Call
      * if a database access error occurs or
      * this method is called on a closed <code>CallableStatement</code>
      * @see #setDate
-     * @since JDK 1.2 (JDK 1.1.x developers: read the overview for
-     *      JDBCParameterMetaData)
+     * @since JDK 1.2
      */
     public synchronized Date getDate(int parameterIndex,
                                      Calendar cal) throws SQLException {
@@ -1330,8 +1331,7 @@ public class JDBCCallableStatement extends JDBCPreparedStatement implements Call
      * if a database access error occurs or
      * this method is called on a closed <code>CallableStatement</code>
      * @see #setTime
-     * @since JDK 1.2 (JDK 1.1.x developers: read the overview for
-     *    JDBCParameterMetaData)
+     * @since JDK 1.2
      */
     public synchronized Time getTime(int parameterIndex,
                                      Calendar cal) throws SQLException {
@@ -1342,7 +1342,7 @@ public class JDBCCallableStatement extends JDBCPreparedStatement implements Call
             return null;
         }
 
-        long millis = DateTimeType.normaliseTime(t.getSeconds()) * 1000;
+        long millis = DateTimeType.normaliseTime(t.getSeconds()) * 1000L;
 
         if (!parameterMetaData.columnTypes[--parameterIndex]
                 .isDateTimeTypeWithZone()) {
@@ -1389,8 +1389,7 @@ public class JDBCCallableStatement extends JDBCPreparedStatement implements Call
      * if a database access error occurs or
      * this method is called on a closed <code>CallableStatement</code>
      * @see #setTimestamp
-     * @since JDK 1.2 (JDK 1.1.x developers: read the overview for
-     *    JDBCParameterMetaData)
+     * @since JDK 1.2
      */
     public synchronized Timestamp getTimestamp(int parameterIndex,
             Calendar cal) throws SQLException {
@@ -1476,8 +1475,7 @@ public class JDBCCallableStatement extends JDBCPreparedStatement implements Call
      * or  <code>STRUCT</code> data type and the JDBC driver does not support
      * this data type
      * @see java.sql.Types
-     * @since JDK 1.2 (JDK 1.1.x developers: read the overview for
-     *  JDBCParameterMetaData)
+     * @since JDK 1.2
      *
      */
     public synchronized void registerOutParameter(int parameterIndex,
@@ -1535,13 +1533,10 @@ public class JDBCCallableStatement extends JDBCPreparedStatement implements Call
      * @since JDK 1.4, HSQL 1.7.0
      * @see java.sql.Types
      */
-//#ifdef JAVA4
     public synchronized void registerOutParameter(String parameterName,
             int sqlType) throws SQLException {
         registerOutParameter(findParameterIndex(parameterName), sqlType);
     }
-
-//#endif JAVA4
 
     /**
      * <!-- start generic documentation -->
@@ -1588,13 +1583,10 @@ public class JDBCCallableStatement extends JDBCPreparedStatement implements Call
      * @since JDK 1.4, HSQLDB 1.7.0
      * @see java.sql.Types
      */
-//#ifdef JAVA4
     public synchronized void registerOutParameter(String parameterName,
             int sqlType, int scale) throws SQLException {
         registerOutParameter(findParameterIndex(parameterName), sqlType);
     }
-
-//#endif JAVA4
 
     /**
      * <!-- start generic documentation -->
@@ -1654,13 +1646,10 @@ public class JDBCCallableStatement extends JDBCPreparedStatement implements Call
      * @see java.sql.Types
      * @since JDK 1.4, HSQL 1.7.0
      */
-//#ifdef JAVA4
     public synchronized void registerOutParameter(String parameterName,
             int sqlType, String typeName) throws SQLException {
         registerOutParameter(findParameterIndex(parameterName), sqlType);
     }
-
-//#endif JAVA4
 
     /**
      * <!-- start generic documentation -->
@@ -1694,15 +1683,12 @@ public class JDBCCallableStatement extends JDBCPreparedStatement implements Call
      * @see #setURL
      * @since JDK 1.4, HSQLDB 1.7.0
      */
-//#ifdef JAVA4
     public java.net.URL getURL(int parameterIndex) throws SQLException {
 
         checkGetParameterIndex(parameterIndex);
 
         throw JDBCUtil.notSupported();
     }
-
-//#endif JAVA4
 
     /**
      * <!-- start generic documentation -->
@@ -1734,13 +1720,10 @@ public class JDBCCallableStatement extends JDBCPreparedStatement implements Call
      * @see #getURL
      * @since JDK 1.4, HSQLDB 1.7.0
      */
-//#ifdef JAVA4
     public void setURL(String parameterName,
                        java.net.URL val) throws SQLException {
         setURL(findParameterIndex(parameterName), val);
     }
-
-//#endif JAVA4
 
     /**
      * <!-- start generic documentation -->
@@ -1768,13 +1751,10 @@ public class JDBCCallableStatement extends JDBCPreparedStatement implements Call
      * this method
      * @since JDK 1.4, HSQLDB 1.7.0
      */
-//#ifdef JAVA4
     public synchronized void setNull(String parameterName,
                                      int sqlType) throws SQLException {
         setNull(findParameterIndex(parameterName), sqlType);
     }
-
-//#endif JAVA4
 
     /**
      * <!-- start generic documentation -->
@@ -1807,13 +1787,10 @@ public class JDBCCallableStatement extends JDBCPreparedStatement implements Call
      * @see #getBoolean
      * @since JDK 1.4, HSQLDB 1.7.0
      */
-//#ifdef JAVA4
     public synchronized void setBoolean(String parameterName,
                                         boolean x) throws SQLException {
         setBoolean(findParameterIndex(parameterName), x);
     }
-
-//#endif JAVA4
 
     /**
      * <!-- start generic documentation -->
@@ -1842,13 +1819,10 @@ public class JDBCCallableStatement extends JDBCPreparedStatement implements Call
      * @see #getByte
      * @since JDK 1.4, HSQLDB 1.7.0
      */
-//#ifdef JAVA4
     public synchronized void setByte(String parameterName,
                                      byte x) throws SQLException {
         setByte(findParameterIndex(parameterName), x);
     }
-
-//#endif JAVA4
 
     /**
      * <!-- start generic documentation -->
@@ -1877,13 +1851,10 @@ public class JDBCCallableStatement extends JDBCPreparedStatement implements Call
      * @see #getShort
      * @since JDK 1.4, HSQLDB 1.7.0
      */
-//#ifdef JAVA4
     public synchronized void setShort(String parameterName,
                                       short x) throws SQLException {
         setShort(findParameterIndex(parameterName), x);
     }
-
-//#endif JAVA4
 
     /**
      * <!-- start generic documentation -->
@@ -1912,13 +1883,10 @@ public class JDBCCallableStatement extends JDBCPreparedStatement implements Call
      * @see #getInt
      * @since JDK 1.4, HSQLDB 1.7.0
      */
-//#ifdef JAVA4
     public synchronized void setInt(String parameterName,
                                     int x) throws SQLException {
         setInt(findParameterIndex(parameterName), x);
     }
-
-//#endif JAVA4
 
     /**
      * <!-- start generic documentation -->
@@ -1947,13 +1915,10 @@ public class JDBCCallableStatement extends JDBCPreparedStatement implements Call
      * @see #getLong
      * @since JDK 1.4, HSQLDB 1.7.0
      */
-//#ifdef JAVA4
     public synchronized void setLong(String parameterName,
                                      long x) throws SQLException {
         setLong(findParameterIndex(parameterName), x);
     }
-
-//#endif JAVA4
 
     /**
      * <!-- start generic documentation -->
@@ -1982,13 +1947,10 @@ public class JDBCCallableStatement extends JDBCPreparedStatement implements Call
      * @see #getFloat
      * @since JDK 1.4, HSQLDB 1.7.0
      */
-//#ifdef JAVA4
     public synchronized void setFloat(String parameterName,
                                       float x) throws SQLException {
         setFloat(findParameterIndex(parameterName), x);
     }
-
-//#endif JAVA4
 
     /**
      * <!-- start generic documentation -->
@@ -2017,13 +1979,10 @@ public class JDBCCallableStatement extends JDBCPreparedStatement implements Call
      * @see #getDouble
      * @since JDK 1.4, HSQLDB 1.7.0
      */
-//#ifdef JAVA4
     public synchronized void setDouble(String parameterName,
                                        double x) throws SQLException {
         setDouble(findParameterIndex(parameterName), x);
     }
-
-//#endif JAVA4
 
     /**
      * <!-- start generic documentation -->
@@ -2053,13 +2012,10 @@ public class JDBCCallableStatement extends JDBCPreparedStatement implements Call
      * @see #getBigDecimal
      * @since JDK 1.4, HSQLDB 1.7.0
      */
-//#ifdef JAVA4
     public synchronized void setBigDecimal(String parameterName,
             BigDecimal x) throws SQLException {
         setBigDecimal(findParameterIndex(parameterName), x);
     }
-
-//#endif JAVA4
 
     /**
      * <!-- start generic documentation -->
@@ -2091,13 +2047,10 @@ public class JDBCCallableStatement extends JDBCPreparedStatement implements Call
      * @see #getString
      * @since JDK 1.4, HSQLDB 1.7.0
      */
-//#ifdef JAVA4
     public synchronized void setString(String parameterName,
                                        String x) throws SQLException {
         setString(findParameterIndex(parameterName), x);
     }
-
-//#endif JAVA4
 
     /**
      * <!-- start generic documentation -->
@@ -2128,13 +2081,10 @@ public class JDBCCallableStatement extends JDBCPreparedStatement implements Call
      * @see #getBytes
      * @since JDK 1.4, HSQLDB 1.7.0
      */
-//#ifdef JAVA4
     public synchronized void setBytes(String parameterName,
                                       byte[] x) throws SQLException {
         setBytes(findParameterIndex(parameterName), x);
     }
-
-//#endif JAVA4
 
     /**
      * <!-- start generic documentation -->
@@ -2166,13 +2116,10 @@ public class JDBCCallableStatement extends JDBCPreparedStatement implements Call
      * @see #getDate
      * @since JDK 1.4, HSQLDB 1.7.0
      */
-//#ifdef JAVA4
     public synchronized void setDate(String parameterName,
                                      Date x) throws SQLException {
         setDate(findParameterIndex(parameterName), x);
     }
-
-//#endif JAVA4
 
     /**
      * <!-- start generic documentation -->
@@ -2201,13 +2148,10 @@ public class JDBCCallableStatement extends JDBCPreparedStatement implements Call
      * @see #getTime
      * @since JDK 1.4, HSQLDB 1.7.0
      */
-//#ifdef JAVA4
     public synchronized void setTime(String parameterName,
                                      Time x) throws SQLException {
         setTime(findParameterIndex(parameterName), x);
     }
-
-//#endif JAVA4
 
     /**
      * <!-- start generic documentation -->
@@ -2237,13 +2181,10 @@ public class JDBCCallableStatement extends JDBCPreparedStatement implements Call
      * @see #getTimestamp
      * @since JDK 1.4, HSQLDB 1.7.0
      */
-//#ifdef JAVA4
     public synchronized void setTimestamp(String parameterName,
             Timestamp x) throws SQLException {
         setTimestamp(findParameterIndex(parameterName), x);
     }
-
-//#endif JAVA4
 
     /**
      * <!-- start generic documentation -->
@@ -2280,13 +2221,10 @@ public class JDBCCallableStatement extends JDBCPreparedStatement implements Call
      * this method
      * @since JDK 1.4, HSQLDB 1.7.0
      */
-//#ifdef JAVA4
     public synchronized void setAsciiStream(String parameterName,
             java.io.InputStream x, int length) throws SQLException {
         setAsciiStream(findParameterIndex(parameterName), x, length);
     }
-
-//#endif JAVA4
 
     /**
      * <!-- start generic documentation -->
@@ -2322,13 +2260,10 @@ public class JDBCCallableStatement extends JDBCPreparedStatement implements Call
      * this method
      * @since JDK 1.4, HSQLDB 1.7.0
      */
-//#ifdef JAVA4
     public synchronized void setBinaryStream(String parameterName,
             java.io.InputStream x, int length) throws SQLException {
         setBinaryStream(findParameterIndex(parameterName), x, length);
     }
-
-//#endif JAVA4
 
     /**
      * <!-- start generic documentation -->
@@ -2350,7 +2285,7 @@ public class JDBCCallableStatement extends JDBCPreparedStatement implements Call
      * or <code>Array</code>, the driver should pass it to the database as a
      * value of the corresponding SQL type.
      * <P>
-     * Note that this method may be used to pass datatabase-
+     * Note that this method may be used to pass database-
      * specific abstract data types.
      *
      * <!-- end generic documentation -->
@@ -2384,14 +2319,11 @@ public class JDBCCallableStatement extends JDBCPreparedStatement implements Call
      * @see #getObject
      * @since JDK 1.4, HSQLDB 1.7.0
      */
-//#ifdef JAVA4
     public synchronized void setObject(String parameterName, Object x,
                                        int targetSqlType,
                                        int scale) throws SQLException {
         setObject(findParameterIndex(parameterName), x, targetSqlType, scale);
     }
-
-//#endif JAVA4
 
     /**
      * <!-- start generic documentation -->
@@ -2427,13 +2359,10 @@ public class JDBCCallableStatement extends JDBCPreparedStatement implements Call
      * @see #getObject
      * @since JDK 1.4, HSQLDB 1.7.0
      */
-//#ifdef JAVA4
     public synchronized void setObject(String parameterName, Object x,
                                        int targetSqlType) throws SQLException {
         setObject(findParameterIndex(parameterName), x, targetSqlType);
     }
-
-//#endif JAVA4
 
     /**
      * <!-- start generic documentation -->
@@ -2484,13 +2413,10 @@ public class JDBCCallableStatement extends JDBCPreparedStatement implements Call
      * @see #getObject
      * @since JDK 1.4, HSQLDB 1.7.0
      */
-//#ifdef JAVA4
     public synchronized void setObject(String parameterName,
                                        Object x) throws SQLException {
         setObject(findParameterIndex(parameterName), x);
     }
-
-//#endif JAVA4
 
     /**
      * <!-- start generic documentation -->
@@ -2528,13 +2454,10 @@ public class JDBCCallableStatement extends JDBCPreparedStatement implements Call
      * this method
      * @since JDK 1.4, HSQLDB 1.7.0
      */
-//#ifdef JAVA4
     public synchronized void setCharacterStream(String parameterName,
             java.io.Reader reader, int length) throws SQLException {
         setCharacterStream(findParameterIndex(parameterName), reader, length);
     }
-
-//#endif JAVA4
 
     /**
      * <!-- start generic documentation -->
@@ -2570,13 +2493,10 @@ public class JDBCCallableStatement extends JDBCPreparedStatement implements Call
      * @see #getDate
      * @since JDK 1.4, HSQLDB 1.7.0
      */
-//#ifdef JAVA4
     public synchronized void setDate(String parameterName, Date x,
                                      Calendar cal) throws SQLException {
         setDate(findParameterIndex(parameterName), x, cal);
     }
-
-//#endif JAVA4
 
     /**
      * <!-- start generic documentation -->
@@ -2612,13 +2532,10 @@ public class JDBCCallableStatement extends JDBCPreparedStatement implements Call
      * @see #getTime
      * @since JDK 1.4, HSQLDB 1.7.0
      */
-//#ifdef JAVA4
     public synchronized void setTime(String parameterName, Time x,
                                      Calendar cal) throws SQLException {
         setTime(findParameterIndex(parameterName), x, cal);
     }
-
-//#endif JAVA4
 
     /**
      * <!-- start generic documentation -->
@@ -2654,13 +2571,10 @@ public class JDBCCallableStatement extends JDBCPreparedStatement implements Call
      * @see #getTimestamp
      * @since JDK 1.4, HSQLDB 1.7.0
      */
-//#ifdef JAVA4
     public synchronized void setTimestamp(String parameterName, Timestamp x,
             Calendar cal) throws SQLException {
         setTimestamp(findParameterIndex(parameterName), x, cal);
     }
-
-//#endif JAVA4
 
     /**
      * <!-- start generic documentation -->
@@ -2707,13 +2621,10 @@ public class JDBCCallableStatement extends JDBCPreparedStatement implements Call
      * this method
      * @since JDK 1.4, HSQLDB 1.7.0
      */
-//#ifdef JAVA4
     public synchronized void setNull(String parameterName, int sqlType,
                                      String typeName) throws SQLException {
         setNull(findParameterIndex(parameterName), sqlType, typeName);
     }
-
-//#endif JAVA4
 
     /**
      * <!-- start generic documentation -->
@@ -2751,13 +2662,10 @@ public class JDBCCallableStatement extends JDBCPreparedStatement implements Call
      * @see #setString
      * @since JDK 1.4, HSQLDB 1.7.0
      */
-//#ifdef JAVA4
     public synchronized String getString(
             String parameterName) throws SQLException {
         return getString(findParameterIndex(parameterName));
     }
-
-//#endif JAVA4
 
     /**
      * <!-- start generic documentation -->
@@ -2789,13 +2697,10 @@ public class JDBCCallableStatement extends JDBCPreparedStatement implements Call
      * @see #setBoolean
      * @since JDK 1.4, HSQLDB 1.7.0
      */
-//#ifdef JAVA4
     public synchronized boolean getBoolean(
             String parameterName) throws SQLException {
         return getBoolean(findParameterIndex(parameterName));
     }
-
-//#endif JAVA4
 
     /**
      * <!-- start generic documentation -->
@@ -2825,13 +2730,10 @@ public class JDBCCallableStatement extends JDBCPreparedStatement implements Call
      * @see #setByte
      * @since JDK 1.4, HSQLDB 1.7.0
      */
-//#ifdef JAVA4
     public synchronized byte getByte(
             String parameterName) throws SQLException {
         return getByte(findParameterIndex(parameterName));
     }
-
-//#endif JAVA4
 
     /**
      * <!-- start generic documentation -->
@@ -2861,13 +2763,10 @@ public class JDBCCallableStatement extends JDBCPreparedStatement implements Call
      * @see #setShort
      * @since JDK 1.4, HSQLDB 1.7.0
      */
-//#ifdef JAVA4
     public synchronized short getShort(
             String parameterName) throws SQLException {
         return getShort(findParameterIndex(parameterName));
     }
-
-//#endif JAVA4
 
     /**
      * <!-- start generic documentation -->
@@ -2898,12 +2797,9 @@ public class JDBCCallableStatement extends JDBCPreparedStatement implements Call
      * @see #setInt
      * @since JDK 1.4, HSQLDB 1.7.0
      */
-//#ifdef JAVA4
     public synchronized int getInt(String parameterName) throws SQLException {
         return getInt(findParameterIndex(parameterName));
     }
-
-//#endif JAVA4
 
     /**
      * <!-- start generic documentation -->
@@ -2933,13 +2829,10 @@ public class JDBCCallableStatement extends JDBCPreparedStatement implements Call
      * @see #setLong
      * @since JDK 1.4, HSQLDB 1.7.0
      */
-//#ifdef JAVA4
     public synchronized long getLong(
             String parameterName) throws SQLException {
         return getLong(findParameterIndex(parameterName));
     }
-
-//#endif JAVA4
 
     /**
      * <!-- start generic documentation -->
@@ -2969,13 +2862,10 @@ public class JDBCCallableStatement extends JDBCPreparedStatement implements Call
      * @see #setFloat
      * @since JDK 1.4, HSQLDB 1.7.0
      */
-//#ifdef JAVA4
     public synchronized float getFloat(
             String parameterName) throws SQLException {
         return getFloat(findParameterIndex(parameterName));
     }
-
-//#endif JAVA4
 
     /**
      * <!-- start generic documentation -->
@@ -3005,13 +2895,10 @@ public class JDBCCallableStatement extends JDBCPreparedStatement implements Call
      * @see #setDouble
      * @since JDK 1.4, HSQLDB 1.7.0
      */
-//#ifdef JAVA4
     public synchronized double getDouble(
             String parameterName) throws SQLException {
         return getDouble(findParameterIndex(parameterName));
     }
-
-//#endif JAVA4
 
     /**
      * <!-- start generic documentation -->
@@ -3042,13 +2929,10 @@ public class JDBCCallableStatement extends JDBCPreparedStatement implements Call
      * @see #setBytes
      * @since JDK 1.4, HSQLDB 1.7.0
      */
-//#ifdef JAVA4
     public synchronized byte[] getBytes(
             String parameterName) throws SQLException {
         return getBytes(findParameterIndex(parameterName));
     }
-
-//#endif JAVA4
 
     /**
      * <!-- start generic documentation -->
@@ -3078,13 +2962,10 @@ public class JDBCCallableStatement extends JDBCPreparedStatement implements Call
      * @see #setDate
      * @since JDK 1.4, HSQLDB 1.7.0
      */
-//#ifdef JAVA4
     public synchronized Date getDate(
             String parameterName) throws SQLException {
         return getDate(findParameterIndex(parameterName));
     }
-
-//#endif JAVA4
 
     /**
      * <!-- start generic documentation -->
@@ -3114,13 +2995,10 @@ public class JDBCCallableStatement extends JDBCPreparedStatement implements Call
      * @see #setTime
      * @since JDK 1.4, HSQLDB 1.7.0
      */
-//#ifdef JAVA4
     public synchronized Time getTime(
             String parameterName) throws SQLException {
         return getTime(findParameterIndex(parameterName));
     }
-
-//#endif JAVA4
 
     /**
      * <!-- start generic documentation -->
@@ -3150,13 +3028,10 @@ public class JDBCCallableStatement extends JDBCPreparedStatement implements Call
      * @see #setTimestamp
      * @since JDK 1.4, HSQLDB 1.7.0
      */
-//#ifdef JAVA4
     public synchronized Timestamp getTimestamp(
             String parameterName) throws SQLException {
         return getTimestamp(findParameterIndex(parameterName));
     }
-
-//#endif JAVA4
 
     /**
      * <!-- start generic documentation -->
@@ -3193,13 +3068,10 @@ public class JDBCCallableStatement extends JDBCPreparedStatement implements Call
      * @see #setObject
      * @since JDK 1.4, HSQLDB 1.7.0
      */
-//#ifdef JAVA4
     public synchronized Object getObject(
             String parameterName) throws SQLException {
         return getObject(findParameterIndex(parameterName));
     }
-
-//#endif JAVA4
 
     /**
      * <!-- start generic documentation -->
@@ -3230,13 +3102,10 @@ public class JDBCCallableStatement extends JDBCPreparedStatement implements Call
      * @see #setBigDecimal
      * @since JDK 1.4, HSQLDB 1.7.0
      */
-//#ifdef JAVA4
     public synchronized BigDecimal getBigDecimal(
             String parameterName) throws SQLException {
         return getBigDecimal(findParameterIndex(parameterName));
     }
-
-//#endif JAVA4
 
     /**
      * <!-- start generic documentation -->
@@ -3273,19 +3142,11 @@ public class JDBCCallableStatement extends JDBCPreparedStatement implements Call
      * @see #setObject
      * @since JDK 1.4, HSQLDB 1.7.0
      */
-
-    /** @todo: how to use CodeSwitcher and +JAVA6 to specifiy Map<String,Class<?>> */
-//#ifdef JAVA6
-    @SuppressWarnings("unchecked")
-
-//#endif JAVA6
-//#ifdef JAVA4
     public synchronized Object getObject(String parameterName,
-            Map map) throws SQLException {
+            Map<String, Class<?>> map) throws SQLException {
         return getObject(findParameterIndex(parameterName), map);
     }
 
-//#endif JAVA4
 
     /**
      * <!-- start generic documentation -->
@@ -3315,12 +3176,9 @@ public class JDBCCallableStatement extends JDBCPreparedStatement implements Call
      * this method
      * @since JDK 1.4, HSQLDB 1.7.0
      */
-//#ifdef JAVA4
     public synchronized Ref getRef(String parameterName) throws SQLException {
         return getRef(findParameterIndex(parameterName));
     }
-
-//#endif JAVA4
 
     /**
      * <!-- start generic documentation -->
@@ -3350,13 +3208,10 @@ public class JDBCCallableStatement extends JDBCPreparedStatement implements Call
      * this method
      * @since JDK 1.4, HSQLDB 1.7.0
      */
-//#ifdef JAVA4
     public synchronized Blob getBlob(
             String parameterName) throws SQLException {
         return getBlob(findParameterIndex(parameterName));
     }
-
-//#endif JAVA4
 
     /**
      * <!-- start generic documentation -->
@@ -3386,13 +3241,10 @@ public class JDBCCallableStatement extends JDBCPreparedStatement implements Call
      * this method
      * @since JDK 1.4, HSQLDB 1.7.0
      */
-//#ifdef JAVA4
     public synchronized Clob getClob(
             String parameterName) throws SQLException {
         return getClob(findParameterIndex(parameterName));
     }
-
-//#endif JAVA4
 
     /**
      * <!-- start generic documentation -->
@@ -3422,13 +3274,10 @@ public class JDBCCallableStatement extends JDBCPreparedStatement implements Call
      * this method
      * @since JDK 1.4, HSQLDB 1.7.0
      */
-//#ifdef JAVA4
     public synchronized Array getArray(
             String parameterName) throws SQLException {
         return getArray(findParameterIndex(parameterName));
     }
-
-//#endif JAVA4
 
     /**
      * <!-- start generic documentation -->
@@ -3466,13 +3315,10 @@ public class JDBCCallableStatement extends JDBCPreparedStatement implements Call
      * @see #setDate
      * @since JDK 1.4, HSQLDB 1.7.0
      */
-//#ifdef JAVA4
     public synchronized Date getDate(String parameterName,
                                      Calendar cal) throws SQLException {
         return getDate(findParameterIndex(parameterName), cal);
     }
-
-//#endif JAVA4
 
     /**
      * <!-- start generic documentation -->
@@ -3510,13 +3356,10 @@ public class JDBCCallableStatement extends JDBCPreparedStatement implements Call
      * @see #setTime
      * @since JDK 1.4, HSQLDB 1.7.0
      */
-//#ifdef JAVA4
     public synchronized Time getTime(String parameterName,
                                      Calendar cal) throws SQLException {
         return getTime(findParameterIndex(parameterName), cal);
     }
-
-//#endif JAVA4
 
     /**
      * <!-- start generic documentation -->
@@ -3555,13 +3398,10 @@ public class JDBCCallableStatement extends JDBCPreparedStatement implements Call
      * @see #setTimestamp
      * @since JDK 1.4, HSQLDB 1.7.0
      */
-//#ifdef JAVA4
     public synchronized Timestamp getTimestamp(String parameterName,
             Calendar cal) throws SQLException {
         return getTimestamp(findParameterIndex(parameterName), cal);
     }
-
-//#endif JAVA4
 
     /**
      * <!-- start generic documentation -->
@@ -3593,12 +3433,10 @@ public class JDBCCallableStatement extends JDBCPreparedStatement implements Call
      * @see #setURL
      * @since JDK 1.4, HSQLDB 1.7.0
      */
-//#ifdef JAVA4
     public java.net.URL getURL(String parameterName) throws SQLException {
         return getURL(findParameterIndex(parameterName));
     }
 
-//#endif JAVA4
     //------------------------- JDBC 4.0 -----------------------------------
 
     /**
@@ -4714,13 +4552,162 @@ public class JDBCCallableStatement extends JDBCPreparedStatement implements Call
      * this method
      * @since JDK 1.7 M11 2010/09/10 (b123), HSQLDB 2.0.1
      */
-//#ifdef JAVA5
-    public <T>T getObject(int parameterIndex,
-                          Class<T> type) throws SQLException {
-        return (T) this.getObject(parameterIndex);
+//#ifdef JAVA8
+/*
+    public <T>T getObject(int parameterIndex, Class<T> type) throws SQLException {
+
+        if (type == null) {
+            throw JDBCUtil.nullArgument();
+        }
+
+        Type hsqlType = Types.getParameterSQLType(type);
+
+        if(hsqlType == null) {
+            throw JDBCUtil.sqlException(Error.error(ErrorCode.X_42561));
+        }
+
+        Object source;
+
+        if (wasNullValue) {
+            return (T) null;
+        }
+
+        Object o = null;
+
+        switch(type.getName()){
+            case "int":
+            case "java.lang.Integer":
+                o = getInt(parameterIndex);
+                break;
+            case "double":
+            case "java.lang.Double":
+                o = getDouble(parameterIndex);
+                break;
+            case "boolean":
+            case "java.lang.Boolean":
+                o = getBoolean(parameterIndex);
+                break;
+            case "byte":
+            case "java.lang.Byte":
+                o = getByte(parameterIndex);
+                break;
+            case "short":
+            case "java.lang.Short":
+                o = getShort(parameterIndex);
+                break;
+            case "long":
+            case "java.lang.Long":
+                o = getLong(parameterIndex);
+                break;
+            case "[B":
+                o = getBytes(parameterIndex);
+                break;
+            case "java.lang.Object":
+                o = getObject(parameterIndex);
+                break;
+            case "java.math.BigDecimal":
+                o = getBigDecimal(parameterIndex);
+                break;
+            case "java.sql.Blob":
+                o = getBlob(parameterIndex);
+                break;
+
+            case "java.sql.Clob":
+                o = getClob(parameterIndex);
+                break;
+            case "java.lang.String":
+            case "java.lang.CharSequence":
+                o = getString(parameterIndex);
+                break;
+
+            case "java.sql.Date": {
+                o = getDate(parameterIndex);
+                break;
+            }
+            case "java.sql.Time": {
+                o = getTime(parameterIndex);
+                break;
+            }
+            case "java.sql.Timestamp": {
+                o = getTimestamp(parameterIndex);
+                break;
+            }
+            case "java.util.UUID":
+                source = getColumnInType(parameterIndex, hsqlType);
+                o = Type.SQL_GUID.convertSQLToJava(session, source);
+                break;
+            case "java.time.LocalDate": {
+                source = getColumnInType(parameterIndex, hsqlType);
+                TimestampData v = (TimestampData) source;
+                long millis = v.getMillis();
+                Calendar cal = session.getCalendarGMT();
+                cal.setTimeInMillis(millis);
+                o = LocalDate.of(cal.get(Calendar.YEAR), cal.get(Calendar.MONTH) + 1, cal.get(Calendar.DAY_OF_MONTH));
+                break;
+            }
+            case "java.time.LocalTime": {
+                source = getColumnInType(parameterIndex, hsqlType);
+                TimeData v = (TimeData) source;
+                o = LocalTime.ofNanoOfDay(v.getSeconds() * 1000_000_000L + v.getNanos());
+                break;
+            }
+            case "java.time.LocalDateTime": {
+                source = getColumnInType(parameterIndex, hsqlType);
+                TimestampData v = (TimestampData) source;
+                o = LocalDateTime.ofEpochSecond(v.getSeconds(), v.getNanos(), ZoneOffset.UTC);
+                break;
+            }
+            case "java.time.OffsetTime": {
+                o = getTimeWithZone(parameterIndex);
+                break;
+            }
+            case "java.time.OffsetDateTime": {
+                o = getTimestampWithZone(parameterIndex);
+                break;
+            }
+            case "java.time.Duration": {
+                Type sourceType = parameterMetaData.columnTypes[parameterIndex - 1];
+
+                if (!sourceType.isIntervalDaySecondType()) {
+                    break;
+                }
+                source = getColumnInType(parameterIndex, hsqlType);
+                IntervalSecondData v = (IntervalSecondData) source;
+                o = Duration.ofSeconds(v.getSeconds(), v.getNanos());
+                break;
+            }
+            case "java.time.Period": {
+                Type sourceType = parameterMetaData.columnTypes[parameterIndex - 1];
+
+                if (!sourceType.isIntervalYearMonthType()) {
+                    break;
+                }
+                source = getColumnInType(parameterIndex, hsqlType);
+                IntervalMonthData v = (IntervalMonthData) source;
+                int months = v.getMonths();
+
+                if (sourceType.typeCode == Types.SQL_INTERVAL_MONTH) {
+                    o = Period.ofMonths(months);
+                } else {
+                    o = Period.of(months / 12, months % 12, 0);
+                }
+                break;
+            }
+        }
+
+        if (o == null) {
+            throw JDBCUtil.sqlException(Error.error(ErrorCode.X_42561));
+        }
+
+        return (T) o;
+    }
+*/
+//#else
+    public <T>T getObject(int parameterIndex, Class<T> type) throws SQLException {
+        throw JDBCUtil.notSupported();
     }
 
-//#endif
+//#endif JAVA8
 
     /**
      * <p>Returns an object representing the value of OUT parameter
@@ -4748,13 +4735,378 @@ public class JDBCCallableStatement extends JDBCPreparedStatement implements Call
      * this method
      * @since JDK 1.7 M11 2010/09/10 (b123), HSQLDB 2.0.1
      */
-//#ifdef JAVA5
     public <T>T getObject(String parameterName,
                           Class<T> type) throws SQLException {
-        return getObject(this.findParameterIndex(parameterName), type);
+
+        return getObject(findParameterIndex(parameterName), type);
     }
 
-//#endif
+    /**
+     * <p>Sets the value of the designated parameter with the given object.
+     *
+     * If the second argument is an {@code InputStream} then the stream
+     * must contain the number of bytes specified by scaleOrLength.
+     * If the second argument is a {@code Reader} then the reader must
+     * contain the number of characters specified
+     * by scaleOrLength. If these conditions are not true the driver
+     * will generate a
+     * {@code SQLException} when the prepared statement is executed.
+     *
+     * <p>The given Java object will be converted to the given targetSqlType
+     * before being sent to the database.
+     *
+     * If the object has a custom mapping (is of a class implementing the
+     * interface {@code SQLData}),
+     * the JDBC driver should call the method {@code SQLData.writeSQL} to
+     * write it to the SQL data stream.
+     * If, on the other hand, the object is of a class implementing
+     * {@code Ref}, {@code Blob}, {@code Clob},  {@code NClob},
+     *  {@code Struct}, {@code java.net.URL},
+     * or {@code Array}, the driver should pass it to the database as a
+     * value of the corresponding SQL type.
+     *
+     * <p>Note that this method may be used to pass database-specific
+     * abstract data types.
+     *<P>
+     * The default implementation will throw {@code SQLFeatureNotSupportedException}
+     *
+     * @param parameterName the name of the parameter
+     * @param x the object containing the input parameter value
+     * @param targetSqlType the SQL type to be
+     * sent to the database. The scale argument may further qualify this type.
+     * @param scaleOrLength for {@code java.sql.JDBCType.DECIMAL}
+     *          or {@code java.sql.JDBCType.NUMERIC types},
+     *          this is the number of digits after the decimal point. For
+     *          Java Object types {@code InputStream} and {@code Reader},
+     *          this is the length
+     *          of the data in the stream or reader.  For all other types,
+     *          this value will be ignored.
+     * @exception SQLException if parameterName does not correspond to a named
+     * parameter; if a database access error occurs
+     * or this method is called on a closed {@code CallableStatement}  or
+     *            if the Java Object specified by x is an InputStream
+     *            or Reader object and the value of the scale parameter is less
+     *            than zero
+     * @exception SQLFeatureNotSupportedException if
+     * the JDBC driver does not support the specified targetSqlType
+     * @see JDBCType
+     * @see SQLType
+     *
+     * @since 1.8
+     */
+//#ifdef JAVA8
+/*
+    public void setObject(String parameterName, Object x, SQLType targetSqlType,
+                           int scaleOrLength) throws SQLException {
+        setObject(parameterName, x, targetSqlType.getVendorTypeNumber(), scaleOrLength);
+    }
+*/
+//#endif JAVA8
+    /**
+     * Sets the value of the designated parameter with the given object.
+     *
+     * This method is similar to {@link #setObject(String parameterName,
+     * Object x, SQLType targetSqlType, int scaleOrLength)},
+     * except that it assumes a scale of zero.
+     *<P>
+     * The default implementation will throw {@code SQLFeatureNotSupportedException}
+     *
+     * @param parameterName the name of the parameter
+     * @param x the object containing the input parameter value
+     * @param targetSqlType the SQL type to be sent to the database
+     * @exception SQLException if parameterName does not correspond to a named
+     * parameter; if a database access error occurs
+     * or this method is called on a closed {@code CallableStatement}
+     * @exception SQLFeatureNotSupportedException if
+     * the JDBC driver does not support the specified targetSqlType
+     * @see JDBCType
+     * @see SQLType
+     * @since 1.8
+     */
+//#ifdef JAVA8
+/*
+    public void setObject(String parameterName, Object x, SQLType targetSqlType)
+            throws SQLException {
+        setObject(parameterName, x, targetSqlType.getVendorTypeNumber());
+    }
+*/
+//#endif JAVA8
+
+    /**
+     * Registers the OUT parameter in ordinal position
+     * {@code parameterIndex} to the JDBC type
+     * {@code sqlType}.  All OUT parameters must be registered
+     * before a stored procedure is executed.
+     * <p>
+     * The JDBC type specified by {@code sqlType} for an OUT
+     * parameter determines the Java type that must be used
+     * in the {@code get} method to read the value of that parameter.
+     * <p>
+     * If the JDBC type expected to be returned to this output parameter
+     * is specific to this particular database, {@code sqlType}
+     * may be {@code JDBCType.OTHER} or a {@code SQLType} that is supported by
+     * the JDBC driver.  The method
+     * {@link #getObject} retrieves the value.
+     *<P>
+     * The default implementation will throw {@code SQLFeatureNotSupportedException}
+     *
+     * @param parameterIndex the first parameter is 1, the second is 2,
+     *        and so on
+     * @param sqlType the JDBC type code defined by {@code SQLType} to use to
+     * register the OUT Parameter.
+     *        If the parameter is of JDBC type {@code JDBCType.NUMERIC}
+     *        or {@code JDBCType.DECIMAL}, the version of
+     *        {@code registerOutParameter} that accepts a scale value
+     *        should be used.
+     *
+     * @exception SQLException if the parameterIndex is not valid;
+     * if a database access error occurs or
+     * this method is called on a closed {@code CallableStatement}
+     * @exception SQLFeatureNotSupportedException if
+     * the JDBC driver does not support the specified sqlType
+     * @see JDBCType
+     * @see SQLType
+     * @since 1.8
+     */
+//#ifdef JAVA8
+/*
+    public void registerOutParameter(int parameterIndex, SQLType sqlType)
+            throws SQLException {
+        registerOutParameter(parameterIndex,sqlType.getVendorTypeNumber());
+    }
+*/
+//#endif JAVA8
+
+    /**
+     * Registers the parameter in ordinal position
+     * {@code parameterIndex} to be of JDBC type
+     * {@code sqlType}. All OUT parameters must be registered
+     * before a stored procedure is executed.
+     * <p>
+     * The JDBC type specified by {@code sqlType} for an OUT
+     * parameter determines the Java type that must be used
+     * in the {@code get} method to read the value of that parameter.
+     * <p>
+     * This version of {@code  registerOutParameter} should be
+     * used when the parameter is of JDBC type {@code JDBCType.NUMERIC}
+     * or {@code JDBCType.DECIMAL}.
+     *<P>
+     * The default implementation will throw {@code SQLFeatureNotSupportedException}
+     *
+     * @param parameterIndex the first parameter is 1, the second is 2,
+     * and so on
+     * @param sqlType the JDBC type code defined by {@code SQLType} to use to
+     * register the OUT Parameter.
+     * @param scale the desired number of digits to the right of the
+     * decimal point.  It must be greater than or equal to zero.
+     * @exception SQLException if the parameterIndex is not valid;
+     * if a database access error occurs or
+     * this method is called on a closed {@code CallableStatement}
+     * @exception SQLFeatureNotSupportedException if
+     * the JDBC driver does not support the specified sqlType
+     * @see JDBCType
+     * @see SQLType
+     * @since 1.8
+     */
+//#ifdef JAVA8
+/*
+    public void registerOutParameter(int parameterIndex, SQLType sqlType,
+                                      int scale) throws SQLException {
+        registerOutParameter(parameterIndex,sqlType.getVendorTypeNumber(), scale);
+    }
+*/
+//#endif JAVA8
+
+    /**
+     * Registers the designated output parameter.
+     * This version of
+     * the method {@code  registerOutParameter}
+     * should be used for a user-defined or {@code REF} output parameter.
+     * Examples
+     * of user-defined types include: {@code STRUCT}, {@code DISTINCT},
+     * {@code JAVA_OBJECT}, and named array types.
+     *<p>
+     * All OUT parameters must be registered
+     * before a stored procedure is executed.
+     * <p>  For a user-defined parameter, the fully-qualified SQL
+     * type name of the parameter should also be given, while a {@code REF}
+     * parameter requires that the fully-qualified type name of the
+     * referenced type be given.  A JDBC driver that does not need the
+     * type code and type name information may ignore it.   To be portable,
+     * however, applications should always provide these values for
+     * user-defined and {@code REF} parameters.
+     *
+     * Although it is intended for user-defined and {@code REF} parameters,
+     * this method may be used to register a parameter of any JDBC type.
+     * If the parameter does not have a user-defined or {@code REF} type, the
+     * <i>typeName</i> parameter is ignored.
+     *
+     * <P><B>Note:</B> When reading the value of an out parameter, you
+     * must use the getter method whose Java type corresponds to the
+     * parameter's registered SQL type.
+     *<P>
+     * The default implementation will throw {@code SQLFeatureNotSupportedException}
+     *
+     * @param parameterIndex the first parameter is 1, the second is 2,...
+     * @param sqlType the JDBC type code defined by {@code SQLType} to use to
+     * register the OUT Parameter.
+     * @param typeName the fully-qualified name of an SQL structured type
+     * @exception SQLException if the parameterIndex is not valid;
+     * if a database access error occurs or
+     * this method is called on a closed {@code CallableStatement}
+     * @exception SQLFeatureNotSupportedException if
+     * the JDBC driver does not support the specified sqlType
+     * @see JDBCType
+     * @see SQLType
+     * @since 1.8
+     */
+//#ifdef JAVA8
+/*
+    public void registerOutParameter (int parameterIndex, SQLType sqlType,
+                                       String typeName) throws SQLException {
+        registerOutParameter(parameterIndex,sqlType.getVendorTypeNumber(), typeName);
+    }
+*/
+//#endif JAVA8
+
+    /**
+     * Registers the OUT parameter named
+     * <code>parameterName</code> to the JDBC type
+     * {@code sqlType}.  All OUT parameters must be registered
+     * before a stored procedure is executed.
+     * <p>
+     * The JDBC type specified by {@code sqlType} for an OUT
+     * parameter determines the Java type that must be used
+     * in the {@code get} method to read the value of that parameter.
+     * <p>
+     * If the JDBC type expected to be returned to this output parameter
+     * is specific to this particular database, {@code sqlType}
+     * should be {@code JDBCType.OTHER} or a {@code SQLType} that is supported
+     * by the JDBC driver..  The method
+     * {@link #getObject} retrieves the value.
+     *<P>
+     * The default implementation will throw {@code SQLFeatureNotSupportedException}
+     *
+     * @param parameterName the name of the parameter
+     * @param sqlType the JDBC type code defined by {@code SQLType} to use to
+     * register the OUT Parameter.
+     * If the parameter is of JDBC type {@code JDBCType.NUMERIC}
+     * or {@code JDBCType.DECIMAL}, the version of
+     * {@code  registerOutParameter} that accepts a scale value
+     * should be used.
+     * @exception SQLException if parameterName does not correspond to a named
+     * parameter; if a database access error occurs or
+     * this method is called on a closed {@code CallableStatement}
+     * @exception SQLFeatureNotSupportedException if
+     * the JDBC driver does not support the specified sqlType
+     * or if the JDBC driver does not support
+     * this method
+     * @since 1.8
+     * @see JDBCType
+     * @see SQLType
+     */
+//#ifdef JAVA8
+/*
+    public void registerOutParameter(String parameterName, SQLType sqlType)
+            throws SQLException {
+        registerOutParameter(parameterName,sqlType.getVendorTypeNumber());
+    }
+*/
+//#endif JAVA8
+
+    /**
+     * Registers the parameter named
+     * <code>parameterName</code> to be of JDBC type
+     * {@code sqlType}.  All OUT parameters must be registered
+     * before a stored procedure is executed.
+     * <p>
+     * The JDBC type specified by {@code sqlType} for an OUT
+     * parameter determines the Java type that must be used
+     * in the {@code get} method to read the value of that parameter.
+     * <p>
+     * This version of {@code  registerOutParameter} should be
+     * used when the parameter is of JDBC type {@code JDBCType.NUMERIC}
+     * or {@code JDBCType.DECIMAL}.
+     *<P>
+     * The default implementation will throw {@code SQLFeatureNotSupportedException}
+     *
+     * @param parameterName the name of the parameter
+     * @param sqlType the JDBC type code defined by {@code SQLType} to use to
+     * register the OUT Parameter.
+     * @param scale the desired number of digits to the right of the
+     * decimal point.  It must be greater than or equal to zero.
+     * @exception SQLException if parameterName does not correspond to a named
+     * parameter; if a database access error occurs or
+     * this method is called on a closed {@code CallableStatement}
+     * @exception SQLFeatureNotSupportedException if
+     * the JDBC driver does not support the specified sqlType
+     * or if the JDBC driver does not support
+     * this method
+     * @since 1.8
+     * @see JDBCType
+     * @see SQLType
+     */
+//#ifdef JAVA8
+/*
+    public void registerOutParameter(String parameterName, SQLType sqlType,
+                                      int scale) throws SQLException {
+        registerOutParameter(parameterName,sqlType.getVendorTypeNumber(), scale);
+    }
+*/
+//#endif JAVA8
+
+    /**
+     * Registers the designated output parameter.  This version of
+     * the method {@code  registerOutParameter}
+     * should be used for a user-named or REF output parameter.  Examples
+     * of user-named types include: STRUCT, DISTINCT, JAVA_OBJECT, and
+     * named array types.
+     *<p>
+     * All OUT parameters must be registered
+     * before a stored procedure is executed.
+     * </p>
+     * For a user-named parameter the fully-qualified SQL
+     * type name of the parameter should also be given, while a REF
+     * parameter requires that the fully-qualified type name of the
+     * referenced type be given.  A JDBC driver that does not need the
+     * type code and type name information may ignore it.   To be portable,
+     * however, applications should always provide these values for
+     * user-named and REF parameters.
+     *
+     * Although it is intended for user-named and REF parameters,
+     * this method may be used to register a parameter of any JDBC type.
+     * If the parameter does not have a user-named or REF type, the
+     * typeName parameter is ignored.
+     *
+     * <P><B>Note:</B> When reading the value of an out parameter, you
+     * must use the {@code getXXX} method whose Java type XXX corresponds to the
+     * parameter's registered SQL type.
+     *<P>
+     * The default implementation will throw {@code SQLFeatureNotSupportedException}
+     *
+     * @param parameterName the name of the parameter
+     * @param sqlType the JDBC type code defined by {@code SQLType} to use to
+     * register the OUT Parameter.
+     * @param typeName the fully-qualified name of an SQL structured type
+     * @exception SQLException if parameterName does not correspond to a named
+     * parameter; if a database access error occurs or
+     * this method is called on a closed {@code CallableStatement}
+     * @exception SQLFeatureNotSupportedException if
+     * the JDBC driver does not support the specified sqlType
+     * or if the JDBC driver does not support this method
+     * @see JDBCType
+     * @see SQLType
+     * @since 1.8
+     */
+//#ifdef JAVA8
+/*
+    public void registerOutParameter (String parameterName, SQLType sqlType,
+                                       String typeName) throws SQLException {
+        registerOutParameter(parameterName,sqlType.getVendorTypeNumber(), typeName);
+    }
+*/
+//#endif JAVA8
+
 // --------------------------- Internal Implementation -------------------------
 
     /** parameter name => parameter index */
@@ -4772,6 +5124,8 @@ public class JDBCCallableStatement extends JDBCPreparedStatement implements Call
      * @param  c the connection on which this statement will execute
      * @param sql the SQL statement this object represents
      * @param resultSetType the type of result this statement will produce
+     * @param resultSetConcurrency (updatability)
+     * @param resultSetHoldability (validity beyond commit)
      * @throws HsqlException if the statement is not accepted by the database
      * @throws SQLException if preprocessing by driver fails
      */
@@ -4832,7 +5186,18 @@ public class JDBCCallableStatement extends JDBCPreparedStatement implements Call
             checkClosed();
         }
 
+        if (parameterName == null) {
+            throw JDBCUtil.nullArgument();
+        }
+
         int index = parameterNameMap.get(parameterName, -1);
+
+        if (index >= 0) {
+            return index + 1;
+        }
+
+        index = parameterNameMap.get(parameterName.toUpperCase(Locale.ENGLISH),
+                                     -1);
 
         if (index >= 0) {
             return index + 1;
@@ -4940,6 +5305,53 @@ public class JDBCCallableStatement extends JDBCPreparedStatement implements Call
         return value;
     }
 
+//#ifdef JAVA8
+/*
+    private Object getTimestampWithZone(int columnIndex) throws SQLException {
+        TimestampData v = (TimestampData) getColumnInType(columnIndex, Type.SQL_TIMESTAMP_WITH_TIME_ZONE);
+
+        if (v == null) {
+            return null;
+        }
+
+        ZoneOffset z = ZoneOffset.ofTotalSeconds(v.getZone());
+        LocalDateTime ldt = LocalDateTime.ofEpochSecond(v.getSeconds() - v.getZone(), v.getNanos(), z);
+        return OffsetDateTime.of(ldt, z);
+    }
+
+    private Object getTimeWithZone(int columnIndex) throws SQLException {
+        TimeData v = (TimeData) getColumnInType(columnIndex, Type.SQL_TIME_WITH_TIME_ZONE);
+
+        if (v == null) {
+            return null;
+        }
+
+        ZoneOffset z = ZoneOffset.ofTotalSeconds(v.getZone());
+        LocalTime lt = LocalTime.ofNanoOfDay(v.getSeconds() * 1000_000_000L + v.getNanos());
+        return OffsetTime.of(lt, z);
+    }
+*/
+
+//#else
+    private Object getTimestampWithZone(int columnIndex) throws SQLException {
+        TimestampData v = (TimestampData) getColumnInType(columnIndex, Type.SQL_TIMESTAMP_WITH_TIME_ZONE);
+
+        if (v == null) {
+            return null;
+        }
+        return Type.SQL_TIMESTAMP.convertSQLToJava(session, v);
+    }
+
+    private Object getTimeWithZone(int columnIndex) throws SQLException {
+        TimeData v = (TimeData) getColumnInType(columnIndex, Type.SQL_TIME_WITH_TIME_ZONE);
+
+        if (v == null) {
+            return null;
+        }
+        return Type.SQL_TIME.convertSQLToJava(session, v);
+    }
+//#endif
+
     private boolean trackNull(Object o) {
         return (wasNullValue = (o == null));
     }
@@ -4966,7 +5378,7 @@ public class JDBCCallableStatement extends JDBCPreparedStatement implements Call
      * returned.<p>
      *
      * If the FUNCTION or PROCEDURE does not return a ResultSet, an
-     * <code>SQLException</code> if thrown.
+     * <code>SQLException</code> is thrown.
      * </div>
      * <!-- end release-specific documentation -->
      *

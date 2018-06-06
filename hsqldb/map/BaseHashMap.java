@@ -1,4 +1,4 @@
-/* Copyright (c) 2001-2011, The HSQL Development Group
+/* Copyright (c) 2001-2016, The HSQL Development Group
  * All rights reserved.
  *
  * Redistribution and use in source and binary forms, with or without
@@ -46,7 +46,7 @@ import org.hsqldb.lib.ObjectComparator;
  * Special getOrAddXXX() methods are used for object maps in some subclasses.
  *
  * @author Fred Toussi (fredt@users dot sourceforge.net)
- * @version 2.3.0
+ * @version 2.3.4
  * @since 1.7.2
  */
 public class BaseHashMap {
@@ -90,6 +90,8 @@ public class BaseHashMap {
     boolean           isObjectValue;
     protected boolean isTwoObjectValue;
     protected boolean isList;
+    protected boolean isAccessCount;
+    protected boolean isLastAccessCount;
 
     //
     private ValuesIterator valuesIterator;
@@ -192,6 +194,8 @@ public class BaseHashMap {
         } else {
             isNoValue = true;
         }
+
+        isLastAccessCount = hasAccessCount;
 
         if (hasAccessCount) {
             accessTable = new int[arraySize];
@@ -302,6 +306,8 @@ public class BaseHashMap {
 
     /**
      * generic method for adding or removing keys
+     *
+     * returns existing Object value if any (or Object key if this is a set)
      */
     protected Object addOrRemove(long longKey, long longValue,
                                  Object objectKey, Object objectValue,
@@ -390,6 +396,10 @@ public class BaseHashMap {
                 return returnValue;
             }
 
+            if (isObjectKey) {
+                returnValue = objectKeyTable[lookup];
+            }
+
             if (isObjectValue) {
                 returnValue              = objectValueTable[lookup];
                 objectValueTable[lookup] = objectValue;
@@ -399,8 +409,10 @@ public class BaseHashMap {
                 longValueTable[lookup] = longValue;
             }
 
-            if (accessTable != null) {
+            if (isLastAccessCount) {
                 accessTable[lookup] = ++accessCount;
+            } else if (isAccessCount) {
+                accessTable[lookup]++;
             }
 
             return returnValue;
@@ -450,16 +462,17 @@ public class BaseHashMap {
         }
 
         //
-        if (accessTable != null) {
+        if (isLastAccessCount) {
             accessTable[lookup] = ++accessCount;
+        } else if (isAccessCount) {
+            accessTable[lookup] = 1;
         }
 
         return returnValue;
     }
 
     /**
-     * generic method for adding or removing key / values in multi-value
-     * maps
+     * Generic method for adding or removing key / values in multi-value maps.
      */
     protected Object addOrRemoveMultiVal(long longKey, long longValue,
                                          Object objectKey, Object objectValue,
@@ -649,8 +662,10 @@ public class BaseHashMap {
         }
 
         //
-        if (accessTable != null) {
+        if (isLastAccessCount) {
             accessTable[lookup] = ++accessCount;
+        } else if (isAccessCount) {
+            accessTable[lookup] = 1;
         }
 
         return returnValue;
@@ -720,8 +735,10 @@ public class BaseHashMap {
                 objectKeyTable[lookup] = objectValueTwo;
             }
 
-            if (accessTable != null) {
+            if (isLastAccessCount) {
                 accessTable[lookup] = ++accessCount;
+            } else if (isAccessCount) {
+                accessTable[lookup]++;
             }
 
             return returnValue;
@@ -760,8 +777,10 @@ public class BaseHashMap {
             objectKeyTable[lookup] = objectValueTwo;
         }
 
-        if (accessTable != null) {
+        if (isLastAccessCount) {
             accessTable[lookup] = ++accessCount;
+        } else if (isAccessCount) {
+            accessTable[lookup] = 1;
         }
 
         return returnValue;
@@ -824,9 +843,9 @@ public class BaseHashMap {
         for (; lookup >= 0;
                 lastLookup = lookup,
                 lookup = hashIndex.getNextLookup(lookup)) {
-            returnValue = objectKeyTable[lookup];
+            if (comparator.longKey(objectKeyTable[lookup]) == longKey) {
+                returnValue = objectKeyTable[lookup];
 
-            if (comparator.longKey(returnValue) == longKey) {
                 break;
             }
         }
@@ -847,8 +866,10 @@ public class BaseHashMap {
             } else {
                 objectKeyTable[lookup] = object;
 
-                if (accessTable != null) {
+                if (isLastAccessCount) {
                     accessTable[lookup] = ++accessCount;
+                } else if (isAccessCount) {
+                    accessTable[lookup]++;
                 }
             }
 
@@ -868,8 +889,10 @@ public class BaseHashMap {
         lookup                 = hashIndex.linkNode(index, lastLookup);
         objectKeyTable[lookup] = object;
 
-        if (accessTable != null) {
+        if (isLastAccessCount) {
             accessTable[lookup] = ++accessCount;
+        } else if (isAccessCount) {
+            accessTable[lookup] = 1;
         }
 
         return returnValue;
@@ -971,7 +994,7 @@ public class BaseHashMap {
     }
 
     /**
-     * resize the arrays contianing the key / value data
+     * resize the arrays containing the key / value data
      */
     private void resizeElementArrays(int dataLength, int newLength) {
 
@@ -1259,20 +1282,20 @@ public class BaseHashMap {
      * Return the max accessCount value for count elements with the lowest
      * access count. Always return at least accessMin + 1
      */
-    public int getAccessCountCeiling(int count, int margin) {
+    protected int getAccessCountCeiling(int count, int margin) {
         return ArrayCounter.rank(accessTable, hashIndex.newNodePointer, count,
-                                 accessMin + 1, accessCount, margin);
+                                 accessMin, accessCount, margin);
     }
 
     /**
      * This is called after all elements below count accessCount have been
      * removed
      */
-    public void setAccessCountFloor(int count) {
+    protected void setAccessCountFloor(int count) {
         accessMin = count;
     }
 
-    public int incrementAccessCount() {
+    protected int incrementAccessCount() {
         return ++accessCount;
     }
 
@@ -1308,25 +1331,26 @@ public class BaseHashMap {
             return;
         }
 
-        if (accessMin < Integer.MAX_VALUE - (1 << 24)) {
-            accessMin = Integer.MAX_VALUE - (1 << 24);
+        int    i      = accessTable.length;
+        double factor = (double) accessMin / accessCount;
+
+        if (factor < 0.5) {
+            factor = 0.5;
         }
 
-        int i = accessTable.length;
-
         while (--i >= 0) {
-            if (accessTable[i] <= accessMin) {
+            if (accessTable[i] < accessMin) {
                 accessTable[i] = 0;
             } else {
-                accessTable[i] -= accessMin;
+                accessTable[i] = (int) ((accessTable[i] - accessMin) * factor);
             }
         }
 
-        accessCount -= accessMin;
+        accessCount = (int) ((accessCount - accessMin) * factor);
         accessMin   = 0;
     }
 
-    public int capacity() {
+    protected int capacity() {
         return hashIndex.linkTable.length;
     }
 
@@ -1484,6 +1508,7 @@ public class BaseHashMap {
         int     lookup = -1;
         int     counter;
         boolean removed;
+        Object  oldKey;
 
         public MultiValueKeyIterator() {
             toNextLookup();
@@ -1510,6 +1535,8 @@ public class BaseHashMap {
 
             toNextLookup();
 
+            oldKey = value;
+
             return value;
         }
 
@@ -1522,7 +1549,7 @@ public class BaseHashMap {
         }
 
         public void remove() throws NoSuchElementException {
-            throw new NoSuchElementException("Hash Iterator");
+            addOrRemoveMultiVal(0, 0, oldKey, null, true, false);
         }
 
         public void setValue(Object value) {
@@ -1609,7 +1636,7 @@ public class BaseHashMap {
 
         public long nextLong() throws NoSuchElementException {
 
-            if ((!isLongKey || !keys)) {
+            if ((keys && !isLongKey) || (!keys && !isLongValue)) {
                 throw new NoSuchElementException("Hash Iterator");
             }
 
@@ -1620,11 +1647,8 @@ public class BaseHashMap {
 
                 lookup = nextLookup(lookup);
 
-                if (keys) {
-                    return longKeyTable[lookup];
-                } else {
-                    return longValueTable[lookup];
-                }
+                return keys ? longKeyTable[lookup]
+                            : longValueTable[lookup];
             }
 
             throw new NoSuchElementException("Hash Iterator");

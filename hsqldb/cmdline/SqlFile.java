@@ -1,4 +1,4 @@
-/* Copyright (c) 2001-2011, The HSQL Development Group
+/* Copyright (c) 2001-2017, The HSQL Development Group
  * All rights reserved.
  *
  * Redistribution and use in source and binary forms, with or without
@@ -83,7 +83,7 @@ import org.hsqldb.cmdline.sqltool.SqlFileScanner;
 import org.hsqldb.cmdline.sqltool.Calculator;
 import org.hsqldb.cmdline.sqltool.FileRecordReader;
 
-/* $Id: SqlFile.java 5244 2013-05-31 13:05:17Z fredt $ */
+/* $Id: SqlFile.java 5736 2017-04-02 10:13:36Z fredt $ */
 
 /**
  * Encapsulation of SQL text and the environment under which it will executed
@@ -95,10 +95,10 @@ import org.hsqldb.cmdline.sqltool.FileRecordReader;
  * The file <CODE>src/org/hsqldb/sample/SqlFileEmbedder.java</CODE>
  * in the HSQLDB distribution provides an example for using SqlFile to
  * execute SQL files directly from your own Java classes.
- * <P/><P>
+ * <P>
  * The complexities of passing userVars and macros maps are to facilitate
  * strong scoping (among blocks and nested scripts).
- * <P/><P>
+ * <P>
  * Some implementation comments and variable names use keywords based
  * on the following definitions.  <UL>
  * <LI> COMMAND = Statement || SpecialCommand || BufferCommand
@@ -106,7 +106,7 @@ import org.hsqldb.cmdline.sqltool.FileRecordReader;
  * <LI>SpecialCommand =  Special Command like "\x arg..."
  * <LI>BufferCommand =  Editing/buffer command like ":s/this/that/"
  * </UL>
- * <P/><P>
+ * <P>
  * When entering SQL statements, you are always "appending" to the
  * "immediate" command (not the "buffer", which is a different thing).
  * All you can do to the immediate command is append new lines to it,
@@ -117,38 +117,37 @@ import org.hsqldb.cmdline.sqltool.FileRecordReader;
  * The buffer usually contains either an exact copy of the last command
  * executed or sent to buffer by entering a blank line,
  * but BUFFER commands can change the contents of the buffer.
- * <P/><P>
+ * <P>
  * In general, the special commands mirror those of Postgresql's psql,
  * but SqlFile handles command editing very differently than Postgresql
  * does, in part because of Java's lack of support for raw tty I/O.
  * The \p special command, in particular, is very different from psql's.
- * <P/><P>
+ * <P>
  * Buffer commands are unique to SQLFile.  The ":" commands allow
  * you to edit the buffer and to execute the buffer.
- * <P/><P>
+ * <P>
  * \d commands are very poorly supported for Mysql because
  * (a) Mysql lacks most of the most basic JDBC support elements, and
  * the most basic role and schema features, and
  * (b) to access the Mysql data dictionary, one must change the database
  * instance (to do that would require work to restore the original state
  * and could have disastrous effects upon transactions).
- * <P/><P>
+ * <P>
  * The process*() methods, other than processBuffHist() ALWAYS execute
  * on "buffer", and expect it to contain the method specific prefix
  * (if any).
- * <P/><P>
+ * <P>
  * The input/output Reader/Stream are generally managed by the caller.
  * An exception is that the input reader may be closed automatically or on
  * demand by the user, since in some cases this class builds the Reader.
  * There is no corresponding functionality for output since the user always
  * has control over that object (which may be null or System.out).
- * <P/>
  *
  * @see <a href="../../../../util-guide/sqltool-chapt.html" target="guide">
  *     The SqlTool chapter of the
  *     HyperSQL Utilities Guide</a>
  * @see org.hsqldb.sample.SqlFileEmbedder
- * @version $Revision: 5244 $, $Date: 2013-05-31 14:05:17 +0100 (Fri, 31 May 2013) $
+ * @version $Revision: 5736 $, $Date: 2017-04-02 06:13:36 -0400 (Sun, 02 Apr 2017) $
  * @author Blaine Simpson (blaine dot simpson at admc dot com)
  */
 
@@ -167,7 +166,7 @@ public class SqlFile {
     private boolean          htmlMode;
     private TokenList        history;
     /** Platform-specific line separator */
-    public static String     LS = System.getProperty("line.separator");
+    public static final String     LS = System.getProperty("line.separator");
     private int              maxHistoryLength = 1;
     // TODO:  Implement PL variable to interactively change history length.
     // Study to be sure this won't cause state inconsistencies.
@@ -189,8 +188,6 @@ public class SqlFile {
 
     static String            DEFAULT_FILE_ENCODING =
                              System.getProperty("file.encoding");
-    static Set<String>       hiddenVars = new HashSet<String>(
-                             Arrays.asList("?", "*START_TIME", "*VERSION"));
 
     // These settings are never null
     private String nullRepToken;   // May be ""
@@ -318,7 +315,7 @@ public class SqlFile {
      * methods that use the settings call a conditional updater, but that
      * is less reliable since there is no way to guarantee that the vars
      * are not used without checking.
-     * UPDATE:  Could do what is needed by making a Map subclass with
+     * TODO:  Could do what is needed by making a Map subclass with
      * overridden setters which enforce dirtiness.
      * <P/>
      */
@@ -327,7 +324,7 @@ public class SqlFile {
         String varVal;
         if (shared.userVars.containsKey("NULL")
                  || shared.userVars.containsKey("*NULL")) {
-                errprintln(SqltoolRB.null_assignment.getString());
+             errprintln(SqltoolRB.null_assignment.getString());
              shared.userVars.remove("NULL");
              shared.userVars.remove("*NULL");
          }
@@ -449,7 +446,7 @@ public class SqlFile {
         "-----------------------------------------------------------------"
         + "-----------------------------------------------------------------";
     // Needs to be at least as wide as the widest field or header displayed.
-    private static final String revString = "$Revision: 5244 $";
+    private static final String revString = "$Revision: 5736 $";
     private static final int revStringLength = revString.length();
     private static final String  revnum =
             (revStringLength - " $".length() > "$Revision: ".length())
@@ -462,8 +459,8 @@ public class SqlFile {
 
     /**
      * Convenience wrapper for the SqlFile(File, String) constructor
-     *
-     * @throws IOException
+     * @param inputFile input file
+     * @throws IOException on read errors
      * @see #SqlFile(File, String)
      */
     public SqlFile(File inputFile) throws IOException {
@@ -473,9 +470,10 @@ public class SqlFile {
     /**
      * Convenience wrapper for the SqlFile(File, String, boolean) constructor
      *
-     * @param encoding is applied to both the given File and other files
-     *        read in or written out. Null will use your env+JVM settings.
-     * @throws IOException
+     * @param inputFile the input File
+     * @param encoding is applied to both the given File and other files read
+     *   in or written out. Null will use your env+JVM settings.
+     * @throws IOException on read errors
      * @see #SqlFile(File, String, boolean)
      */
     public SqlFile(File inputFile, String encoding) throws IOException {
@@ -486,12 +484,13 @@ public class SqlFile {
      * Constructor for non-interactive usage with a SQL file, using the
      * specified encoding and sending normal output to stdout.
      *
+     * @param inputFile the input File
      * @param encoding is applied to the given File and other files
      *        read in or written out. Null will use your env+JVM settings.
      * @param interactive  If true, prompts are printed, the interactive
      *                     Special commands are enabled, and
      *                     continueOnError defaults to true.
-     * @throws IOException
+     * @throws IOException on read errors
      * @see #SqlFile(Reader, String, PrintStream, String, boolean, File)
      */
     public SqlFile(File inputFile, String encoding, boolean interactive)
@@ -511,7 +510,7 @@ public class SqlFile {
      * @param interactive  If true, prompts are printed, the interactive
      *                     Special commands are enabled, and
      *                     continueOnError defaults to true.
-     * @throws IOException
+     * @throws IOException on read errors
      * @see #SqlFile(Reader, String, PrintStream, String, boolean, File)
      */
     public SqlFile(String encoding, boolean interactive) throws IOException {
@@ -539,15 +538,18 @@ public class SqlFile {
      *                     Caller is responsible for setting up encoding.
      *                     (the 'encoding' parameter will NOT be applied
      *                     to this reader).
+     * @param inputStreamLabel the lable
      * @param psStd        PrintStream for normal output.
      *                     If null, normal output will be discarded.
      *                     Caller is responsible for settingup encoding
      *                     (the 'encoding' parameter will NOT be applied
      *                     to this stream).
+     * @param encoding     the encoding
      * @param interactive  If true, prompts are printed, the interactive
      *                     Special commands are enabled, and
      *                     continueOnError defaults to true.
-     * @throws IOException
+     * @param baseDir      the base dir
+     * @throws IOException on read errors
      * @see #execute()
      */
     public SqlFile(Reader reader, String inputStreamLabel,
@@ -560,6 +562,7 @@ public class SqlFile {
                     "*START_TIME", (new java.util.Date()).toString());
             shared.userVars.put("*REVISION", revnum);
             shared.userVars.put("?", "");
+            shared.userVars.put("#", "0");
             setEncoding(encoding);
             this.interactive = interactive;
             continueOnError = this.interactive;
@@ -672,7 +675,8 @@ public class SqlFile {
         shared.userVars.putAll(newUserVars);
         List<String> strangeVars = new ArrayList<String>();
         for (String name : newUserVars.keySet())
-            if (!name.equals("?") && !varPattern.matcher(name).matches())
+            if (!name.equals("?") && !name.equals("#")
+                    && !varPattern.matcher(name).matches())
                 strangeVars.add(name);
         if (strangeVars.size() > 0)
             errprintln(SqltoolRB.varname_warning.getString(
@@ -686,6 +690,8 @@ public class SqlFile {
      * Since you are getting a reference to the private map used inside this
      * class, update this map with great caution and attention to lifecycle
      * handling of the variable map.
+     *
+     * @return user variable map
      */
     public Map<String, String> getUserVars() {
         return shared.userVars;
@@ -738,10 +744,11 @@ public class SqlFile {
      * to true).
      * You may want to set this to false if you want to stop execution with
      * \q or similar, then continue using the Reader or underlying Stream.
-     * </P> <P>
+     * <P>
      * The caller is always responsible for closing the output object (if any)
      * used by SqlFile.
-     * </P>
+     *
+     * @param autoClose boolean
      */
     public void setAutoClose(boolean autoClose) {
         this.autoClose = autoClose;
@@ -753,7 +760,7 @@ public class SqlFile {
      * SQL commands in the content get executed against the current JDBC
      * data source connection.
      *
-     * @throws SQLExceptions thrown by JDBC driver.
+     * @throws SQLException thrown by JDBC driver.
      *                       Only possible if in "\c false" mode.
      * @throws SqlToolError  all other errors.
      *               This includes including QuitNow, BreakException,
@@ -850,7 +857,7 @@ public class SqlFile {
      */
     private void setSqlExpandMode() {
         for (String key : shared.userVars.keySet()) {
-            if (key.charAt(0) != '*' && !key.equals("?")) {
+            if (key.charAt(0) != '*' && !key.equals("?") && !key.equals("#")) {
                 sqlExpandMode = Boolean.TRUE;
                 return;
             }
@@ -952,24 +959,23 @@ public class SqlFile {
                         }
                         if (receivedType == Token.RAWEXEC_TYPE) {
                             historize();
-                            Statement statement = processSQL();
                             ResultSet rs = null;
+                            Statement statement = processSQL();
                             if (statement != null) {
                                 try {
                                     rs = statement.getResultSet();
-                                } catch (SQLException se) {
+                                    displaySqlResults(
+                                            statement, rs, null, null, true);
+                                } finally {
+                                    assert statement != null;
                                     try {
-                                        if (statement != null)
-                                            statement.close();
+                                        statement.close();
                                     } catch (SQLException nse) {
                                         // Purposefully doing nothing
                                     } finally {
                                         statement = null;
                                     }
-                                    throw se;  // rethrow
                                 }
-                                displaySqlResults(
-                                        statement, rs, null, null, true);
                             }
                         }
                         continue;
@@ -1004,23 +1010,23 @@ public class SqlFile {
                         if (token.val == null) token.val = "";
                         setBuf(token);
                         historize();
-                        Statement statement = processSQL();
                         ResultSet rs = null;
+                        Statement statement = processSQL();
                         if (statement != null) {
                             try {
                                 rs = statement.getResultSet();
-                            } catch (SQLException se) {
+                                displaySqlResults(
+                                        statement, rs, null, null, true);
+                            } finally {
+                                assert statement != null;
                                 try {
-                                    if (statement != null) statement.close();
+                                    statement.close();
                                 } catch (SQLException nse) {
                                     // Purposefully doing nothing
                                 } finally {
                                     statement = null;
                                 }
-                                throw se;  // rethrow
                             }
-                            displaySqlResults(
-                                    statement, rs, null, null, true);
                         }
                         continue;
                     default:
@@ -1030,16 +1036,12 @@ public class SqlFile {
                 }
             } catch (BadSpecial bs) {
                 // BadSpecials ALWAYS have non-null getMessage().
-                if (token == null) {
-                    errprintln(SqltoolRB.errorat.getString(
-                            inputStreamLabel, "?", "?", bs.getMessage()));
-                } else {
-                    errprintln(SqltoolRB.errorat.getString(
-                            inputStreamLabel,
-                            Integer.toString(token.line),
-                            token.reconstitute(),
-                            bs.getMessage(), bs.getMessage()));
-                }
+                assert token != null;
+                errprintln(SqltoolRB.errorat.getString(
+                        inputStreamLabel,
+                        Integer.toString(token.line),
+                        token.reconstitute(),
+                        bs.getMessage(), bs.getMessage()));
                 Throwable cause = bs.getCause();
                 if (cause != null)
                     errprintln(SqltoolRB.causereport.getString(cause));
@@ -1047,10 +1049,9 @@ public class SqlFile {
                 if (!continueOnError) throw new SqlToolError(bs);
             } catch (SQLException se) {
                 //se.printStackTrace();
+                assert token != null;
                 errprintln("SQL " + SqltoolRB.errorat.getString(
-                        inputStreamLabel,
-                        ((token == null) ? "?"
-                                         : Integer.toString(token.line)),
+                        inputStreamLabel, Integer.toString(token.line),
                         lastSqlStatement,
                         se.getMessage()));
                 // It's possible that we could have
@@ -1087,6 +1088,7 @@ public class SqlFile {
             } catch (QuitNow qn) {
                 throw qn;
             } catch (SqlToolError ste) {
+                assert token != null;
                 StringBuffer sb = new StringBuffer(SqltoolRB.errorat.getString(
                     /* WARNING:  I have removed an extra LS appended to
                      * non-null ste.getMessages() below because I believe that
@@ -1095,18 +1097,12 @@ public class SqlFile {
                      * If I am wrong and this is needed for Scanner display or
                      * something, restore it.
                      */
-                    ((token == null)
-                            ? (new String[] {
-                                inputStreamLabel, "?", "?",
-                                ((ste.getMessage() == null)
-                                        ? "" : ste.getMessage())
-                              })
-                            : (new String[] {
-                                inputStreamLabel, Integer.toString(token.line),
-                                ((token.val == null) ? "" : token.reconstitute()),
-                                ((ste.getMessage() == null)
-                                        ? "" : ste.getMessage())
-                              }))
+                    (new String[] {
+                        inputStreamLabel, Integer.toString(token.line),
+                        ((token.val == null) ? "" : token.reconstitute()),
+                        ((ste.getMessage() == null)
+                                ? "" : ste.getMessage())
+                     })
                 ));
                 Throwable cause = ste.getCause();
                 errprintln((cause == null) ? sb.toString()
@@ -1178,7 +1174,7 @@ public class SqlFile {
      * Therefore, external users have no reason to specifically handle
      * QuitNow.
      */
-    private class QuitNow extends SqlToolError {
+    private static class QuitNow extends SqlToolError {
         static final long serialVersionUID = 1811094258670900488L;
 
         public QuitNow(String s) {
@@ -1197,7 +1193,7 @@ public class SqlFile {
      * Therefore, external users have no reason to specifically handle
      * BreakException.
      */
-    private class BreakException extends SqlToolError {
+    private static class BreakException extends SqlToolError {
         static final long serialVersionUID = 351150072817675994L;
 
         public BreakException() {
@@ -1216,7 +1212,7 @@ public class SqlFile {
      * Therefore, external users have no reason to specifically handle
      * ContinueException.
      */
-    private class ContinueException extends SqlToolError {
+    private static class ContinueException extends SqlToolError {
         static final long serialVersionUID = 5064604160827106014L;
 
         public ContinueException() {
@@ -1231,7 +1227,7 @@ public class SqlFile {
     /**
      * Utility nested Exception class for internal use only.
      */
-    private class BadSubst extends Exception {
+    private static class BadSubst extends Exception {
         static final long serialVersionUID = 7325933736897253269L;
 
         BadSubst(String s) {
@@ -1242,7 +1238,7 @@ public class SqlFile {
     /**
      * Utility nested Exception class for internal use only.
      */
-    private class RowError extends AppendableException {
+    private static class RowError extends AppendableException {
         static final long serialVersionUID = 754346434606022750L;
 
         RowError(String s) {
@@ -1266,7 +1262,7 @@ public class SqlFile {
      * Due to the nature of the goal here, we don't trim() "other" like
      * we do for other kinds of commands.
      *
-     * @param inString Complete command, less the leading ':' character.
+     * @param token Complete command, less the leading ':' character.
      * @throws SQLException  thrown by JDBC driver.
      * @throws BadSpecial    special-command-specific errors.
      * @throws SqlToolError  all other errors.
@@ -1466,7 +1462,7 @@ public class SqlFile {
                         + m.groupCount() + " groups";
                     String optionGroup = (
                             (m.groupCount() > 3 && m.group(4) != null)
-                            ? (new String(m.group(4))) : null);
+                            ? m.group(4) : null);
 
                     if (optionGroup != null) {
                         if (optionGroup.indexOf(';') > -1) {
@@ -1922,6 +1918,8 @@ public class SqlFile {
                         pwd = tokens[1];
                         url = tokens[2];
                         break;
+                    default:
+                        assert false;
                 }
                 if (tokens.length > 0) {
                     // Close current connection
@@ -2410,7 +2408,7 @@ public class SqlFile {
                 throw new BadSpecial(SqltoolRB.pl_block_fail.getString(), e);
             } finally {
                 // If we haven't instantiated a new SqlTool, then the following
-                // are unncessary.  TODO:  Test this and remove if unnecessary.
+                // are unnecessary.  TODO:  Test this and remove if unnecessary.
                 updateUserSettings();
                 sqlExpandMode = null;
             }
@@ -2442,14 +2440,16 @@ public class SqlFile {
                         + "immediately by an SQL statement");
             setBuf(queryToken);
             List<String[]> rowData = new ArrayList<String[]>();
-            Statement statement = processSQL();
             ResultSet rs = null;
+            int colCount = 0;
+            Statement statement = processSQL();
             if (statement == null)
                 // TODO: Define message
                 throw new BadSpecial("Failed to prepare SQL for loop");
-            int colCount = 0;
+            shared.userVars.put("#", "0");
             try {
                 rs = statement.getResultSet();
+                shared.userVars.put("#", Integer.toString(rowData.size()));
                 ResultSetMetaData rsmd = rs.getMetaData();
                 colCount = rsmd.getColumnCount();
                 if (vars != null && vars.length > colCount)
@@ -2475,7 +2475,7 @@ public class SqlFile {
                     rs = null;
                 }
                 try {
-                    if (statement != null) statement.close();
+                    statement.close();
                 } catch (SQLException nse) {
                     // Purposefully doing nothing
                 } finally {
@@ -2484,6 +2484,7 @@ public class SqlFile {
             }
             lastSqlStatement = null;
             // Done with SQL
+            shared.userVars.put("#", Integer.toString(rowData.size()));
 
             if (rowData.size() > 0) {
                 String firstVal = rowData.get(0)[0];
@@ -2979,6 +2980,7 @@ public class SqlFile {
 
             case '_' :
                 silentFetch = true;
+                // Purposefully fall through to next case
             case '~' :
                 // TODO:  Condsider limiting fetchingVars to User variables
                 // (as opposed to *SYSTEM variables).
@@ -3562,10 +3564,7 @@ public class SqlFile {
                     rs = md.getTables(null, additionalSchema, null,
                                       types);
 
-                    if (rs == null)
-                        throw new BadSpecial(
-                                SqltoolRB.metadata_fetch_failfor.getString(
-                                additionalSchema));
+                    assert rs != null;
 
                     if (!rs.next()) continue;
 
@@ -3798,6 +3797,7 @@ public class SqlFile {
 
                     break;
                 }
+                shared.userVars.put("#", "0");
 
                 ResultSetMetaData m        = r.getMetaData();
                 int               cols     = m.getColumnCount();
@@ -3863,6 +3863,8 @@ public class SqlFile {
                         case java.sql.Types.LONGVARBINARY :
                         case java.sql.Types.LONGVARCHAR :
                             autonulls[insi] = false;
+                            break;
+                        default:
                             break;
                     }
 
@@ -4025,6 +4027,8 @@ public class SqlFile {
                         }
 
                         if (silent) {
+                            // N.b. we ignore rows after first row returned
+                            shared.userVars.put("#", "1");
                             lastSqlStatement = null;
                             return;
                         }
@@ -4067,6 +4071,7 @@ public class SqlFile {
 
                     fetchingVar = null;
                 }
+                shared.userVars.put("#", Integer.toString(rows.size()));
 
                 // STEP 2: DISPLAY DATA  (= 2a OR 2b)
                 // STEP 2a (Non-DSV)
@@ -4351,8 +4356,7 @@ public class SqlFile {
                     + "Attempted to add command type "
                     + newBuffer.getTypeString() + " to buffer";
         }
-        buffer = new Token(newBuffer.type, new String(newBuffer.val),
-                newBuffer.line);
+        buffer = new Token(newBuffer.type, newBuffer.val, newBuffer.line);
         // System.err.println("Buffer is now (" + buffer + ')');
         return true;
     }
@@ -4773,11 +4777,16 @@ public class SqlFile {
 
     /**
      * As the name says...
+     *
      * This method always closes the input stream.
+     *
+     * @param is InputStream
+     * @param cs String
+     * @throws IOException on read errors
+     * @return String
      */
-    public String streamToString(InputStream isIn, String cs)
+    public String streamToString(InputStream is, String cs)
             throws IOException {
-        InputStream is = isIn;  // Compiler warning, when we can null the ref
         byte[] ba = null;
         int bytesread = 0;
         int retval;
@@ -4810,7 +4819,9 @@ public class SqlFile {
             } catch (IOException ioe) {
                 // intentionally empty
             } finally {
-                is = null;  // Encourage GC of buffers
+                is = null;  // Encourage GC of buffers.
+                // Modification of input param will elicit a compiler warning.
+                // N.b. the caller reference will remain non-null.
             }
         }
     }
@@ -4831,6 +4842,10 @@ public class SqlFile {
 
     /**
      * As the name says...
+     *
+     * @param is input
+     * @throws IOException on read errors
+     * @return byte[]
      */
     public static byte[] streamToBytes(InputStream is) throws IOException {
         byte[]                xferBuffer = new byte[10240];
@@ -4850,7 +4865,9 @@ public class SqlFile {
     /**
      * Binary file load
      *
-     * @return The bytes which are the content of the fil
+     * @return The bytes which are the content of the file
+     * @throws IOException on read errors
+     * @param binFile File
      */
     public static byte[] loadBinary(File binFile) throws IOException {
         byte[]                xferBuffer = new byte[10240];
@@ -4890,9 +4907,11 @@ public class SqlFile {
      * value displayable.
      * </P>
      *
-     * @see <A href="http://java.sun.com/docs/books/tutorial/jdbc/basics/retrieving.html"> http://java.sun.com/docs/books/tutorial/jdbc/basics/retrieving.html</A>
+     * @param i JDBC type number
+     * @return boolean
+     * @see <A href="http://java.sun.com/docs/books/tutorial/jdbc/basics/retrieving.html">http://java.sun.com/docs/books/tutorial/jdbc/basics/retrieving.html
      *      The table on this page lists the most common SqlTypes, all of which
-     *      must implement toString()
+     *      must implement toString()</A>
      * @see java.sql.Types
      */
     public static boolean canDisplayType(int i) {
@@ -4921,6 +4940,9 @@ public class SqlFile {
 
     /**
      * Return a String representation of the specified java.sql.Types type.
+     *
+     * @param i int
+     * @return String
      */
     public static String sqlTypeToString(int i) {
         switch (i) {
@@ -5028,6 +5050,7 @@ public class SqlFile {
      * Validate that String is safe to write TO DSV file.
      *
      * @throws SqlToolError if validation fails.
+     * @param s String
      */
     public void dsvSafe(String s) throws SqlToolError {
         assert pwDsv != null && dsvColDelim != null && dsvRowDelim != null
@@ -5068,6 +5091,9 @@ public class SqlFile {
      * </UL>
      *
      * Java 1.4 String methods will make this into a 1 or 2 line task.
+     *
+     * @param inString input string
+     * @return converted string
      */
     public static String convertEscapes(String inString) {
         if (inString == null) return null;
@@ -5126,7 +5152,11 @@ public class SqlFile {
     }
 
     /**
-     * @param string  Non-null String to modify.
+     *
+     * @param string Non-null String to modify.
+     * @param from String
+     * @param to String
+     * @return String
      */
     private static String convertEscapes(String string, String from, String to) {
         String workString = string;
@@ -5152,6 +5182,11 @@ public class SqlFile {
 
     /**
      * Convert CSV 'line' into DSV 'lines'.
+     *
+     * @param s String
+     * @param lineNum int
+     * @throws SqlToolError
+     * @return String
      */
     private String preprocessCsvQuoting(String s, int lineNum)
             throws SqlToolError {
@@ -5165,7 +5200,7 @@ public class SqlFile {
             offset = s.indexOf('"', prevOffset + 1);
             segLen = ((offset < 0) ? s.length() : offset)
                     - (prevOffset + 1);
-            if (segLen > 1)
+            if (segLen > 0)
                 // Here we insert non-quoted segments, replacing all
                 // dsvColSplitters.
                 sb.append(s.substring(
@@ -5197,6 +5232,8 @@ public class SqlFile {
     /**
      * Name is self-explanatory.
      *
+     * @param filePath String
+     * @param skipPrefix String
      * @throws SqlToolError  Would prefer to throw an internal exception,
      *                       but we want this method to have external
      *                       visibility.
@@ -5464,6 +5501,9 @@ public class SqlFile {
                     case org.hsqldb.types.Types.SQL_TIMESTAMP_WITH_TIME_ZONE:
                     case org.hsqldb.types.Types.SQL_TIME_WITH_TIME_ZONE:
                         parseDate[i] = true;
+                        break;
+                    default:
+                        break;
                 }
             }
         } catch (SQLException se) {
@@ -5873,8 +5913,11 @@ public class SqlFile {
     }
 
     /**
-     * Does a poor-man's parse of a MSDOS command line and parses it
-     * into a WIndows cmd.exe invocation to approximate.
+     * Does a poor-man's parse of a MSDOS command line and parses it into a
+     * WIndows cmd.exe invocation to approximate.
+     *
+     * @param monolithic String
+     * @return String[]
      */
     private static String[] genWinArgs(String monolithic) {
         List<String> list = new ArrayList<String>();
@@ -5914,22 +5957,27 @@ public class SqlFile {
 
     /**
      * Parses input into command tokens, but does not perform the commands
-     * (unless you consider parsing blocks of nested commands to be
-     * "performing" a command).
+     * (unless you consider parsing blocks of nested commands to be "performing"
+     * a command).
      *
-     * Throws only if I/O error or if nestingCommand != null and
-     * EOF encountered before end of entire file
-     * (encountered at any level of recursion).
+     * <p> Throws only if I/O error or if nestingCommand != null and EOF
+     * encountered before end of entire file (encountered at any level of
+     * recursion).
      *
-     * Exceptions thrown within this method percolate right up to the
-     * external call (in scanpass), regardless of ContinueOnErr setting.
-     * This is because it's impossible to know when to terminate blocks
-     * if there is a parsing error.
-     * Only a separate SqlFile invocation (incl. \i command) will cause
-     * a seekTokenSource exception to be handled at a level other than
-     * the very top.
+     * <p> Exceptions thrown within this method percolate right up to the
+     * external call (in scanpass), regardless of ContinueOnErr setting. This is
+     * because it's impossible to know when to terminate blocks if there is a
+     * parsing error.
+     *
+     * <p> Only a separate SqlFile invocation (incl. \i command) will cause a
+     * seekTokenSource exception to be handled at a level other than the very
+     * top.
      *
      * @param nestingCommand Set to null to read scanner until EOF.
+     * @throws BadSpecial
+     * @throws IOException
+     * @throws SqlToolError
+     * @return TokenList
      */
     private TokenList seekTokenSource(String nestingCommand)
             throws BadSpecial, IOException, SqlToolError {
@@ -5979,9 +6027,11 @@ public class SqlFile {
     }
 
     /**
-     * We want leading space to be trimmed.
-     * Leading space should probably not be trimmed, but it is trimmed now
-     * (by the Scanner).
+     * We want leading space to be trimmed. Leading space should probably not be
+     * trimmed, but it is trimmed now (by the Scanner).
+     *
+     * @param defToken Token
+     * @throws BadSpecial
      */
     private void processMacro(Token defToken) throws BadSpecial {
         Matcher matcher;
@@ -6097,7 +6147,7 @@ public class SqlFile {
                     while (templateM.find()) {
                         buffer.val += macroToken.val
                                 .substring(prevEnd, templateM.start());
-                        varNum = Integer.valueOf(
+                        varNum = Integer.parseInt(
                                 templateM.group(templateM.groupCount()));
                         varVal = (varNum > 0 && varNum <= splitVars.length)
                                 ? splitVars[varNum-1] : null;
@@ -6132,8 +6182,11 @@ public class SqlFile {
     }
 
     /**
-     * Convert a String to a byte array by interpreting every 2 characters as
-     * an octal byte value.
+     * Convert a String to a byte array by interpreting every 2 characters as an
+     * octal byte value.
+     *
+     * @param hexChars String
+     * @return byte[]
      */
     public static byte[] hexCharOctetsToBytes(String hexChars) {
         int chars = hexChars.length();
@@ -6180,6 +6233,9 @@ public class SqlFile {
 
     /**
      * Just a stub for now.
+     *
+     * @param hexChars String
+     * @return byte[]
      */
     public static byte[] bitCharsToBytes(String hexChars) {
         if (hexChars == null) throw new NullPointerException();
@@ -6194,9 +6250,11 @@ public class SqlFile {
     }
 
     /**
-     * Returns a String report for the specified JDBC Connection.
+     * Returns a String report for the specified JDBC Connection. For databases
+     * with poor JDBC support, you won't get much detail.
      *
-     * For databases with poor JDBC support, you won't get much detail.
+     * @param c Connection
+     * @return String
      */
     public static String getBanner(Connection c) {
         try {
@@ -6234,6 +6292,9 @@ public class SqlFile {
     /**
      * Escaping rules taken from 'Reserved Characters in HTML table at
      * http://www.w3schools.com/tags/ref_entities.asp
+     *
+     * @param s String
+     * @return String
      */
     public static String escapeHtml(String s) {
         StringBuilder sb = new StringBuilder();
@@ -6262,7 +6323,11 @@ public class SqlFile {
     }
 
     /**
+     *
+     * @param pWriter PrintWriter
      * @param filePath only used for error reporting.
+     * @throws BadSpecial
+     * @throws SqlToolError
      */
     private void writeHeader(PrintWriter pWriter, String filePath)
             throws BadSpecial, SqlToolError {
@@ -6301,7 +6366,9 @@ public class SqlFile {
     }
 
     /**
+     * @param pwQuery the writer
      * @param filePath only used for error reporting.
+     * @throws SqlToolError
      */
     private void writeFooter(PrintWriter pwQuery, String filePath)
             throws SqlToolError {

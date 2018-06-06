@@ -1,4 +1,4 @@
-/* Copyright (c) 2001-2011, The HSQL Development Group
+/* Copyright (c) 2001-2016, The HSQL Development Group
  * All rights reserved.
  *
  * Redistribution and use in source and binary forms, with or without
@@ -88,6 +88,10 @@ public class RowType extends Type {
 
     public boolean isRowType() {
         return true;
+    }
+
+    public int getDegree() {
+        return dataTypes.length;
     }
 
     public String getNameString() {
@@ -429,9 +433,9 @@ public class RowType extends Type {
                 if (!dataTypes[i].equals(otherTypes[i])) {
                     return false;
                 }
-
-                return true;
             }
+
+            return true;
         }
 
         return false;

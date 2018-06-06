@@ -1,4 +1,4 @@
-/* Copyright (c) 2001-2011, The HSQL Development Group
+/* Copyright (c) 2001-2017, The HSQL Development Group
  * All rights reserved.
  *
  * Redistribution and use in source and binary forms, with or without
@@ -52,7 +52,7 @@ import org.hsqldb.types.Types;
  * operation.<p>
  *
  * Was reviewed for 1.7.2 resulting in centralising all DATETIME related
- * operstions.<p>
+ * operations.<p>
  *
  * From version 2.0.0, HSQLDB supports TIME ZONE with datetime types. The
  * values are stored internally as UTC seconds from 1970, regardless of the
@@ -60,7 +60,7 @@ import org.hsqldb.types.Types;
  * timezone.
  *
  * @author Fred Toussi (fredt@users dot sourceforge.net)
- * @version 2.3.0
+ * @version 2.3.5
  * @since 1.7.0
  */
 public class HsqlDateTime {
@@ -69,8 +69,7 @@ public class HsqlDateTime {
      * A reusable static value for today's date. Should only be accessed
      * by getToday()
      */
-    private static Locale        defaultLocale = Locale.UK;
-    private static long          currentDateMillis;
+    public static Locale         defaultLocale  = Locale.UK;
     public static final Calendar tempCalDefault = new GregorianCalendar();
     public static final Calendar tempCalGMT =
         new GregorianCalendar(TimeZone.getTimeZone("GMT"), defaultLocale);
@@ -95,10 +94,6 @@ public class HsqlDateTime {
         sdfts.setCalendar(new GregorianCalendar(TimeZone.getTimeZone("GMT"),
                 defaultLocale));
         sdfts.setLenient(false);
-    }
-
-    static {
-        currentDateMillis = getNormalisedDate(System.currentTimeMillis());
     }
 
     public static long getDateSeconds(String s) {
@@ -159,15 +154,6 @@ public class HsqlDateTime {
         }
     }
 
-    public static synchronized long getCurrentDateMillis(long millis) {
-
-        if (millis - currentDateMillis >= 24 * 3600 * 1000) {
-            currentDateMillis = getNormalisedDate(millis);
-        }
-
-        return currentDateMillis;
-    }
-
     private static java.util.Date sysDate = new java.util.Date();
 
     public static String getSystemTimeString() {
@@ -216,19 +202,24 @@ public class HsqlDateTime {
 
     public static long convertMillisFromCalendar(Calendar calendar,
             long millis) {
+        return convertMillisFromCalendar(tempCalGMT, calendar, millis);
+    }
 
-        synchronized (tempCalGMT) {
+    public static long convertMillisFromCalendar(Calendar clendarGMT,
+            Calendar calendar, long millis) {
+
+        synchronized (clendarGMT) {
             synchronized (calendar) {
-                tempCalGMT.clear();
+                clendarGMT.clear();
                 calendar.setTimeInMillis(millis);
-                tempCalGMT.set(calendar.get(Calendar.YEAR),
+                clendarGMT.set(calendar.get(Calendar.YEAR),
                                calendar.get(Calendar.MONTH),
                                calendar.get(Calendar.DAY_OF_MONTH),
                                calendar.get(Calendar.HOUR_OF_DAY),
                                calendar.get(Calendar.MINUTE),
                                calendar.get(Calendar.SECOND));
 
-                return tempCalGMT.getTimeInMillis();
+                return clendarGMT.getTimeInMillis();
             }
         }
     }
@@ -241,43 +232,7 @@ public class HsqlDateTime {
      * @param       millis                  the time value in milliseconds
      */
     public static void setTimeInMillis(Calendar cal, long millis) {
-
-//#ifdef JAVA4
-        // Use method directly
         cal.setTimeInMillis(millis);
-
-//#else
-/*
-        // Have to go indirect
-        synchronized (tempDate) {
-            tempDate.setTime(millis);
-            cal.setTime(tempDate);
-        }
-*/
-
-//#endif JAVA4
-    }
-
-    /**
-     * Gets the time from the given Calendar as a milliseconds value; wrapper method to
-     * allow use of more efficient JDK1.4 method on JDK1.4 (was protected in earlier versions).
-     *
-     * @param       cal                             the Calendar
-     * @return      the time value in milliseconds
-     */
-    public static long getTimeInMillis(Calendar cal) {
-
-//#ifdef JAVA4
-        // Use method directly
-        return cal.getTimeInMillis();
-
-//#else
-/*
-        // Have to go indirect
-        return cal.getTime().getTime();
-*/
-
-//#endif JAVA4
     }
 
     public static long convertToNormalisedTime(long t) {
@@ -290,19 +245,9 @@ public class HsqlDateTime {
             setTimeInMillis(cal, t);
             resetToDate(cal);
 
-            long t1 = getTimeInMillis(cal);
+            long t1 = cal.getTimeInMillis();
 
             return t - t1;
-        }
-    }
-
-    public static long convertToNormalisedDate(long t, Calendar cal) {
-
-        synchronized (cal) {
-            setTimeInMillis(cal, t);
-            resetToDate(cal);
-
-            return getTimeInMillis(cal);
         }
     }
 
@@ -314,7 +259,7 @@ public class HsqlDateTime {
             setTimeInMillis(cal, t);
             resetToTime(cal);
 
-            return getTimeInMillis(cal);
+            return cal.getTimeInMillis();
         }
     }
 
@@ -324,7 +269,7 @@ public class HsqlDateTime {
             setTimeInMillis(cal, t);
             resetToTime(cal);
 
-            return getTimeInMillis(cal);
+            return cal.getTimeInMillis();
         }
     }
 
@@ -334,17 +279,17 @@ public class HsqlDateTime {
             setTimeInMillis(tempCalGMT, d);
             resetToDate(tempCalGMT);
 
-            return getTimeInMillis(tempCalGMT);
+            return tempCalGMT.getTimeInMillis();
         }
     }
 
-    public static long getNormalisedDate(Calendar cal, long d) {
+    public static long getNormalisedDate(Calendar cal, long t) {
 
         synchronized (cal) {
-            setTimeInMillis(cal, d);
+            setTimeInMillis(cal, t);
             resetToDate(cal);
 
-            return getTimeInMillis(cal);
+            return cal.getTimeInMillis();
         }
     }
 
@@ -354,19 +299,7 @@ public class HsqlDateTime {
     }
 
     public static int getZoneMillis(Calendar cal, long millis) {
-
-//#ifdef JAVA4
-        // get zone for the specific date
         return cal.getTimeZone().getOffset(millis);
-
-//#else
-/*
-        // get zone for the specific date
-        setTimeInMillis(cal, millis);
-        return (cal.get(Calendar.ZONE_OFFSET) + cal.get(Calendar.DST_OFFSET) );
-*/
-
-//#endif JAVA4
     }
 
     /**
@@ -512,6 +445,7 @@ public class HsqlDateTime {
                 cal.set(Calendar.SECOND, 0);
             case Types.SQL_INTERVAL_SECOND :
                 cal.set(Calendar.MILLISECOND, 0);
+            default :
         }
     }
 
@@ -540,7 +474,7 @@ public class HsqlDateTime {
         "MMM", "MMMMM",
         "MM",
         "EEEE", "EE",
-        "'*WW'", "w", "dd", "D",
+        "'*WW'", "'*IW'", "dd", "D",
         "'*W'",
         "HH", "KK", "KK",
         "mm", "ss",
@@ -570,10 +504,13 @@ public class HsqlDateTime {
     private static final char e = 0xffff;
 
     public static TimestampData toDate(String string, String pattern,
-                                       SimpleDateFormat format) {
+                                       SimpleDateFormat format,
+                                       boolean fraction) {
 
-        Date   date;
+        long   millis;
+        int    nanos       = 0;
         String javaPattern = HsqlDateTime.toJavaDatePattern(pattern);
+        String tempPattern = null;
         int    matchIndex  = javaPattern.indexOf("*IY");
 
         if (matchIndex >= 0) {
@@ -592,17 +529,46 @@ public class HsqlDateTime {
             throw Error.error(ErrorCode.X_22511);
         }
 
+        matchIndex = javaPattern.indexOf("S");
+
+        if (matchIndex >= 0) {
+            tempPattern = javaPattern;
+            javaPattern = javaPattern.substring(0, matchIndex)
+                          + javaPattern.substring(matchIndex + 1);
+        }
+
         try {
             format.applyPattern(javaPattern);
 
-            date = format.parse(string);
+            millis = format.parse(string).getTime();
         } catch (Exception e) {
             throw Error.error(ErrorCode.X_22007, e.toString());
         }
 
-        int nanos = ((int) (date.getTime() % 1000)) * 1000000;
+        if (matchIndex >= 0 && fraction) {
+            javaPattern = tempPattern;
 
-        return new TimestampData(date.getTime() / 1000, nanos, 0);
+            try {
+                format.applyPattern(javaPattern);
+
+                long tempMillis = format.parse(string).getTime();
+                int  factor     = 1;
+
+                tempMillis -= millis;
+                nanos      = (int) tempMillis;
+
+                while (tempMillis > 1000) {
+                    tempMillis /= 10;
+                    factor     *= 10;
+                }
+
+                nanos *= (1000000 / factor);
+            } catch (Exception e) {
+                throw Error.error(ErrorCode.X_22007, e.toString());
+            }
+        }
+
+        return new TimestampData(millis / 1000, nanos, 0);
     }
 
     public static String toFormattedDate(Date date, String pattern,
@@ -634,6 +600,8 @@ public class HsqlDateTime {
 
             if (weekOfYear == 1 && cal.get(Calendar.DAY_OF_YEAR) > 360) {
                 year++;
+            } else if (weekOfYear > 51 && cal.get(Calendar.DAY_OF_YEAR) < 4) {
+                year--;
             }
 
             String yearString = String.valueOf(year);
@@ -657,6 +625,21 @@ public class HsqlDateTime {
             int           dayOfYear   = cal.get(Calendar.DAY_OF_YEAR);
             int           weekOfYear  = ((dayOfYear - 1) / 7) + 1;
             StringBuilder sb          = new StringBuilder(result);
+
+            sb.replace(matchIndex, matchIndex + matchLength,
+                       String.valueOf(weekOfYear));
+
+            result = sb.toString();
+        }
+
+        matchIndex = result.indexOf("*IW");
+
+        if (matchIndex >= 0) {
+            Calendar cal         = format.getCalendar();
+            int      matchLength = 3;
+            int weekOfYear = getDateTimePart(date.getTime(),
+                                             Calendar.WEEK_OF_YEAR);
+            StringBuilder sb = new StringBuilder(result);
 
             sb.replace(matchIndex, matchIndex + matchLength,
                        String.valueOf(weekOfYear));
@@ -892,7 +875,7 @@ public class HsqlDateTime {
          * Matches the specified character against tokens.
          *
          * @param ch
-         * @param tokens
+         * @param position
          */
         public boolean next(char ch, int position) {
 
@@ -904,7 +887,7 @@ public class HsqlDateTime {
 
             for (int i = tokens.length; --i >= 0; ) {
                 if (isZeroBit(i)) {
-                    if (tokens[i][index] == ch) {
+                    if (tokens[i][index] == Character.toUpperCase(ch)) {
                         if (tokens[i].length == len) {
                             setBit(i);
 

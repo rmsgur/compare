@@ -1,4 +1,4 @@
-/* Copyright (c) 2001-2011, The HSQL Development Group
+/* Copyright (c) 2001-2014, The HSQL Development Group
  * All rights reserved.
  *
  * Redistribution and use in source and binary forms, with or without
@@ -31,14 +31,13 @@
 
 package org.hsqldb.auth;
 
-import java.sql.Array;
 import java.sql.Connection;
-import java.util.Set;
-import java.sql.SQLException;
 import java.sql.ResultSet;
+import java.sql.SQLException;
 import java.sql.Statement;
 import java.util.HashSet;
-import org.hsqldb.jdbc.JDBCArrayBasic;
+import java.util.Set;
+
 import org.hsqldb.lib.FrameworkLogger;
 
 /**
@@ -60,10 +59,12 @@ public class AuthUtils {
     }
 
     static String getInitialSchema(Connection c) throws SQLException {
-        ResultSet rs = c.createStatement().executeQuery(
+        Statement st = c.createStatement();
+        ResultSet rs = null;
+        try {
+            rs = st.executeQuery(
                 "SELECT initial_schema FROM information_schema.system_users\n"
                 + "WHERE user_name = current_user");
-        try {
             if (!rs.next()) {
                 throw new IllegalStateException(
                         "Failed to retrieve initial_schema for current user");
@@ -77,14 +78,23 @@ public class AuthUtils {
                         + "to close ResultSet for retrieving initial schema");
             }
             rs = null;  // Encourage GC
+            try {
+                st.close();
+            } catch (SQLException se) {
+                logger.error(
+                        "Failed to close Statement for retrieving db name");
+            }
+            st = null;  // Encourage GC
         }
     }
 
     static Set getEnabledRoles(Connection c) throws SQLException {
         Set roles = new HashSet<String>();
-        ResultSet rs = c.createStatement().executeQuery(
-                "SELECT * FROM information_schema.enabled_roles");
+        Statement st = c.createStatement();
+        ResultSet rs = null;
         try {
+            rs = st.executeQuery(
+                    "SELECT * FROM information_schema.enabled_roles");
             while (rs.next()) roles.add(rs.getString(1));
         } finally {
             if (rs != null) try {
@@ -94,6 +104,13 @@ public class AuthUtils {
                         "Failed to close ResultSet for retrieving db name");
             }
             rs = null;  // Encourage GC
+            try {
+                st.close();
+            } catch (SQLException se) {
+                logger.error(
+                        "Failed to close Statement for retrieving db name");
+            }
+            st = null;  // Encourage GC
         }
         return roles;
     }

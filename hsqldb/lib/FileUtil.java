@@ -1,4 +1,4 @@
-/* Copyright (c) 2001-2011, The HSQL Development Group
+/* Copyright (c) 2001-2017, The HSQL Development Group
  * All rights reserved.
  *
  * Redistribution and use in source and binary forms, with or without
@@ -49,10 +49,10 @@ import org.hsqldb.lib.java.JavaSystem;
  * A collection of file management methods.<p>
  * Also provides the default FileAccess implementation
  *
- * @author Campbell Boucher-Burnet (boucherb@users dot sourceforge.net)
+ * @author Campbell Burnet (campbell-burnet@users dot sourceforge.net)
  * @author Fred Toussi (fredt@users dot sourceforge.net)
  * @author Ocke Janssen oj@openoffice.org
- * @version 2.3.0
+ * @version 2.3.4
  * @since 1.7.2
  */
 public class FileUtil implements FileAccess {
@@ -68,16 +68,16 @@ public class FileUtil implements FileAccess {
     }
 
     public static FileAccess getFileAccess(boolean isResource) {
-        return isResource ? (FileAccess) fileAccessRes
-                          : (FileAccess) fileUtil;
+        return isResource ? fileAccessRes
+                          : fileUtil;
     }
 
-    public boolean isStreamElement(java.lang.String elementName) {
-        return (new File(elementName)).exists();
+    public boolean isStreamElement(String elementName) {
+        return new File(elementName).exists();
     }
 
-    public InputStream openInputStreamElement(java.lang.String streamName)
-    throws java.io.IOException {
+    public InputStream openInputStreamElement(String streamName)
+    throws IOException {
 
         try {
             return new FileInputStream(new File(streamName));
@@ -97,14 +97,13 @@ public class FileUtil implements FileAccess {
         }
     }
 
-    public void renameElement(java.lang.String oldName,
-                              java.lang.String newName) {
+    public void renameElement(String oldName, String newName) {
         renameWithOverwrite(oldName, newName);
     }
 
-    public java.io.OutputStream openOutputStreamElement(
-            java.lang.String streamName) throws java.io.IOException {
-        return new FileOutputStream(new File(streamName));
+    public OutputStream openOutputStreamElement(String streamName)
+    throws IOException {
+        return new FileOutputStream(new File(streamName), true);
     }
 
     // end of FileAccess implementation
@@ -131,7 +130,7 @@ public class FileUtil implements FileAccess {
      * Delete the named file
      */
     public boolean delete(String filename) {
-        return (new File(filename)).delete();
+        return new File(filename).delete();
     }
 
     /**
@@ -157,7 +156,7 @@ public class FileUtil implements FileAccess {
      * Return true or false based on whether the named file exists.
      */
     public boolean exists(String filename) {
-        return (new File(filename)).exists();
+        return new File(filename).exists();
     }
 
     public boolean exists(String fileName, boolean resource, Class cla) {
@@ -206,7 +205,7 @@ public class FileUtil implements FileAccess {
      * @return the absolute path
      */
     public String absolutePath(String path) {
-        return (new File(path)).getAbsolutePath();
+        return new File(path).getAbsolutePath();
     }
 
     /**
@@ -305,7 +304,7 @@ public class FileUtil implements FileAccess {
     }
 
     public FileAccess.FileSync getFileSync(java.io.OutputStream os)
-    throws java.io.IOException {
+    throws IOException {
         return new FileSync((FileOutputStream) os);
     }
 
@@ -375,14 +374,13 @@ public class FileUtil implements FileAccess {
             return fis;
         }
 
-        public void createParentDirs(java.lang.String filename) {}
+        public void createParentDirs(String filename) {}
 
-        public void removeElement(java.lang.String filename) {}
+        public void removeElement(String filename) {}
 
-        public void renameElement(java.lang.String oldName,
-                                  java.lang.String newName) {}
+        public void renameElement(String oldName, String newName) {}
 
-        public java.io.OutputStream openOutputStreamElement(String streamName)
+        public OutputStream openOutputStreamElement(String streamName)
         throws IOException {
             throw new IOException();
         }
@@ -397,10 +395,10 @@ public class FileUtil implements FileAccess {
      * Utility method for user applications. Attempts to delete all the files
      * for the database as listed by the getDatabaseFileList() method. If any
      * of the current, main database files cannot be deleted, it is renamed
-     * by adding a suffixe containting a hexadecimal timestamp portion and
+     * by adding a suffix containing a hexadecimal timestamp portion and
      * the ".old" extension. Also deletes the ".tmp" directory.
      *
-     * @param path full path or name of database (without a file extension)
+     * @param dbNamePath full path or name of database (without a file extension)
      * @return currently always true
      */
     public static boolean deleteOrRenameDatabaseFiles(String dbNamePath) {
@@ -417,8 +415,10 @@ public class FileUtil implements FileAccess {
         if (tempDir.isDirectory()) {
             File[] tempList = tempDir.listFiles();
 
-            for (int i = 0; i < tempList.length; i++) {
-                tempList[i].delete();
+            if (tempList != null) {
+                for (int i = 0; i < tempList.length; i++) {
+                    tempList[i].delete();
+                }
             }
 
             tempDir.delete();
@@ -451,7 +451,7 @@ public class FileUtil implements FileAccess {
      * currently exist for a database. The list includes current database files
      * as well as ".new", and ".old" versions of the files, plus any app logs.
      *
-     * @param path full path or name of database (without a file extension)
+     * @param dbNamePath full path or name of database (without a file extension)
      */
     public static File[] getDatabaseFileList(String dbNamePath) {
 
@@ -464,7 +464,7 @@ public class FileUtil implements FileAccess {
      * Returns a list of existing main files for a database. The list excludes
      * non-essential files.
      *
-     * @param path full path or name of database (without a file extension)
+     * @param dbNamePath full path or name of database (without a file extension)
      */
     public static File[] getDatabaseMainFileList(String dbNamePath) {
 
@@ -489,7 +489,7 @@ public class FileUtil implements FileAccess {
     static class DatabaseFilenameFilter implements FilenameFilter {
 
         String[]        suffixes      = new String[] {
-            ".backup", ".properties", ".script", ".data", ".log", ".lobs",
+            ".backup", ".properties", ".script", ".data", ".log", ".lobs"
         };
         String[]        extraSuffixes = new String[] {
             ".lck", ".sql.log", ".app.log"
